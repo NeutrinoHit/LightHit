@@ -1,0 +1,38 @@
+# Public test model. These constants are not a Baikal-water calibration.
+[medium]
+kind = "parameters"
+absorption_per_m = 0.04
+scattering_per_m = 0.05
+g = 0.7
+group_index = 1.35
+wavelength_nm = 450.0
+provenance = "synthetic-example-not-Baikal"
+
+[source]
+kind = "directed"
+direction = [0.0, 0.0, 1.0]
+photons = 1.0
+time_ns = 0.0
+
+[detector]
+# r=20 m, angle between the initial ray and source-detector vector = 60 deg.
+# Effective area is not assigned: output is per square metre.
+displacement_m = [17.32050807568877, 0.0, 10.0]
+
+[solver]
+scattering_degree = 32
+spatial_degree = 160
+k_max_per_m = 6.0
+k_panel_per_m = 0.04
+k_order = 8
+taper = true
+
+[frequency]
+max_per_ns = 1.2
+nodes = 241
+
+[readout]
+start_relative_front_ns = -30.0
+stop_relative_front_ns = 650.0
+bin_width_ns = 2.0
+sigma_ns = 3.0

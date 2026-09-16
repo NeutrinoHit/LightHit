@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lighthit"
+version = "0.1.0.dev1"
+description = "Time-dependent light transport and detector response"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26", "scipy>=1.11"]
+
+[project.optional-dependencies]
+notebook = ["jupyterlab>=4", "ipykernel>=6", "nbformat>=5", "nbclient>=0.10", "nbconvert>=7", "matplotlib>=3.8"]
+dev = ["pytest>=8", "build>=1"]
+
+[project.scripts]
+lighthit = "lighthit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lighthit = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
