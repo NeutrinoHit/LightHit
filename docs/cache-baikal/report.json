@@ -1,0 +1,248 @@
+{
+  "lighthit_version": "0.1.0.dev1",
+  "medium": {
+    "absorption_per_m": 0.07,
+    "scattering_per_m": 0.022,
+    "g": 0.9,
+    "group_index": 1.36,
+    "wavelength_nm": 450.0,
+    "provenance": "synthetic-near-baikal-not-calibration"
+  },
+  "medium_note": "the repository synthetic near-Baikal medium, specified at 450 nm; the laser is 532 nm, so this run pairs a real photon yield with synthetic optics and is illustrative, not a Baikal prediction",
+  "laser": {
+    "wavelength_nm": 532.0,
+    "pulse_energy_J": 0.00037,
+    "photons_per_pulse": 990915505155107.0,
+    "emission": "isotropic diffuser",
+    "position_m": [
+      125.0,
+      72.16878364870321,
+      -1012.5
+    ]
+  },
+  "optical_module": {
+    "effective_area_m2": 0.053,
+    "quantum_efficiency": 0.2,
+    "quantum_efficiency_note": "no published value found at 532 nm; explicit input",
+    "axis": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "acceptances": [
+      "ideal isotropic",
+      "hemispherical (1+x)/2",
+      "bare cosine max(x,0)"
+    ]
+  },
+  "geometry": {
+    "clusters": 3,
+    "centers_m": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        250.0,
+        0.0
+      ],
+      [
+        125.0,
+        216.50635094610965
+      ]
+    ],
+    "strings_per_cluster": 8,
+    "peripheral_radius_m": 60.0,
+    "oms_per_string": 36,
+    "om_spacing_m": 15.0,
+    "top_depth_m": 750.0,
+    "cluster_pitch_m": 250.0,
+    "modules": 864,
+    "distance_range_m": [
+      84.95591157270455,
+      332.5833125030741
+    ],
+    "modules_in_cache_range": 864
+  },
+  "cache": {
+    "radius_range_m": [
+      10.0,
+      400.0
+    ],
+    "build_time_s": 181.41365705100043,
+    "bands": [
+      {
+        "range_m": [
+          10.0,
+          20.0
+        ],
+        "degree": 364,
+        "settings": {
+          "scattering_degree": 64,
+          "spatial_degree": 364,
+          "k_max_per_m": 12.0
+        },
+        "radii": 20,
+        "build_s": 15.353986455000268
+      },
+      {
+        "range_m": [
+          20.0,
+          60.0
+        ],
+        "degree": 526,
+        "settings": {
+          "scattering_degree": 64,
+          "spatial_degree": 526,
+          "k_max_per_m": 6.0
+        },
+        "radii": 32,
+        "build_s": 33.90493636300016
+      },
+      {
+        "range_m": [
+          60.0,
+          400.0
+        ],
+        "degree": 1620,
+        "settings": {
+          "scattering_degree": 64,
+          "spatial_degree": 1620,
+          "k_max_per_m": 3.0
+        },
+        "radii": 50,
+        "build_s": 132.154734233
+      }
+    ]
+  },
+  "timing": {
+    "cached_query": {
+      "ideal isotropic": {
+        "seconds": 0.005294710000271152,
+        "per_module_us": 6.1281365743879075,
+        "acceptance_top_degree": 0
+      },
+      "hemispherical (1+x)/2": {
+        "seconds": 0.004911881000225549,
+        "per_module_us": 5.6850474539647555,
+        "acceptance_top_degree": 1
+      },
+      "bare cosine max(x,0)": {
+        "seconds": 0.24318090499946265,
+        "per_module_us": 281.4593807864151,
+        "acceptance_top_degree": 364
+      }
+    },
+    "cached_per_module_s": 5.685047453964755e-06,
+    "direct_solve_per_module_s": 0.09091867575000379,
+    "speedup": 15992.597508855806,
+    "sampled_direct_modules": 8
+  },
+  "trust": {
+    "first_negative_component_radius_m": 299.5656578003115,
+    "modules_with_negative_component": 49,
+    "modules_above_0p01pe": 703,
+    "max_radius_above_0p01pe": 282.48515859672716,
+    "negatives_inside_that_subset": 0,
+    "note": "negative components mark the accuracy floor of @sec-discretizations, not a physical effect; they appear only far below one photoelectron"
+  },
+  "photoelectrons": {
+    "max": 146656.76701439975,
+    "above_1pe": 469,
+    "above_0p1pe": 592,
+    "per_cluster_max": [
+      78344.78651601255,
+      146656.76701439975,
+      118046.08322236157
+    ],
+    "per_cluster_above_1pe": [
+      158,
+      156,
+      155
+    ],
+    "radius_of_last_module_above_1pe": 224.9212825264282,
+    "radius_of_last_module_above_0p1pe": 253.42552461430878
+  },
+  "order_fractions_by_distance": {
+    "80-120 m": {
+      "0 scattering": 0.1453184264631237,
+      "1 scattering": 0.27342109764223727,
+      ">=2 scattering": 0.5812604758946393
+    },
+    "120-160 m": {
+      "0 scattering": 0.07053055526710163,
+      "1 scattering": 0.18190120754800457,
+      ">=2 scattering": 0.7475682371848938
+    },
+    "160-200 m": {
+      "0 scattering": 0.03499222733134989,
+      "1 scattering": 0.113954861552,
+      ">=2 scattering": 0.8510529111166497
+    },
+    "200-250 m": {
+      "0 scattering": 0.01760152116114504,
+      "1 scattering": 0.06900007913886758,
+      ">=2 scattering": 0.9133983996999876
+    },
+    "250-283 m": {
+      "0 scattering": 0.007289860835894051,
+      "1 scattering": 0.03661883208011994,
+      ">=2 scattering": 0.9560913070839859
+    }
+  },
+  "order_fractions_at_60m": {
+    "ideal isotropic": {
+      "0 scattering": 0.28186535122698914,
+      "1 scattering": 0.35157323207655244,
+      ">=2 scattering": 0.3665614166964585
+    },
+    "hemispherical (1+x)/2": {
+      "0 scattering": 0.28186535122698914,
+      "1 scattering": 0.3515732320765524,
+      ">=2 scattering": 0.3665614166964584
+    },
+    "bare cosine max(x,0)": {
+      "0 scattering": 0.0,
+      "1 scattering": 0.3322090837819887,
+      ">=2 scattering": 0.6677909162180112
+    }
+  },
+  "first_order_consistency": {
+    "10.5-19.5 m": {
+      "n_points": 12,
+      "max_relative_first_order": 2.3158216383155622e-07,
+      "median_relative_first_order": 5.294976496570454e-08,
+      "max_first_order_error_over_total": 4.311593088657211e-08,
+      "radius_range_m": [
+        10.534279850725717,
+        18.297890469039228
+      ]
+    },
+    "21.0-58.0 m": {
+      "n_points": 12,
+      "max_relative_first_order": 6.913964476160246e-07,
+      "median_relative_first_order": 1.0261868308117695e-07,
+      "max_first_order_error_over_total": 2.0040129845240508e-07,
+      "radius_range_m": [
+        21.112632730901332,
+        52.24898142252341
+      ]
+    },
+    "62.0-290.0 m": {
+      "n_points": 12,
+      "max_relative_first_order": 0.03263136710189204,
+      "median_relative_first_order": 5.089625515154018e-05,
+      "max_first_order_error_over_total": 0.0013474542489161237,
+      "radius_range_m": [
+        62.50567892626424,
+        247.47458015231672
+      ]
+    }
+  },
+  "environment": {
+    "python": "3.11.15",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "platform": "Linux-6.18.44-fc-v33-x86_64-with-glibc2.39"
+  }
+}

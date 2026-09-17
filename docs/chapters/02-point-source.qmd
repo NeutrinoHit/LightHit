@@ -87,10 +87,32 @@ D(\mathbf s)=d_0+ik\mu,\quad d_0=\mu_t-i\omega/v,
 $$ {#eq-master}
 This holds **per $\mathbf k$**: different wavenumbers never mix, because
 the medium's homogeneity is exactly what a Fourier transform in $\mathbf x$
-diagonalizes (@sec-method-choice returns to why that matters). $\mathrm{Re}(d_0)=\mu_t>0$
-makes $D-V$ invertible for every real $\omega$ and every physical medium; that
-positivity is what selects the causal, retarded solution automatically, with
-no separate initial condition to impose by hand. @eq-master is the equation
+diagonalizes (@sec-method-choice returns to why that matters).
+
+What makes @eq-master solvable at all is **absorption**, not extinction. Pair
+it with $h$ in the Hermitian product $\langle f,g\rangle=\int f^*g\,
+\mathrm d\Omega$ and take real parts. Streaming contributes nothing:
+$\mathrm{Re}\,D=\mu_t$, because both $ik\mu$ and $-i\omega/v$ are purely
+imaginary for real $k,\mu,\omega$. Scattering is bounded by $\mu_s$, since
+its eigenvalues are $\mu_s\chi_l$ with $|\chi_l|\le\chi_0=1$ for any
+normalized nonnegative phase function (@eq-gamma-general). Hence
+$$
+\mathrm{Re}\,\langle h,(D-V)h\rangle\;\ge\;(\mu_t-\mu_s)\,\lVert h\rVert^2
+\;=\;\mu_a\,\lVert h\rVert^2 ,
+$$ {#eq-coercive}
+so $D-V$ is invertible for every real $\omega$ and every $\mathbf k$ as soon
+as $\mu_a>0$, with a bound that does not degrade as $k\to0$ or
+$\omega\to0$. The bound is sharp: at $\mu_a=0$, $k=0$, $\omega=0$ the
+isotropic mode has $(D-V)Y_{00}=(\mu_t-\mu_s)Y_{00}=0$ and the problem is
+genuinely singular — a non-absorbing infinite medium in a steady state holds
+an unbounded photon density. `Medium` already requires $\mu_a>0$, so the
+code never meets this case; the argument for why is what needed correcting,
+not the input contract.
+
+Extinction positivity does real work elsewhere: $\mu_t>0$ is what makes the
+ballistic time integral of @sec-ballistic converge, and with it the causal,
+retarded solution is picked out automatically, with no separate initial
+condition to impose by hand. @eq-master is the equation
 solved, in one form or another, for the rest of this chapter — everything
 that follows is either a special case of it (@sec-ballistic), a reformulation
 of what to do with it (@sec-adjoint), or an inversion of its solution back
@@ -219,56 +241,92 @@ $h$ of @eq-adjoint-h, with no leftover conjugation anywhere in the code.
 
 @eq-adjoint-h is already a spherical-harmonic expansion — just not the one a
 first guess might reach for, expanding $I(\mathbf x,\mathbf s,t)$ directly in
-$\mathbf x$-space. Two choices explain the difference, both visible directly
+$\mathbf x$-space. Three facts explain the difference, all visible directly
 in `angular.py`.
 
 **Fourier in $\mathbf x$ first.** A direct real-space spherical-harmonic (or
 discrete-ordinate) expansion still leaves $\nabla$ coupling every spatial
-point to its neighbors: the angular truncation alone does not remove the
+point to its neighbours: the angular truncation alone does not remove the
 need to discretize $\mathbf x$, and a finite grid or mesh adds its own
 truncation error — numerical dispersion, a chosen spacing — on top of the
 angular one. The medium here is infinite and homogeneous, so translations
 in $\mathbf x$ are an exact symmetry of @eq-rte-local, and the Fourier
 transform diagonalizes them: @eq-master holds **per $\mathbf k$**, with zero
 coupling between different $\mathbf k$. That is what removes $\mathbf x$
-from the problem entirely. The only discretizations anywhere in this
-chapter are the angular truncation $L$ (@sec-matrix) and the numerical $k$
-quadrature (@sec-spatial) — never a spatial grid.
+from the problem entirely — and it is the only thing removed for free.
+@sec-discretizations lists what is still approximated.
+
+**Every $Y_{lm}$ is an eigenfunction of scattering.** This is a property of
+the *shape* of the kernel, not of Henyey–Greenstein. Suppose only that the
+phase function depends on the scattering angle alone, $p=p(\mathbf s\cdot
+\mathbf s')$, as every isotropic medium requires. Expand it in Legendre
+polynomials,
+$$
+p(\cos\Theta)=\sum_{l\ge0}\frac{2l+1}{4\pi}\,\chi_l\,P_l(\cos\Theta),
+\qquad
+\chi_l=2\pi\int_{-1}^{1}p(\mu)\,P_l(\mu)\,\mathrm d\mu,
+$$ {#eq-phase-legendre}
+and apply the spherical-harmonic addition theorem,
+$P_l(\mathbf s\cdot\mathbf s')=\frac{4\pi}{2l+1}\sum_{m=-l}^{l}
+Y_{lm}(\mathbf s)Y_{lm}^*(\mathbf s')$. Orthonormality of the $Y_{lm}$ then
+collapses the scattering integral term by term:
+$$
+\boxed{V\,Y_{lm}=\gamma_l\,Y_{lm},\qquad \gamma_l=\mu_s\chi_l,}
+$$ {#eq-gamma-general}
+with the eigenvalue independent of $m$. Normalization of $p$ over the sphere
+is exactly $\chi_0=1$, so $\gamma_0=\mu_s$: the $l=0$ mode is untouched,
+which is photon-number conservation (@sec-number-conservation) read off the
+spectrum. Henyey–Greenstein is the special case in which these coefficients
+have a closed form, $\chi_l=g^l$, so no numerical projection of a tabulated
+$p$ is needed and $\gamma_l=\mu_sg^l$ — the array `gamma` in `angular.py`.
+A measured, tabulated phase function changes the *numbers* $\chi_l$ through
+@eq-phase-legendre and nothing else: $\Gamma$ stays diagonal. What would
+genuinely break diagonality is a medium whose kernel depends on more than
+$\mathbf s\cdot\mathbf s'$ — an optically anisotropic medium,
+$p(\mathbf s,\mathbf s')$ — which is a different physical problem, not a
+different quadrature.
 
 **Legendre, not a general $Y_{lm}$ expansion.** Once in $\mathbf k$-space,
 $D(\mathbf s)=d_0+ik\mu$ depends on $\mathbf s$ only through $\mu=
 \widehat{\mathbf k}\cdot\mathbf s$, the cosine to the *particular* $\mathbf
-k$ being solved for. Choosing the polar axis along $\mathbf k$ — a free
-choice, made independently at every $\mathbf k$ — makes $D$, and the
-uniform source $1$, both invariant under rotation about that axis, so only
-$m=0$ survives: the Legendre polynomials $P_l(\mu)$, not a full $(l,m)$
-spherical-harmonic system. A source or phase function that was *not*
-axisymmetric about $\mathbf k$ would force every $m$ back in. Streaming
-couples adjacent $l$ only, by the ordinary 3-term recursion $\mu p_l=a_lp_{l-1}
-+a_{l+1}p_{l+1}$ — hence tridiagonal. Scattering is **diagonal** in $l$,
-with eigenvalue $\gamma_l=\mu_sg^l$, specifically because the
-Henyey–Greenstein phase function's own Legendre expansion is
-$p_{\mathrm{HG}}(\cos\Theta)=\sum_l\frac{2l+1}{4\pi}g^lP_l(\cos\Theta)$ — a
-classical property of HG (Henyey & Greenstein 1941), not of phase functions
-in general. A tabulated or otherwise non-HG phase function would still
-reduce to this $m=0$, $l$-indexed problem by the same rotation argument, but
-its $\Gamma$ would no longer be diagonal — `dense_finite_rank_reference`
-(@sec-orders) solves exactly that more general, dense-matrix case, and is
-the fallback this design keeps available.
+k$ being solved for. Choose the polar axis along $\mathbf k$ — a free
+choice, made independently at every $\mathbf k$. Then $D$ is axisymmetric
+about that axis, and so is the entire right-hand side of @eq-adjoint-h,
+which is the constant $1$. Since $V$ preserves each $(l,m)$ and streaming
+couples only $m$ to itself, nothing in the problem can generate $m\ne0$:
+the whole solve lives in the $m=0$ block, spanned by $P_l(\mu)$.
+
+It is worth being precise about *why* the source direction does not spoil
+this, because it is the step that buys the most. One might expect an
+arbitrary $\mathbf s_0$, which has no special relation to $\mathbf k$, to
+excite every $m$. It does — in the direct problem for $\tilde I$, whose
+source $\delta(\mathbf s-\mathbf s_0)$ is axisymmetric only about $\mathbf
+s_0$. Reciprocity replaced that problem by the one for $h$, and in that
+problem $\mathbf s_0$ has left the equation entirely: the right-hand side is
+$1$, and $\mathbf s_0$ returns only afterwards, as the point at which the
+solved $h$ is evaluated (@eq-adjoint-h). Evaluating an $m=0$ function at an
+off-axis direction costs nothing. The $m\ne0$ blocks return only if
+the *detector* stops being isotropic — a directional optical module, whose
+acceptance enters @eq-adjoint-h as a right-hand side that is axisymmetric
+about the module axis rather than about $\mathbf k$ — or if the medium
+itself is anisotropic.
+
+Within the $m=0$ block, streaming couples adjacent $l$ only, through the
+ordinary three-term recursion $\mu p_l=a_lp_{l-1}+a_{l+1}p_{l+1}$: hence
+tridiagonal, with the diagonal scattering of @eq-gamma-general sitting on
+top of it.
 
 **Reciprocity removes the last multiplicity.** @sec-adjoint's construction
 means the single tridiagonal solve at each $(\mathbf k,\omega)$ — sourced by
 $1$, not by $\mathbf s_0$ — already answers the question for every source
 direction, and @sec-spatial folds in every observation point $\mathbf r$
-afterward, algebraically, from that same $h$.
+afterwards, algebraically, from that same $h$.
 
 Put together: an exact, per-$\mathbf k$ algebraic system, tridiagonal
 because of the streaming recursion, diagonal in its scattering part because
-of HG's own Legendre expansion, solved once per $(\mathbf k,\omega)$
-regardless of how many source directions or detector positions are asked
-for. The only approximations left are the truncation degree $L$
-(@sec-matrix) and the numerical $k,\omega$ quadratures (@sec-spatial,
-@sec-charge) — never a discretization of $\mathbf x$.
+the kernel depends on $\mathbf s\cdot\mathbf s'$ alone, solved once per
+$(\mathbf k,\omega)$ regardless of how many source directions or detector
+positions are asked for.
 
 ## Matrix form and the exact free tail {#sec-matrix}
 
@@ -295,21 +353,34 @@ to **free** transport alone. Its exact moments,
 $$b_l=\int_{-1}^1\frac{p_l(\mu)}{d_0+ik\mu}\,\mathrm d\mu,$$
 satisfy the same homogeneous recursion for $l>0$ — these are exactly the
 Legendre coefficients of $h^{(0)}=1/D$ from @sec-ballistic, restricted to
-$V=0$. Let $N\ge L$ be the last degree kept explicitly. Then, for a
-right-hand side that vanishes above $L$, the free tail obeys
-$$h_{N+1}=r_Nh_N,\qquad r_N=\frac{b_{N+1}}{b_N}$$
-(with $r_N=0$ at $k=0$), and the code never divides small $b_l$ by one
-another directly — see the collapsed derivation below for how $r_N$ is
-actually computed.
-The last diagonal entry of the finite matrix becomes
-$$A_{NN}=d_0-\gamma_N+ik\,a_{N+1}r_N,$$
-and for the remaining rows
-$$A_{ll}=d_0-\gamma_l,\quad
-A_{l,l-1}=ik\,a_l,\quad A_{l,l+1}=ik\,a_{l+1}.$$
-This eliminates the infinite **free** tail exactly; the condition
-$h_{N+1}=0$ is never imposed. A regression test moves the elimination
-degree $N$ from 20 to 90 at fixed $L$ and checks that the retained
-low-degree coefficients do not move.
+$V=0$.
+
+The system can therefore be closed at $l=L$, the last degree at which
+$\gamma_l$ is nonzero, and not one degree higher. Above $L$ the right-hand
+sides of @sec-orders vanish and the coefficients are free, so
+$$h_{L+1}=r_L\,h_L,\qquad r_L=\frac{b_{L+1}}{b_L}$$
+(with $r_L=0$ at $k=0$; the code never divides small $b_l$ by one another
+directly — see the collapsed derivation below). Substituting this one
+relation into row $L$ folds the entire infinite free tail into a single
+entry. The matrix actually assembled is $(L+1)\times(L+1)$:
+$$
+A_{ll}=d_0-\gamma_l,\qquad
+A_{l,l-1}=ik\,a_l,\qquad A_{l,l+1}=ik\,a_{l+1},
+$$
+for $l=0,\dots,L$, with the single modification
+$$
+\boxed{A_{LL}=d_0-\gamma_L+ik\,a_{L+1}\,r_L.}
+$$ {#eq-tail-closure}
+This is exact elimination, not truncation: the condition $h_{L+1}=0$ is
+never imposed. @sec-finite-system builds this matrix entry by entry, with a
+worked numerical example.
+
+$N=\max(L,J)$ appears in the code as well, but it plays no part in the
+linear algebra: it is only the length of the returned coefficient arrays.
+Degrees above $L$ are produced by propagating the same free ratios,
+$h_{l+1}=r_lh_l$, so the solved system never grows with the spatial degree
+$J$. A regression test raises $J$ from 20 to 90 at fixed $L=12$ and checks
+that the retained low-degree coefficients do not move.
 
 ::: {.callout-note collapse="true" title="How the tail ratio r_N is computed"}
 Let $F_l=\int P_l(\mu)/(d_0+ik\mu)\,\mathrm d\mu$ and $z=id_0/k$. Then
@@ -318,21 +389,37 @@ F_0=\frac2k\arctan(k/d_0),\qquad
 F_1=zF_0+\frac2{ik},\qquad
 F_{l+1}=\frac{(2l+1)zF_l-lF_{l-1}}{l+1}.
 $$
-Forward recursion in $F_l$ is used when it stays numerically safe; the
-alternative is the ratio $R_l=F_{l+1}/F_l$, obtained by backward recursion,
+This three-term recursion has two independent solutions: one that grows with
+$l$ and one that decays. The moments $F_l$ are the decaying, *minimal*
+solution — that is the whole physical content, since a free propagator
+cannot keep feeding ever-higher multipoles.
+
+Minimal solutions are exactly what forward recursion destroys. Rounding
+error at any step injects a small amount of the growing solution, and from
+there it grows while the wanted piece decays, so the relative contamination
+grows like $e^{2\eta l}$. Forward recursion is therefore used only while the
+wanted solution has not yet decayed enough for this to matter, which is the
+test $\eta(N+3)<3$ in the code.
+
+Everywhere else the code runs Miller's algorithm: recur *backwards* in the
+ratio $R_l=F_{l+1}/F_l$,
 $$
-R_{l-1}=\frac{l}{(2l+1)z-(l+1)R_l},
+R_{l-1}=\frac{l}{(2l+1)z-(l+1)R_l}.
 $$
-selecting the branch that decays with $l$ — the physically decaying free
-solution, not the growing one that backward recursion would otherwise pick
-up numerically. The normalized tail ratio is then
-$r_N=\sqrt{(2N+3)/(2N+1)}\,R_N$. At $k=0$: $b_0=\sqrt2/d_0$, $b_{l>0}=0$.
-Both branches are implemented in `angular.py` as `free_moments_and_tail` /
-`_free_moments_and_ratios`, which switches between the forward and backward
-form depending on how much the free solution has already decayed — that is
-the `forward` mask built from `eta` in the source. How far the backward
-recursion has to run before it is trusted is exactly the cost driver
-profiled in @sec-spatial's closing note.
+Run backwards, the roles swap — the growing solution is the one now being
+suppressed, so the recursion forgets whatever it was started with and
+converges onto the minimal solution. That is why it may be seeded with a
+crude guess at a high degree $l=\text{depth}$: the seed's error is damped by
+$e^{-\eta}$ per step, and $\lceil28/\eta\rceil$ steps drive it below double
+precision. Starting deeper costs time and buys nothing; starting shallower
+leaves a seed-dependent answer.
+
+The normalized tail ratio is then $r_N=\sqrt{(2N+3)/(2N+1)}\,R_N$.
+At $k=0$: $b_0=\sqrt2/d_0$, $b_{l>0}=0$. Both branches live in `angular.py`
+as `free_moments_and_tail` / `_free_moments_and_ratios`, which splits the
+$k$ nodes with the `forward` mask built from `eta`. How deep the backward
+pass must start is the cost driver discussed in @sec-spatial and measured in
+@sec-performance.
 :::
 
 ## Separating the first orders {#sec-orders}
@@ -359,9 +446,17 @@ B_{ij}=\int_{-1}^1\frac{p_i(\mu)p_j(\mu)}{D(\mu)}\,\mathrm d\mu,
 $$
 solves $(1-\Gamma B)a=\Gamma b$ by ordinary dense linear algebra, and
 projects $[1+\sum_ia_ip_i(\mu)]/D(\mu)$. This path uses neither the
-tridiagonal elimination nor the tail recursion; the two are compared
-directly in `test_angular.py`. It is also the fallback for a phase function
-whose $\Gamma$ is not diagonal (@sec-method-choice).
+tridiagonal elimination nor the tail recursion, so agreement between the two
+tests the elimination and the exact tail rather than the physics they share;
+they are compared directly in `test_angular.py`.
+
+It is an independent *linear-algebra* route, not a more general physical
+model: it reads the same scalar $g$ from `Medium` and builds the same
+diagonal $\Gamma$ with $\gamma_l=\mu_sg^l$. Nothing in the shipped code
+takes a tabulated phase function. Supporting one means computing $\chi_l$
+from @eq-phase-legendre once and passing those numbers in place of $g^l$;
+$\Gamma$ stays diagonal (@sec-method-choice), so the tridiagonal solver
+needs no change at all.
 :::
 
 The distinction that matters for the final answer: **the coordinate-space
@@ -394,8 +489,18 @@ $$
 $J$, the **spatial** angular degree, is independent of $L$: the
 tridiagonal solve stops at $N=L$, and coefficients above $L$ are continued
 up to $J$ by the exact free-tail ratios of @sec-matrix's closing callout —
-the linear system never grows with $J$. For an isotropic source only $l=0$ survives,
-with an extra factor $1/\sqrt2$.
+the linear system never grows with $J$.
+
+For an isotropic source only the $l=0$ term of the boxed sum survives. Writing
+it out removes an ambiguity that the phrase "an extra factor" invites: with
+$P_0=1$, $i^0=1$ and $\sqrt{(2\cdot0+1)/2}=1/\sqrt2$, the boxed prefactor is
+already $1/(2\pi^2\sqrt2)$, and the isotropic response is
+$$
+\tilde K^{(\ge2)}_{\mathrm{iso}}(r,\omega)=
+\frac1{2\pi^2\sqrt2}\int_0^\infty k^2j_0(kr)\,h_0^{(\ge2)}(k,\omega)\,\mathrm dk .
+$$ {#eq-spatial-isotropic}
+The $1/\sqrt2$ is the normalization of $p_0$, not a separate correction
+applied on top of the directed formula.
 
 The radial integral is a composite Gauss quadrature up to `k_max_per_m`;
 with `taper=true` the weight is smoothly reduced over the second half of
@@ -415,14 +520,27 @@ points passed to the *same* call already share the angular solve
 (@sec-bgvd-caching measures the resulting speedup directly).
 
 Profiling a representative solve (`examples/point-green.toml`'s settings, a
-single point, 241 frequencies) shows the tridiagonal solve itself is cheap;
-almost all the wall time — about 70% in that configuration — is spent in
-`_free_moments_and_ratios`'s own backward recursion for the free-tail
-ratio $r_N$ (@sec-matrix's closing callout), whose iteration count is set by the
-*slowest-decaying* $k$-node in the batch (the smallest $k$, near $k\to0$)
-rather than by $N$ itself, and can run to several times $N$ as a result.
-This is a real, measured cost, not a hypothetical one; it is not yet
-addressed in this delivery.
+single point, 241 frequencies) shows the tridiagonal solve itself is cheap:
+around 60% of the wall time sits in `_free_moments_and_ratios`, in the
+backward recursion for the free-tail ratio (@sec-matrix's closing callout),
+whose depth can run to several times $N$.
+
+Which $k$ nodes are expensive follows from the decay rate itself. At
+$\omega=0$ the ratio of successive free moments decays like $e^{-\eta}$ with
+$$
+\eta=\operatorname{arcsinh}(\mu_t/k),
+$$ {#eq-eta}
+so small $k$ gives *large* $\eta$: the free solution dies within a few
+degrees there, and the backward recursion needs almost no extra depth. The
+slow nodes are the **large**-$k$ ones. The deepest pass of all is at the
+switching threshold: the code uses forward recursion while
+$\eta(N+3)<3$ and backward recursion otherwise, so the smallest $\eta$ in
+the backward batch is pinned just above $3/(N+3)$, and the margin
+$\lceil 28/\eta\rceil$ that guarantees convergence to the minimal solution
+is then about $9.3\,N$. Charging that single worst node's depth to the whole
+batch — as a batch-wide maximum does — is what made the recursion dominate.
+Giving each node its own depth, which changes no constant and no result,
+removes the excess; @sec-performance measures what that is worth.
 
 ## First order in coordinate space {#sec-coordinate-first}
 
@@ -495,6 +613,44 @@ before $r/v$; the strict-causality check applies only at $\sigma=0$.
 No negative value is ever clipped. The code returns the sum of negative
 bins, the absolute unsmeared signal before the light front, and the
 fraction of charge captured in the reported window (`readout.py`).
+
+## Every approximation in one place {#sec-discretizations}
+
+Fourier-transforming in $\mathbf x$ removes the spatial grid, and the free
+tail is eliminated exactly rather than truncated. Neither makes the result
+exact. Six separate approximations remain, each with its own knob, its own
+failure mode and its own convergence scan; an earlier draft of this chapter
+claimed there were two, which understated the work needed before trusting a
+number in a new regime.
+
+| What | Knob | Controls | How it fails |
+|---|---|---|---|
+| Scattering rank | $L$ | degrees kept in $V$ | too small: the phase function is effectively rounded off; at $g=0.9$, $L\approx64$–$96$ suffices |
+| Spatial degree | $J$ | multipoles in the Bessel sum | too small: the radial inversion cannot localize at $r$; needs $J\gtrsim k_{\max}r$ |
+| Radial cutoff | `k_max_per_m` | upper limit of $\int\mathrm dk$ | too small: sharp spatial structure is lost, badly at small $r$ |
+| Radial quadrature | `k_panel_per_m`, `k_order`, `taper` | how that integral is sampled | oscillatory integrand under-resolved; the taper changes the value and must be scanned too |
+| Frequency band and step | `max_per_ns`, `nodes` | the $\omega$ grid of @sec-charge | finite step aliases the time profile with period $2\pi/\Delta\omega$ |
+| First-order quadrature | internal, reported per solve | the exact $K^{(1)}$ integral | reported as `first_quadrature_error`, not silent |
+
+Two of these interact, which is what makes them easy to get wrong together.
+$J$ has to follow $k_{\max}r$, so raising the cutoff at fixed $J$ silently
+invalidates large radii, and a scan that moves $L$ and $J$ together cannot
+tell which one was binding — @sec-bgvd-water documents a case where exactly
+that conflation sent the blame to $g$.
+
+The rule $J\gtrsim k_{\max}r$ is an empirical guide from the localisation
+properties of a spherical-Bessel sum, not a proven error bound, and it is
+used here only to choose starting points for scans. What establishes a
+result is the scan.
+
+A further practical floor is worth recording. When the response itself falls
+to roughly $10^{-15}$ photons per square metre per emitted photon, the Bessel
+sum is producing that value through cancellation among far larger terms, and
+the answer becomes sensitive to `k_max_per_m` at the tens-of-percent level:
+at $r\approx260\,\mathrm m$ in the synthetic medium of @sec-bgvd-water,
+cutoffs of $2$, $3$ and $4\,\mathrm m^{-1}$ give $1.18$, $0.70$ and
+$0.78\times10^{-16}$. That is the method's accuracy floor for those settings,
+not a physical variation, and it sits far below any detectable signal.
 
 ## Checks and limitations {#sec-checks}
 
