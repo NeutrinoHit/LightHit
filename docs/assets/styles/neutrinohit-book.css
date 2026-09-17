@@ -1,0 +1,623 @@
+/* Canonical web and EPUB foundation for books in the NeutrinoHit universe. */
+
+:root {
+  --book-ink: #18262f;
+  --book-ink-soft: #42545f;
+  --book-muted: #687984;
+  --book-paper: #ffffff;
+  --book-canvas: #f4f6f7;
+  --book-line: #d9e0e3;
+  --book-line-strong: #bcc9ce;
+  --book-teal: #0f6972;
+  --book-teal-dark: #094b52;
+  --book-teal-soft: #e8f1f2;
+  --book-blue: #2f6f9f;
+  --book-blue-soft: #edf3fa;
+  --book-coral: #c7472f;
+  --book-coral-soft: #faeeeb;
+  --book-gold: #b97817;
+  --book-gold-soft: #fbf3e4;
+  --book-shadow: 0 18px 42px -34px rgba(24, 38, 47, 0.5);
+  --book-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --book-sans: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--book-ink);
+  background: var(--book-canvas);
+  font-family: var(--book-serif);
+  font-size: 1.08rem;
+  line-height: 1.72;
+}
+
+a {
+  color: var(--book-teal);
+  text-decoration-color: rgba(15, 105, 114, 0.32);
+  text-underline-offset: 0.16em;
+}
+
+a:hover,
+a:focus {
+  color: var(--book-teal-dark);
+  text-decoration-color: currentColor;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.sidebar,
+.toc-actions,
+.page-navigation,
+.chapter-number {
+  font-family: var(--book-sans);
+}
+
+h1,
+h2,
+h3 {
+  color: var(--book-ink);
+  letter-spacing: 0;
+}
+
+h1 {
+  max-width: none;
+  font-size: clamp(2.3rem, 5vw, 4rem);
+  line-height: 1.02;
+}
+
+h2 {
+  margin-top: 2.8rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--book-line);
+  font-size: clamp(1.55rem, 3vw, 2.2rem);
+  line-height: 1.14;
+}
+
+h3 {
+  margin-top: 2rem;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+p,
+li {
+  max-width: none;
+}
+
+main.content {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  overflow-x: clip;
+  padding-top: 2.2rem;
+  padding-bottom: 5rem;
+}
+
+.page-columns > *,
+main.content > *,
+main.content section,
+main.content div,
+main.content figure {
+  min-width: 0;
+}
+
+main.content img,
+main.content video,
+main.content iframe,
+main.content canvas,
+main.content svg {
+  max-width: 100%;
+}
+
+main.content pre,
+main.content code,
+main.content .sourceCode {
+  max-width: 100%;
+}
+
+main.content pre,
+main.content .sourceCode,
+.math.display,
+.MathJax_Display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* MathJax 3 uses custom elements rather than the MathJax 2 class names. */
+main.content mjx-container {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.page-columns .content {
+  background: var(--book-paper);
+  box-shadow: var(--book-shadow);
+}
+
+#quarto-content.page-columns {
+  column-gap: 0;
+}
+
+#title-block-header {
+  margin-bottom: 2.5rem;
+}
+
+.quarto-title .title {
+  margin-bottom: 0.6rem;
+}
+
+.quarto-title .subtitle {
+  max-width: 36ch;
+  color: var(--book-muted);
+  font-family: var(--book-serif);
+  font-size: 1.35rem;
+  line-height: 1.35;
+}
+
+.chapter-number {
+  display: block;
+  margin-bottom: 0.7rem;
+  color: var(--book-teal);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sidebar {
+  background: #eef2f3;
+  border-right: 1px solid var(--book-line);
+}
+
+.sidebar-title {
+  color: var(--book-ink);
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.sidebar-item .sidebar-item-text {
+  color: var(--book-ink-soft);
+}
+
+.sidebar-item .sidebar-link.active {
+  color: var(--book-teal-dark);
+  font-weight: 700;
+}
+
+.sidebar-item-section > .sidebar-item-container > .sidebar-item-text {
+  color: var(--book-ink);
+  font-weight: 750;
+}
+
+.sidebar nav[role="doc-toc"] ul > li > a.active,
+.sidebar nav[role="doc-toc"] ul > li > ul > li > a.active {
+  color: var(--book-teal);
+  border-left-color: var(--book-teal);
+}
+
+/* Keep a local-file preview usable even before Bootstrap JavaScript runs. */
+#quarto-margin-sidebar #TOC > ul.collapse {
+  display: block;
+}
+
+.quarto-secondary-nav-title {
+  font-family: var(--book-sans);
+}
+
+.page-navigation {
+  margin-top: 4rem;
+  border-top: 1px solid var(--book-line);
+}
+
+.nav-page .nav-page-text {
+  color: var(--book-teal-dark);
+  font-weight: 650;
+}
+
+blockquote {
+  margin: 1.6rem 0;
+  padding: 0.3rem 0 0.3rem 1.25rem;
+  border-left: 3px solid var(--book-teal);
+  color: var(--book-ink-soft);
+  font-size: 1.05rem;
+}
+
+.book-lead {
+  clear: both;
+  margin: 2rem 0 3rem;
+  padding: 1.35rem 1.55rem;
+  border-top: 4px solid var(--book-teal);
+  background: var(--book-teal-soft);
+  color: var(--book-ink);
+  font-size: 1.18rem;
+  line-height: 1.62;
+}
+
+table {
+  width: 100%;
+  max-width: 100%;
+  margin: 1.6rem 0 2rem;
+  border-color: var(--book-line);
+  font-family: var(--book-sans);
+  font-size: 0.94rem;
+  line-height: 1.45;
+  table-layout: fixed;
+}
+
+thead {
+  border-bottom: 2px solid var(--book-teal);
+}
+
+tbody tr:nth-child(even) {
+  background: #f7f9fa;
+}
+
+th,
+td {
+  padding: 0.72rem 0.8rem;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+figcaption {
+  color: var(--book-muted);
+  font-family: var(--book-sans);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 991px) {
+  body {
+    font-size: 1rem;
+  }
+
+  .page-navigation .nav-page {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .page-navigation .pagination-link {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .page-navigation .nav-page-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  main.content {
+    padding-top: 1.4rem;
+    padding-bottom: 3rem;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 10vw, 3rem);
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+    table-layout: auto;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  .page-columns .content {
+    box-shadow: none;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+/* Shared book components. Subject books may change colour tokens, but their
+   structure and placement stay identical across the NeutrinoHit universe. */
+
+/* Ordered processes use a plain vertical list. This keeps equations at full
+   width and avoids one-off boxes tied to a particular chapter. */
+.process-flow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.process-step {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  column-gap: 0.75rem;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.process-step-label,
+.process-step-title {
+  font-family: var(--book-sans);
+  font-weight: 700;
+}
+
+.process-step-label {
+  grid-column: 1;
+  color: var(--book-teal);
+}
+
+.process-step-title {
+  grid-column: 2;
+  color: var(--book-ink);
+}
+
+.process-step-body {
+  grid-column: 2;
+  min-width: 0;
+  margin-top: 0.35rem;
+}
+
+.process-step-body > :first-child { margin-top: 0; }
+.process-step-body > :last-child { margin-bottom: 0; }
+
+aside.biography,
+div.biography {
+  grid-column: body-content-start / body-content-end !important;
+  clear: both !important;
+  position: static !important;
+  float: none !important;
+  display: flex;
+  align-items: stretch;
+  gap: 1.25rem;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 2rem 0 !important;
+  padding: 1.15rem 1.25rem;
+  border-left: 5px solid var(--book-blue);
+  background: var(--book-blue-soft);
+  box-shadow: 0 14px 30px -28px rgba(30, 44, 70, 0.7);
+}
+
+.biography-photo {
+  flex: 0 0 min(29%, 12rem);
+  align-self: stretch;
+}
+
+.biography-photo a {
+  display: block;
+  height: 100%;
+}
+
+.biography-portrait {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 11rem;
+  max-height: 17rem;
+  border: 1px solid rgba(70, 91, 140, 0.2);
+  object-fit: cover;
+  object-position: center top;
+}
+
+.biography-copy {
+  flex: 1 1 auto;
+  align-self: center;
+  min-width: 0;
+}
+
+.biography-label,
+.biography-name,
+.biography-years,
+.biography-sources {
+  font-family: var(--book-sans);
+}
+
+.biography-label {
+  margin-bottom: 0.15rem;
+  color: var(--book-blue);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.biography-name {
+  color: var(--book-ink);
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1.16;
+}
+
+.biography-years {
+  margin-top: 0.18rem;
+  color: var(--book-muted);
+  font-size: 0.9rem;
+}
+
+.biography-copy > p {
+  margin: 0.75rem 0 0;
+  line-height: 1.55;
+}
+
+.biography-sources {
+  margin-top: 0.8rem;
+  color: var(--book-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.biography-sources p {
+  margin: 0;
+}
+
+h2.exercise-heading,
+h3.exercise-heading {
+  margin: 0 0 0.7rem;
+  padding: 0;
+  border: 0;
+  font-size: 1.08rem;
+  line-height: 1.28;
+}
+
+.exercise-heading .header-section-number {
+  display: none;
+}
+
+section.level2:has(> h2.exercise-heading),
+section.level3:has(> h3.exercise-heading) {
+  clear: both;
+  margin: 1rem 0;
+  padding: 1rem 1.2rem;
+  border-left: 4px solid var(--book-coral);
+  background: var(--book-coral-soft);
+}
+
+.animation-block,
+.interactive-block {
+  clear: both;
+  display: block;
+  margin: 2.2rem 0;
+  padding: 1rem;
+  border: 1px solid #23333d;
+  background: #101820;
+  color: #fff;
+  box-shadow: 0 18px 34px -28px rgba(0, 0, 0, 0.85);
+}
+
+.animation-block video,
+.animation-block img,
+.interactive-block img {
+  display: block;
+  width: min(100%, 900px);
+  max-height: 68vh;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.animation-block iframe.animation-embed,
+.interactive-block iframe.interactive-embed {
+  display: block;
+  width: 100%;
+  height: 44rem;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 0.45rem;
+  background: #000;
+}
+
+.animation-block figcaption,
+.interactive-block figcaption {
+  margin-top: 0.75rem;
+  color: #fff;
+  text-align: center;
+}
+
+.animation-block a,
+.interactive-block a {
+  color: #b9e5ed;
+}
+
+.animation-block img.animation-qr,
+.interactive-block img.interactive-qr,
+.animation-qr {
+  width: 132px;
+  max-width: 36%;
+  margin: 1rem auto 0;
+  padding: 0.3rem;
+  background: #fff;
+}
+
+.media-source {
+  margin-top: 0.65rem;
+  color: #c6d1d7;
+  font-family: var(--book-sans);
+  font-size: 0.86rem;
+}
+
+.media-source p {
+  margin: 0;
+}
+
+details.margin-note {
+  position: relative;
+  width: min(24rem, calc(100% - 1rem));
+  margin: 1.35rem 0.35rem 1.75rem auto;
+  padding: 0.85rem 1rem 0.8rem;
+  overflow: visible;
+  color: #211700;
+  font-family: var(--book-sans);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  background: linear-gradient(180deg, #fff2a8 0%, #ffe06d 100%);
+  border: 1px solid rgba(122, 92, 0, 0.26);
+  border-radius: 0.16rem;
+  box-shadow: 0 0.45rem 1rem rgba(24, 38, 47, 0.18);
+  transform: rotate(-0.35deg);
+  transform-origin: center;
+}
+
+details.margin-note::before {
+  position: absolute;
+  top: -0.14rem;
+  left: 50%;
+  width: 2.7rem;
+  height: 0.42rem;
+  background: rgba(244, 197, 66, 0.9);
+  border-radius: 999px;
+  box-shadow: 0 0.08rem 0.18rem rgba(0, 0, 0, 0.18);
+  content: "";
+  transform: translateX(-50%) rotate(2deg);
+}
+
+details.margin-note summary {
+  color: #0d0900;
+  cursor: pointer;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+details.margin-note > :last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  details.margin-note {
+    width: calc(100% - 0.7rem);
+    margin-right: auto;
+  }
+
+  aside.biography,
+  div.biography {
+    display: block;
+  }
+
+  .biography-photo {
+    width: min(68%, 14rem);
+    margin: 0 auto 1rem;
+  }
+
+  .animation-block iframe.animation-embed,
+  .interactive-block iframe.interactive-embed {
+    height: 36rem;
+  }
+}

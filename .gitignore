@@ -17,14 +17,15 @@ __pycache__/
 /build/
 /dist/
 
-# Quarto and platform files
-/.quarto/
-/_site/
-/_book/
+# Quarto and platform files (any depth: docs/ book, slides/ deck)
+.quarto/
+_site/
+_book/
+*_files/
 .DS_Store
 
 # Local run outputs and rendered reports: regenerate, do not commit.
 /results/
 /preview/
-/docs/point-green.html
-/docs/point-green_files/
+docs/*.html
+slides/*.html

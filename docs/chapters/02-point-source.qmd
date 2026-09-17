@@ -1,0 +1,540 @@
+# Point source, point detector {#sec-point-source}
+
+This chapter solves @eq-rte of @sec-rte for a single point source and a
+single point isotropic detector in an infinite, homogeneous medium, at one
+wavelength $\lambda$. It is the exact math behind `src/lighthit`; every
+boxed result is cross-referenced to the function that implements it.
+
+The route from @eq-rte to code has four steps, in this order: a space–time
+Fourier transform turns the streaming PDE into an algebraic equation, one
+$\mathbf k$ at a time (@sec-fourier); reciprocity trades "solve once for
+every source direction" for "solve once, evaluate anywhere" (@sec-adjoint);
+expanding the remaining angular dependence in Legendre polynomials, with
+the polar axis along $\mathbf k$, turns that one solve into an exact,
+tridiagonal linear system (@sec-matrix) — @sec-method-choice explains why
+this, rather than a direct real-space spherical-harmonic expansion; and an
+inverse Fourier–Bessel transform brings the result back to $(\mathbf r,t)$
+(@sec-spatial, @sec-coordinate-first, @sec-charge). Keep this chain in mind
+throughout: every symbol introduced below is a waypoint on it, not a new
+unrelated quantity.
+
+## Setup and normalization {#sec-setup}
+
+The medium is infinite and homogeneous. Absorption $\mu_a>0$ and scattering
+$\mu_s\ge0$ are in $\mathrm m^{-1}$, $\mu_t=\mu_a+\mu_s$, and the group speed
+$v=c_0/n_g$ is in m/ns with $c_0=0.299792458$ m/ns. Polarization, wavelength
+change on scattering, refracting boundaries, and reflections are not
+included. $I(\mathbf x,\mathbf s,t)$ is the intensity of @sec-rte, and the
+transport equation reads
+$$
+\left(\frac1v\partial_t+\mathbf s\cdot\nabla+\mu_t\right)I
+-\mu_s\int p(\mathbf s\cdot\mathbf s')I(\mathbf s')\,\mathrm d\Omega'
+=q.
+$$ {#eq-rte-local}
+
+A directed single-photon flash at $t=0$ is
+$$q=\delta^3(\mathbf x)\,\delta(t)\,\delta_{S^2}(\mathbf s-\mathbf s_0),$$
+with $q$ integrating to one photon over space, time, and direction. For an
+isotropic flash the angular delta function is replaced by $1/(4\pi)$.
+
+An ideal detector measures the scalar flux
+$$K(\mathbf r,t;\mathbf s_0)=\int I(\mathbf r,\mathbf s,t)\,\mathrm d\Omega,$$
+the response **per unit effective area**, in $\mathrm m^{-2}\,\mathrm{ns}^{-1}$.
+This is not the same as the signed vector flux $\int\mathbf sI\,\mathrm d\Omega$
+through a plane. The detector's angular sensitivity is isotropic and its
+efficiency is 1; the expected count of a small detector of area $A$ is
+$A\int K\,\mathrm dt$. The radius or shape of a finite optical module (OM)
+is not modeled yet.
+
+For the directed flash,
+$$K^{(0)}(\mathbf r,t;\mathbf s_0)=v\,e^{-\mu_tvt}\,\delta^3(\mathbf r-vt\,\mathbf s_0),\qquad t>0,$$ {#eq-k0-directed}
+a single spike travelling outward along $\mathbf s_0$ at speed $v$. On the
+exact forward ray this has no finite pointwise value; the API rejects that
+request (see `PointGreenSolver.solve`). In every other direction $K^{(0)}=0$.
+For the isotropic flash,
+$$K^{(0)}(r,t)=\frac{e^{-\mu_tr}}{4\pi r^2}\,\delta(t-r/v),\qquad r>0,$$ {#eq-k0-iso}
+whose integral over a time bin is computed in closed form (@sec-charge).
+Both are derived from scratch in @sec-ballistic, together with the tool the
+rest of the chapter reuses.
+
+## The Fourier transport equation {#sec-fourier}
+
+For any field $u(\mathbf x,t)$, define its space–time Fourier transform
+$$
+\tilde u(\mathbf k,\omega)=\int \mathrm d^3x\,\mathrm dt\ u(\mathbf x,t)\,
+e^{-i\mathbf k\cdot\mathbf x+i\omega t},
+$$ {#eq-fourier-def}
+with $\mathbf k$ in $\mathrm m^{-1}$, $\omega$ in $\mathrm{rad/ns}$. A tilde
+marks this transform **everywhere** in this book. A hat over a unit vector,
+as in $\widehat{\mathbf k}=\mathbf k/k$ or $\widehat{\mathbf r}=\mathbf r/r$,
+is unrelated to it — it just means "divide by the length" — and never
+denotes a transform.
+
+Under @eq-fourier-def, integrating by parts and dropping boundary terms at
+spatial and temporal infinity gives $\partial_t\to-i\omega$ and
+$\nabla\to i\mathbf k$. The scattering integral in @eq-rte-local does not
+touch $\mathbf x$ or $t$, so it transforms termwise, into an operator $V$
+acting only on the direction $\mathbf s$:
+$$
+(V u)(\mathbf s):=\mu_s\int p(\mathbf s\cdot\mathbf s')\,u(\mathbf s')\,
+\mathrm d\Omega'.
+$$
+Collecting every term of @eq-rte-local,
+$$
+\boxed{(D-V)\tilde I=\tilde q,}\qquad
+D(\mathbf s)=d_0+ik\mu,\quad d_0=\mu_t-i\omega/v,
+\quad k=|\mathbf k|,\quad \mu=\widehat{\mathbf k}\cdot\mathbf s.
+$$ {#eq-master}
+This holds **per $\mathbf k$**: different wavenumbers never mix, because
+the medium's homogeneity is exactly what a Fourier transform in $\mathbf x$
+diagonalizes (@sec-method-choice returns to why that matters). $\mathrm{Re}(d_0)=\mu_t>0$
+makes $D-V$ invertible for every real $\omega$ and every physical medium; that
+positivity is what selects the causal, retarded solution automatically, with
+no separate initial condition to impose by hand. @eq-master is the equation
+solved, in one form or another, for the rest of this chapter — everything
+that follows is either a special case of it (@sec-ballistic), a reformulation
+of what to do with it (@sec-adjoint), or an inversion of its solution back
+to $(\mathbf r,t)$ (@sec-spatial onward).
+
+## Deriving the ballistic term {#sec-ballistic}
+
+Set $V=0$ in @eq-master — no scattering — with the directed-flash source. Its
+Fourier transform is
+$$
+\tilde q(\mathbf k,\mathbf s,\omega)=\int\mathrm d^3x\,\mathrm dt\,
+\delta^3(\mathbf x)\delta(t)\delta_{S^2}(\mathbf s-\mathbf s_0)\,
+e^{-i\mathbf k\cdot\mathbf x+i\omega t}=\delta_{S^2}(\mathbf s-\mathbf s_0),
+$$
+independent of $\mathbf k,\omega$: the space and time deltas simply evaluate
+the exponential at the origin. @eq-master then reads $D(\mathbf s)\tilde I(\mathbf s)
+=\delta(\mathbf s-\mathbf s_0)$, and since $D$ is an ordinary, nonzero
+multiplier (no integral operator left to invert), the solution is itself a
+delta, scaled by $D$ at the point it sits on:
+$$
+\tilde I^{(0)}(\mathbf s)=\frac{\delta_{S^2}(\mathbf s-\mathbf s_0)}{D(\mathbf s_0)}
+\quad\Longrightarrow\quad
+\tilde K^{(0)}(\mathbf k,\omega;\mathbf s_0)=\int\tilde I^{(0)}\,\mathrm d\Omega
+=\frac1{D(\mathbf s_0)}.
+$$ {#eq-k0-transform}
+No scattering means the photon direction never leaves $\mathbf s_0$, and
+@eq-k0-transform says exactly that in transform space: the whole angular
+dependence stays a single spike. Everything downstream of $\mathbf s_0$ in
+this chapter is this same object with $V$ turned back on.
+
+::: {.callout-note collapse="true" title="From 1/D(s0) back to (r,t): verifying eq-k0-directed"}
+Rather than inverting a four-dimensional distributional integral from
+scratch, check @eq-k0-directed by transforming it forward and confirming it
+reproduces @eq-k0-transform — a short, self-contained calculation. With
+$\theta$ the step function,
+$$
+\int\mathrm d^3r\,\mathrm dt\ v\,\theta(t)e^{-\mu_tvt}\,
+\delta^3(\mathbf r-vt\mathbf s_0)\ e^{-i\mathbf k\cdot\mathbf r+i\omega t}
+=v\int_0^\infty\mathrm dt\ e^{-\mu_tvt-ivt(\mathbf k\cdot\mathbf s_0)+i\omega t}
+=\frac{v}{\mu_tv+iv(\mathbf k\cdot\mathbf s_0)-i\omega}
+=\frac1{d_0+ik\mu},
+$$
+using $\mathbf k\cdot\mathbf s_0=k\mu$ with $\mu=\widehat{\mathbf k}\cdot\mathbf s_0$
+in the last step — exactly $1/D(\mathbf s_0)$. $\mu_t>0$ makes the time
+integral converge, which is the same positivity that made $D$ invertible
+above; the two are the same causality statement.
+
+For the isotropic flash, average @eq-k0-directed over $\mathbf s_0$ with
+weight $1/(4\pi)$. Only $\mathbf s_0$ multiplies $vt$ inside the delta, so
+use $\int_{S^2}\delta^3(\mathbf x-R\widehat{\mathbf s})\,\mathrm d\Omega_{\widehat{\mathbf s}}
+=\delta(|\mathbf x|-R)/R^2$ with $R=vt$, $\mathbf x=\mathbf r$:
+$$
+K^{(0)}_{\mathrm{iso}}(r,t)=\frac{v\,e^{-\mu_tvt}}{4\pi}\cdot
+\frac{\delta(r-vt)}{(vt)^2}=\frac{e^{-\mu_tr}}{4\pi r^2}\,\delta(t-r/v),
+$$
+using $\delta(r-vt)=\delta(t-r/v)/v$ in the last step — @eq-k0-iso.
+:::
+
+## Reciprocity: one solve for every source direction {#sec-adjoint}
+
+Solving @eq-master directly for the directed flash means finding the
+Green's function $G(\mathbf s,\mathbf s_0)$ of $L:=D-V$ on the sphere, one
+$\mathbf s_0$ at a time, and then integrating it over the *output* variable,
+$\tilde K(\mathbf k,\omega;\mathbf s_0)=\int G(\mathbf s,\mathbf s_0)\,
+\mathrm d\Omega_{\mathbf s}$ — a fresh solve for every source direction of
+interest. Reciprocity removes that per-$\mathbf s_0$ cost.
+
+Use the bilinear pairing $\langle f,g\rangle=\int_{S^2}f(\mathbf s)g(\mathbf s)\,
+\mathrm d\Omega$ — no complex conjugation; this is the transport-theory
+reciprocity pairing, not the Hermitian inner product, and it is what lets
+the argument below go through without ever conjugating the complex $D$.
+$D$ multiplies pointwise, so $\langle f,Dg\rangle=\langle Df,g\rangle$ for
+*any* complex-valued $D(\mathbf s)$, trivially. $V$'s kernel $\mu_sp(\mathbf s\cdot
+\mathbf s')$ depends on the dot product alone, so it is symmetric under
+$\mathbf s\leftrightarrow\mathbf s'$ — true of every physical phase
+function, HG included — and relabeling the dummy variable in $\langle f,Vg
+\rangle$ gives $\langle f,Vg\rangle=\langle Vf,g\rangle$ too. So
+$$
+\langle f,Lg\rangle=\langle Lf,g\rangle\quad\text{for all }f,g,
+$$
+using only the **symmetry** of the phase function — nothing about it being
+real-valued is needed. Now evaluate what is wanted, $\tilde K(\mathbf s_0)=
+\langle1,G(\cdot,\mathbf s_0)\rangle$ with $G(\cdot,\mathbf s_0)=L^{-1}
+\delta(\cdot-\mathbf s_0)$:
+$$
+\tilde K(\mathbf k,\omega;\mathbf s_0)
+=\langle1,L^{-1}\delta(\cdot-\mathbf s_0)\rangle
+=\langle L^{-1}1,\delta(\cdot-\mathbf s_0)\rangle
+=\bigl[L^{-1}1\bigr](\mathbf s_0),
+$$
+where the middle step applies the same symmetry to $L^{-1}$ (transposes of
+inverses are inverses of transposes), and the last step uses
+$\langle u,\delta(\cdot-\mathbf s_0)\rangle=u(\mathbf s_0)$. Writing
+$h:=L^{-1}1$ — the response to a **unit, uniform** right-hand side, not to
+any particular $\mathbf s_0$ —
+$$
+\boxed{(D-V)h=1,}\qquad
+\boxed{\tilde K(\mathbf k,\omega;\mathbf s_0)=h(\mathbf s_0).}
+$$ {#eq-adjoint-h}
+This is the payoff: $h$ does not know about $\mathbf s_0$ at all while it is
+being solved for; $\mathbf s_0$ only enters afterward, as the point at which
+the already-computed $h$ is evaluated. One tridiagonal solve per $(\mathbf
+k,\omega)$ (@sec-matrix) answers the detector-response question for every
+source direction at once. $h$'s meaning is now explicit and never has to be
+taken on faith again: **$h(\mathbf s_0)$ is $\tilde K$, the transform of the
+actual measured response**, not an auxiliary field with no direct physical
+reading — @sec-spatial and @sec-charge only have left to invert it back to
+$(\mathbf r,t)$. For an isotropic flash the same argument with $\tilde q=
+1/(4\pi)$ in place of $\delta(\cdot-\mathbf s_0)$ gives
+$\tilde K_{\mathrm{iso}}=\langle h,1/(4\pi)\rangle$, the average of $h$ over
+the sphere — used from @sec-spatial on.
+
+::: {.callout-note collapse="true" title="The Hermitian route, for comparison"}
+Transport texts often build the adjoint with the Hermitian inner product
+$\langle f,g\rangle=\int f^*g\,\mathrm d\Omega$ instead. That route needs
+$D^*$, produces a field $\psi$ solving $(D^*-V)\psi=1$, and recovers the
+wanted quantity by a final conjugation, $h=\psi^*$. It agrees with
+@eq-adjoint-h — the HG kernel is both real and symmetric, so nothing here
+contradicts that derivation — but it needs the kernel's *reality* as well as
+its symmetry, and reaches the boxed result in two steps instead of one. This
+book uses the bilinear route throughout; `angular.py`'s `h` is exactly the
+$h$ of @eq-adjoint-h, with no leftover conjugation anywhere in the code.
+:::
+
+## Why Fourier space and Legendre polynomials {#sec-method-choice}
+
+@eq-adjoint-h is already a spherical-harmonic expansion — just not the one a
+first guess might reach for, expanding $I(\mathbf x,\mathbf s,t)$ directly in
+$\mathbf x$-space. Two choices explain the difference, both visible directly
+in `angular.py`.
+
+**Fourier in $\mathbf x$ first.** A direct real-space spherical-harmonic (or
+discrete-ordinate) expansion still leaves $\nabla$ coupling every spatial
+point to its neighbors: the angular truncation alone does not remove the
+need to discretize $\mathbf x$, and a finite grid or mesh adds its own
+truncation error — numerical dispersion, a chosen spacing — on top of the
+angular one. The medium here is infinite and homogeneous, so translations
+in $\mathbf x$ are an exact symmetry of @eq-rte-local, and the Fourier
+transform diagonalizes them: @eq-master holds **per $\mathbf k$**, with zero
+coupling between different $\mathbf k$. That is what removes $\mathbf x$
+from the problem entirely. The only discretizations anywhere in this
+chapter are the angular truncation $L$ (@sec-matrix) and the numerical $k$
+quadrature (@sec-spatial) — never a spatial grid.
+
+**Legendre, not a general $Y_{lm}$ expansion.** Once in $\mathbf k$-space,
+$D(\mathbf s)=d_0+ik\mu$ depends on $\mathbf s$ only through $\mu=
+\widehat{\mathbf k}\cdot\mathbf s$, the cosine to the *particular* $\mathbf
+k$ being solved for. Choosing the polar axis along $\mathbf k$ — a free
+choice, made independently at every $\mathbf k$ — makes $D$, and the
+uniform source $1$, both invariant under rotation about that axis, so only
+$m=0$ survives: the Legendre polynomials $P_l(\mu)$, not a full $(l,m)$
+spherical-harmonic system. A source or phase function that was *not*
+axisymmetric about $\mathbf k$ would force every $m$ back in. Streaming
+couples adjacent $l$ only, by the ordinary 3-term recursion $\mu p_l=a_lp_{l-1}
++a_{l+1}p_{l+1}$ — hence tridiagonal. Scattering is **diagonal** in $l$,
+with eigenvalue $\gamma_l=\mu_sg^l$, specifically because the
+Henyey–Greenstein phase function's own Legendre expansion is
+$p_{\mathrm{HG}}(\cos\Theta)=\sum_l\frac{2l+1}{4\pi}g^lP_l(\cos\Theta)$ — a
+classical property of HG (Henyey & Greenstein 1941), not of phase functions
+in general. A tabulated or otherwise non-HG phase function would still
+reduce to this $m=0$, $l$-indexed problem by the same rotation argument, but
+its $\Gamma$ would no longer be diagonal — `dense_finite_rank_reference`
+(@sec-orders) solves exactly that more general, dense-matrix case, and is
+the fallback this design keeps available.
+
+**Reciprocity removes the last multiplicity.** @sec-adjoint's construction
+means the single tridiagonal solve at each $(\mathbf k,\omega)$ — sourced by
+$1$, not by $\mathbf s_0$ — already answers the question for every source
+direction, and @sec-spatial folds in every observation point $\mathbf r$
+afterward, algebraically, from that same $h$.
+
+Put together: an exact, per-$\mathbf k$ algebraic system, tridiagonal
+because of the streaming recursion, diagonal in its scattering part because
+of HG's own Legendre expansion, solved once per $(\mathbf k,\omega)$
+regardless of how many source directions or detector positions are asked
+for. The only approximations left are the truncation degree $L$
+(@sec-matrix) and the numerical $k,\omega$ quadratures (@sec-spatial,
+@sec-charge) — never a discretization of $\mathbf x$.
+
+## Matrix form and the exact free tail {#sec-matrix}
+
+The HG phase function is normalized to one over the full sphere,
+$$p_{\mathrm{HG}}(x)=\frac{1-g^2}{4\pi(1+g^2-2gx)^{3/2}}.$$
+$g$ is a model input here, not inferred from either optical coefficient
+(the private-water adapter's own default is discussed in @sec-bgvd-water).
+The multiply-scattered part of the code uses the truncated operator
+$$\gamma_l=\begin{cases}\mu_sg^l,&l\le L,\\0,&l>L,\end{cases}$$
+where $L$ is the **scattering degree** — a truncation of the operator's
+angular rank, not of the number of collisions summed (@sec-orders makes
+that distinction precise). Multiplication by $\mu$ is tridiagonal in the
+normalized-Legendre basis $p_l(\mu)=\sqrt{(2l+1)/2}\,P_l(\mu)$,
+$$\mu p_l=a_lp_{l-1}+a_{l+1}p_{l+1},\qquad
+a_l=\frac{l}{\sqrt{4l^2-1}}\ (l\ge1),\quad a_0=0,$$
+so, writing $h(\mu)=\sum_lh_lp_l(\mu)$, the angular equation @eq-adjoint-h
+becomes
+$$\boxed{
+(d_0-\gamma_l)h_l+ik\,a_lh_{l-1}+ik\,a_{l+1}h_{l+1}
+=\sqrt2\,\delta_{l0}.
+}$$
+This is still an infinite system. Above degree $L$ its coefficients belong
+to **free** transport alone. Its exact moments,
+$$b_l=\int_{-1}^1\frac{p_l(\mu)}{d_0+ik\mu}\,\mathrm d\mu,$$
+satisfy the same homogeneous recursion for $l>0$ — these are exactly the
+Legendre coefficients of $h^{(0)}=1/D$ from @sec-ballistic, restricted to
+$V=0$. Let $N\ge L$ be the last degree kept explicitly. Then, for a
+right-hand side that vanishes above $L$, the free tail obeys
+$$h_{N+1}=r_Nh_N,\qquad r_N=\frac{b_{N+1}}{b_N}$$
+(with $r_N=0$ at $k=0$), and the code never divides small $b_l$ by one
+another directly — see the collapsed derivation below for how $r_N$ is
+actually computed.
+The last diagonal entry of the finite matrix becomes
+$$A_{NN}=d_0-\gamma_N+ik\,a_{N+1}r_N,$$
+and for the remaining rows
+$$A_{ll}=d_0-\gamma_l,\quad
+A_{l,l-1}=ik\,a_l,\quad A_{l,l+1}=ik\,a_{l+1}.$$
+This eliminates the infinite **free** tail exactly; the condition
+$h_{N+1}=0$ is never imposed. A regression test moves the elimination
+degree $N$ from 20 to 90 at fixed $L$ and checks that the retained
+low-degree coefficients do not move.
+
+::: {.callout-note collapse="true" title="How the tail ratio r_N is computed"}
+Let $F_l=\int P_l(\mu)/(d_0+ik\mu)\,\mathrm d\mu$ and $z=id_0/k$. Then
+$$
+F_0=\frac2k\arctan(k/d_0),\qquad
+F_1=zF_0+\frac2{ik},\qquad
+F_{l+1}=\frac{(2l+1)zF_l-lF_{l-1}}{l+1}.
+$$
+Forward recursion in $F_l$ is used when it stays numerically safe; the
+alternative is the ratio $R_l=F_{l+1}/F_l$, obtained by backward recursion,
+$$
+R_{l-1}=\frac{l}{(2l+1)z-(l+1)R_l},
+$$
+selecting the branch that decays with $l$ — the physically decaying free
+solution, not the growing one that backward recursion would otherwise pick
+up numerically. The normalized tail ratio is then
+$r_N=\sqrt{(2N+3)/(2N+1)}\,R_N$. At $k=0$: $b_0=\sqrt2/d_0$, $b_{l>0}=0$.
+Both branches are implemented in `angular.py` as `free_moments_and_tail` /
+`_free_moments_and_ratios`, which switches between the forward and backward
+form depending on how much the free solution has already decayed — that is
+the `forward` mask built from `eta` in the source. How far the backward
+recursion has to run before it is trusted is exactly the cost driver
+profiled in @sec-spatial's closing note.
+:::
+
+## Separating the first orders {#sec-orders}
+
+To avoid inverting the ballistic singularities in space, and to avoid
+subtracting two nearly equal numbers, the code solves three systems built
+from the **same** matrix structure instead of one:
+$$
+h^{(0)}=b,\qquad
+A_0h^{(1)}=\Gamma b,\qquad
+A_Lh^{(\ge2)}=\Gamma h^{(1)}.
+$$
+$\Gamma$ is the diagonal matrix of $\gamma_l$; $A_0$ contains free transport
+only, and $A_L=A_0-\Gamma$. Both matrices share the same exact free tail.
+The last solve sums **all** orders $2,3,\dots$ — there is no truncation of
+the Neumann series in the number of collisions, only the angular truncation
+at $L$ described above. For each $(k,\omega)$ this means two tridiagonal
+solves, each $O(N)$, batched over every $k$ node at once (`angular_components`).
+
+::: {.callout-note collapse="true" title="Independent check: dense matrix reference"}
+`dense_finite_rank_reference` builds
+$$
+B_{ij}=\int_{-1}^1\frac{p_i(\mu)p_j(\mu)}{D(\mu)}\,\mathrm d\mu,
+$$
+solves $(1-\Gamma B)a=\Gamma b$ by ordinary dense linear algebra, and
+projects $[1+\sum_ia_ip_i(\mu)]/D(\mu)$. This path uses neither the
+tridiagonal elimination nor the tail recursion; the two are compared
+directly in `test_angular.py`. It is also the fallback for a phase function
+whose $\Gamma$ is not diagonal (@sec-method-choice).
+:::
+
+The distinction that matters for the final answer: **the coordinate-space
+result uses a separate, exact first-order integral with the full HG phase
+function** (@sec-coordinate-first), not the finite-$L$ $h^{(1)}$ above. So
+the shipped result is
+$$
+K=K^{(0)}+K_{\mathrm{HG}}^{(1)}+K_L^{(\ge2)}.
+$$
+The finite-$L$ $h^{(1)}$ still matters — it is the right-hand side that
+feeds $h^{(\ge2)}$ — but it is not itself reported. This is not the exact
+solution of one finite-$L$ HG operator at fixed $L$: the first order is
+resolved more precisely than that. As $L\to\infty$ the finite-$L$ solution
+converges to the full HG answer either way. The exact composition of the
+result is recorded in the output file's metadata (`GreenResult.save`).
+
+## Spatial inversion {#sec-spatial}
+
+Let $\nu=\widehat{\mathbf r}\cdot\mathbf s_0$. The angular integral over
+$\widehat{\mathbf k}$ is done analytically through the spherical Bessel
+function $j_l$:
+$$
+\boxed{
+\tilde K^{(\ge2)}(r,\nu,\omega)=
+\frac1{2\pi^2}\sum_{l=0}^{J}
+i^l\sqrt{\frac{2l+1}{2}}P_l(\nu)
+\int_0^\infty k^2j_l(kr)\,h_l^{(\ge2)}(k,\omega)\,\mathrm dk.
+}
+$$
+$J$, the **spatial** angular degree, is independent of $L$: the
+tridiagonal solve stops at $N=L$, and coefficients above $L$ are continued
+up to $J$ by the exact free-tail ratios of @sec-matrix's closing callout —
+the linear system never grows with $J$. For an isotropic source only $l=0$ survives,
+with an extra factor $1/\sqrt2$.
+
+The radial integral is a composite Gauss quadrature up to `k_max_per_m`;
+with `taper=true` the weight is smoothly reduced over the second half of
+the interval. This changes the numerical value of the integral — cutoff and
+edge taper both need their own convergence scan, and so does $J$: a
+spherical-Bessel sum needs roughly $J\gtrsim k_{\max}\cdot r$ multipole
+terms to represent a function localized at radius $r$, a constraint
+independent of $L$ or $g$ (@sec-bgvd-water works through a case where this,
+not $L$, was the binding constraint). There is no 3-D FFT and no spatial
+grid in $x,y,z$ anywhere in this path (`SolverSettings.quadrature`,
+`PointGreenSolver.solve`). Within one call, frequencies are processed one
+at a time; after the angular coefficients at a given frequency are found,
+they are contracted against every requested observation point and
+discarded. Only the resulting spectra are kept — there is no cache reused
+between independent `solve` calls in this first release, though observation
+points passed to the *same* call already share the angular solve
+(@sec-bgvd-caching measures the resulting speedup directly).
+
+Profiling a representative solve (`examples/point-green.toml`'s settings, a
+single point, 241 frequencies) shows the tridiagonal solve itself is cheap;
+almost all the wall time — about 70% in that configuration — is spent in
+`_free_moments_and_ratios`'s own backward recursion for the free-tail
+ratio $r_N$ (@sec-matrix's closing callout), whose iteration count is set by the
+*slowest-decaying* $k$-node in the batch (the smallest $k$, near $k\to0$)
+rather than by $N$ itself, and can run to several times $N$ as a result.
+This is a real, measured cost, not a hypothetical one; it is not yet
+addressed in this delivery.
+
+## First order in coordinate space {#sec-coordinate-first}
+
+For a directed photon, let $s=vt$, $r=|\mathbf r|$,
+$\nu=\widehat{\mathbf r}\cdot\mathbf s_0<1$. The only possible scattering
+point lies on the initial ray:
+$$
+a=\frac{s^2-r^2}{2(s-r\nu)},\qquad b=s-a,\qquad
+\cos\theta=\frac{r\nu-a}{b},
+$$
+with $a$ the distance to the scattering point and $b$ the distance from
+there to the detector. For $t>r/v$,
+$$
+\boxed{
+K^{(1)}(t)=\frac{\mu_sv\,p_{\mathrm{HG}}(\cos\theta)\,e^{-\mu_ss-\mu_as}}
+{b(s-r\nu)}.
+}
+$$
+For $t<r/v$ the response is zero.
+
+::: {.callout-note collapse="true" title="Where this comes from"}
+The formula is obtained by integrating
+$\mu_sp(\cos\theta)e^{-\mu_t(a+b)}b^{-2}\delta(t-(a+b)/v)\,\mathrm da$,
+keeping the Jacobian $\mathrm dt/\mathrm da=(1-\cos\theta)/v$. Its charge is
+checked independently by integrating directly over $a$. For an isotropic
+source and isotropic scattering ($g=0$), an independent closed form is
+available as a cross-check:
+$$
+K^{(1)}(r,t)=\frac{\mu_s}{4\pi rt}e^{-\mu_tvt}
+\ln\frac{vt+r}{vt-r},\qquad t>r/v.
+$$
+For an isotropic source at general $g\ne0$, a one-dimensional quadrature
+over the ellipsoid $a+b=vt$ is used instead, after the substitution
+$a=(vt/2)(1+\tanh y)$, which removes the $1/(ab)$ factor from the
+integration measure. See `single_scattering_rate`, `single_spectrum`,
+`single_bins`.
+:::
+
+## Charge and the time signal {#sec-charge}
+
+The charge is $Q=\tilde K(0)$. In a bin centered at $t_b$ with width
+$\Delta t_b$, the $\ge2$-scattering contribution is
+$$
+N_b^{(\ge2)}\simeq\frac1\pi\Re\sum_jw_j\,
+\tilde K^{(\ge2)}(\omega_j)\,
+e^{-\omega_j^2\sigma^2/2}\,
+\Delta t_b\,\operatorname{sinc}(\omega_j\Delta t_b/2)\,
+e^{-i\omega_jt_b},
+$$
+where $w_j$ are trapezoidal quadrature weights in $\omega$,
+$\operatorname{sinc}x=\sin x/x$, and $\sigma$ is the width of an additional
+Gaussian instrument response ($\sigma=0$: no smearing). Orders 0 and 1 are
+instead integrated directly in physical time; at $\sigma>0$ their
+convolution with the Gaussian is applied as a difference of normal CDFs at
+the bin edges. @sec-histogram-binning explains why that split is necessary,
+not just convenient.
+
+`components` has shape `(frequency, observation, 3)`; the last axis is the
+orders $0$, $1$, $\ge2$, not three specific collision counts. Time-domain
+components have shape `(observation, bin, 3)`.
+
+In the demonstration, 241 nodes on $[0,1.2]$ rad/ns give
+$\Delta\omega=0.005$ rad/ns; the frequency-sum period is
+$2\pi/\Delta\omega\simeq1256.6$ ns. Bins on an arbitrary window still use
+the formula above, but periodic copies of the $\ge2$-scattering spectrum do
+not vanish on their own — widening the window requires shrinking the
+frequency step to compensate. Gaussian smearing produces its own tail
+before $r/v$; the strict-causality check applies only at $\sigma=0$.
+
+No negative value is ever clipped. The code returns the sum of negative
+bins, the absolute unsmeared signal before the light front, and the
+fraction of charge captured in the reported window (`readout.py`).
+
+## Checks and limitations {#sec-checks}
+
+At $g=0$, with $A=\arctan(k/d_0)/k$ (and $A=1/d_0$ at $k=0$),
+$$
+\tilde K_{\mathrm{iso}}(k,\omega)=\frac{A}{1-\mu_sA},\qquad
+\tilde K^{(\ge2)}_{\mathrm{iso}}=\frac{\mu_s^2A^3}{1-\mu_sA}.
+$$
+This closed form checks the full scattering series; its independent spatial
+inversion in the test suite uses an infinite-sine QUADPACK quadrature. At
+$k=0$ the full angular monopole is $1/(\mu_a-i\omega/v)$ for any $g$ — a
+check that scattering conserves photon number, matching @eq-number-balance
+of @sec-rte at the level of the transported spectrum.
+
+Rotations, a time shift, linear scaling with photon number, several
+detectors solved together, pure ballistic transport, HG normalization, and
+reading a synthetic double of the private interface are checked
+independently as well.
+
+This first module has no independent Monte Carlo confirmation, no finite
+OM sphere, and no error estimate that holds uniformly over all geometries.
+Scans over $L,J,k,\omega$ need to be extended for any new regime of use —
+@sec-bgvd-water discusses one such extension, to measured water optics at
+$g=0.9$, and in particular shows that the spatial degree $J$, not the
+scattering degree $L$, is what must track $k_{\max}\cdot r$: a demonstration
+this book had originally missed at large radius.
+
+## Sources {#sec-sources}
+
+The resolvent math and Fourier conventions were checked against
+`baikal-rte/src/baikal_rte/spectral.py`, `frequency.py`, and the
+`10-adjoint-frequency` notes of the predecessor project. The tridiagonal
+route here is a new implementation, specialized to a point isotropic
+detector and checked against an independent dense solver. The bilinear
+reciprocity argument of @sec-adjoint is the standard transport-theory
+adjoint/importance construction; see e.g. Bell & Glasstone, *Nuclear
+Reactor Theory* (1970), ch. 6, for the general form this chapter specializes.
+
+Definitions of the special functions and recursions:
+[NIST DLMF, Legendre functions](https://dlmf.nist.gov/14),
+[NIST DLMF, recurrence relations](https://dlmf.nist.gov/18.9). The radial
+inversion uses
+[SciPy `spherical_jn`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.spherical_jn.html).

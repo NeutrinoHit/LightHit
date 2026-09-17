@@ -42,5 +42,8 @@ class Medium:
 
 
 def synthetic_medium():
-    """Explicit TEST parameters; these are NOT a Baikal-water calibration."""
-    return Medium(1 / 25, 1 / 20, 0.7, 1.35, 450.0, "synthetic-example-not-Baikal")
+    """Explicit test parameters, chosen near typical deep Lake Baikal water at
+    450 nm (absorption exceeding scattering, strongly forward-peaked g) but not
+    equal to any measured value: this is not a calibration. See PROVENANCE.md.
+    """
+    return Medium(0.07, 0.022, 0.9, 1.36, 450.0, "synthetic-near-baikal-not-calibration")

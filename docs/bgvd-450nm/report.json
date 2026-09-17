@@ -1,0 +1,267 @@
+{
+  "lighthit_version": "0.1.0.dev1",
+  "wavelength_nm": 450.0,
+  "medium": {
+    "absorption_per_m": 0.07907692307692309,
+    "scattering_per_m": 0.020153846153846158,
+    "g": 0.9,
+    "group_index": 1.3713442515026502,
+    "wavelength_nm": 450.0,
+    "provenance": "private-bgvd-water:sha256:e434a5be8069406422177682440839bf813f8ef8a6c51d139e9f78b3ad2cb0f8"
+  },
+  "g_note": "g=0.9 is the module's own explicit default for the private-water adapter (providers.load_bgvd_water, cli.py). An earlier draft of this chapter derived g as the mean cosine of BaikalWater's own measured cs_scattering(cosine) table (g~0.999); that is inconsistent with this module's own convention that g is an explicit model input, not something read from or fit to the water tables, and it produced a numerically extreme edge case. This run uses the module's own default instead, matching every other medium in this book.",
+  "source_provenance": "private BaikalWater.py table, read only through lighthit.providers.load_bgvd_water; OpticalModule.py is not imported, detector efficiency is 1",
+  "direction": [
+    0.0,
+    0.0,
+    1.0
+  ],
+  "convergence_j_scan": [
+    {
+      "spatial_degree": 100,
+      "scattering_degree": 64,
+      "elapsed_s": 0.2375069039999289,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 9.335571550567424e-08,
+      "charge_total": 1.0417829869995258e-07
+    },
+    {
+      "spatial_degree": 150,
+      "scattering_degree": 64,
+      "elapsed_s": 0.4116716019998421,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 8.264137138770517e-09,
+      "charge_total": 1.908672033304886e-08
+    },
+    {
+      "spatial_degree": 208,
+      "scattering_degree": 64,
+      "elapsed_s": 0.6133131569999932,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 1.2981278020008877e-08,
+      "charge_total": 2.3803861214287217e-08
+    },
+    {
+      "spatial_degree": 330,
+      "scattering_degree": 64,
+      "elapsed_s": 1.1054169779999938,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 1.2981278020316464e-08,
+      "charge_total": 2.3803861214594806e-08
+    },
+    {
+      "spatial_degree": 450,
+      "scattering_degree": 64,
+      "elapsed_s": 1.4430564450001384,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 1.2981278020316464e-08,
+      "charge_total": 2.3803861214594806e-08
+    }
+  ],
+  "convergence_l_scan": [
+    {
+      "scattering_degree": 32,
+      "spatial_degree": 450,
+      "elapsed_s": 1.6178756209999392,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 2.1722710192865967e-08,
+      "charge_total": 3.2545293387144305e-08
+    },
+    {
+      "scattering_degree": 48,
+      "spatial_degree": 450,
+      "elapsed_s": 1.3149556179998854,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 1.3770158524572104e-08,
+      "charge_total": 2.4592741718850446e-08
+    },
+    {
+      "scattering_degree": 64,
+      "spatial_degree": 450,
+      "elapsed_s": 1.5874968670000271,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 1.2981278020316464e-08,
+      "charge_total": 2.3803861214594806e-08
+    },
+    {
+      "scattering_degree": 96,
+      "spatial_degree": 450,
+      "elapsed_s": 1.2887958029998572,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 1.2924171056238511e-08,
+      "charge_total": 2.374675425051685e-08
+    },
+    {
+      "scattering_degree": 128,
+      "spatial_degree": 450,
+      "elapsed_s": 1.5017195660000198,
+      "charge_1": 1.0822583194278342e-08,
+      "charge_2": 1.292562767457778e-08,
+      "charge_total": 2.3748210868856122e-08
+    }
+  ],
+  "convergence_reference_point": {
+    "label": "back",
+    "angle_deg": 155.0,
+    "radius_m": 30.0
+  },
+  "convergence_finding": "J (spatial_degree, the spherical-multipole truncation of the spatial inversion) must satisfy J >~ k_max_per_m * radius_m; an L=J-matched scan (as used in an earlier draft) conflates this with the scattering degree L and attributes the resulting instability to g alone. At fixed, adequate J, L=64-96 is enough at g=0.9 (sub-percent residual); L is not the dominant constraint at this g.",
+  "settings_production": {
+    "scattering_degree": 96,
+    "spatial_degree": 450,
+    "k_max_per_m": 6.0,
+    "k_panel_per_m": 0.025,
+    "k_order": 10,
+    "taper": true
+  },
+  "frequency_nodes": 241,
+  "frequency_max_per_ns": 1.2,
+  "frequency_step_per_ns": 0.005,
+  "points": [
+    {
+      "label": "front",
+      "angle_deg": 25.0,
+      "radius_m": 15.0,
+      "displacement_m": [
+        6.339273926110492,
+        0.0,
+        13.59461680554975
+      ],
+      "cosine": 0.9063077870366499,
+      "front_time_ns": 68.6146806686503,
+      "charge_per_m2": 4.109750933130439e-05,
+      "charge_components_per_m2": [
+        0.0,
+        2.9892405672894268e-05,
+        1.120510365841012e-05
+      ],
+      "uncached_solve_s": 36.49676757499992
+    },
+    {
+      "label": "front",
+      "angle_deg": 25.0,
+      "radius_m": 30.0,
+      "displacement_m": [
+        12.678547852220984,
+        0.0,
+        27.1892336110995
+      ],
+      "cosine": 0.9063077870366499,
+      "front_time_ns": 137.2293613373006,
+      "charge_per_m2": 5.668922981875748e-06,
+      "charge_components_per_m2": [
+        0.0,
+        3.0444767462273614e-06,
+        2.6244462356483863e-06
+      ],
+      "uncached_solve_s": 35.472745484999905
+    },
+    {
+      "label": "horizon",
+      "angle_deg": 90.0,
+      "radius_m": 15.0,
+      "displacement_m": [
+        15.0,
+        0.0,
+        9.18485099360515e-16
+      ],
+      "cosine": 6.123233995736766e-17,
+      "front_time_ns": 68.6146806686503,
+      "charge_per_m2": 8.594231000448584e-07,
+      "charge_components_per_m2": [
+        0.0,
+        5.583095710059543e-07,
+        3.01113529038904e-07
+      ],
+      "uncached_solve_s": 35.97443585699989
+    },
+    {
+      "label": "horizon",
+      "angle_deg": 90.0,
+      "radius_m": 30.0,
+      "displacement_m": [
+        30.0,
+        0.0,
+        1.83697019872103e-15
+      ],
+      "cosine": 6.123233995736766e-17,
+      "front_time_ns": 137.2293613373006,
+      "charge_per_m2": 9.056963609142956e-08,
+      "charge_components_per_m2": [
+        0.0,
+        4.2311399278497424e-08,
+        4.825823681293213e-08
+      ],
+      "uncached_solve_s": 36.3304881869999
+    },
+    {
+      "label": "back",
+      "angle_deg": 155.0,
+      "radius_m": 15.0,
+      "displacement_m": [
+        6.339273926110493,
+        0.0,
+        -13.59461680554975
+      ],
+      "cosine": -0.9063077870366499,
+      "front_time_ns": 68.6146806686503,
+      "charge_per_m2": 2.5212447114378705e-07,
+      "charge_components_per_m2": [
+        0.0,
+        1.58329832743566e-07,
+        9.379463840022101e-08
+      ],
+      "uncached_solve_s": 35.162279614
+    },
+    {
+      "label": "back",
+      "angle_deg": 155.0,
+      "radius_m": 30.0,
+      "displacement_m": [
+        12.678547852220985,
+        0.0,
+        -27.1892336110995
+      ],
+      "cosine": -0.9063077870366499,
+      "front_time_ns": 137.2293613373006,
+      "charge_per_m2": 2.3746754250516855e-08,
+      "charge_components_per_m2": [
+        0.0,
+        1.0822583194278344e-08,
+        1.2924171056238511e-08
+      ],
+      "uncached_solve_s": 35.16594183699999
+    }
+  ],
+  "caching_demo": {
+    "n_points": 6,
+    "cached_total_s": 56.890419587999986,
+    "cached_timings_breakdown_s": {
+      "spatial_weights": 6.47996853099994,
+      "angular_solve": 31.573275646999946,
+      "inverse_space": 17.992554589003703,
+      "exact_low_orders": 0.8395512950000921,
+      "total": 56.889148594999824,
+      "k_nodes": 2400,
+      "observations": 6,
+      "frequencies": 241
+    },
+    "uncached_total_s": 214.6026585549996,
+    "uncached_each_s": [
+      36.49676757499992,
+      35.472745484999905,
+      35.97443585699989,
+      36.3304881869999,
+      35.162279614,
+      35.16594183699999
+    ],
+    "speedup": 3.7722108592123336,
+    "note": "cached = one solve() call sharing the angular/frequency solve across all points; uncached = one independent solve() call per point, each redoing the same angular_solve from scratch. angular_solve itself does not depend on the number of observation points at all."
+  },
+  "environment": {
+    "python": "3.11.15 (main, Mar  3 2026, 09:26:23) [GCC 13.3.0]",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "platform": "Linux-6.18.44-fc-v33-x86_64-with-glibc2.39"
+  }
+}

@@ -1,0 +1,273 @@
+# The radiative transfer equation {#sec-rte}
+
+Consider a small volume of water. The number of photons inside it changes
+when photons cross its boundary, are created inside it, or are absorbed.
+Scattering does not change the total number of photons, but it moves them
+between directions. If the observable of interest is not just the light
+density but the signal of a directional receiver, that exchange between
+directions has to be tracked explicitly.
+
+Fix one wavelength; polarization and wavelength change on scattering are not
+treated here. Between interactions a photon travels in a straight line at
+constant group speed $v$. The optical properties are given and are not
+modified by the light itself. What is modeled is the mean photon
+distribution, not an electromagnetic amplitude or one random realization.
+This kinetic description applies at scales where intensities can be added
+and coherent interference is negligible [see e.g. Arridge & Schotland,
+*Inverse Problems* **25**, 123010 (2009)].
+
+## What is transported {#sec-intensity}
+
+Let $\mathbf x$ be position, $t$ time, and $\mathbf s$ the unit direction of
+travel. Direction has two independent coordinates, usually polar and
+azimuthal angle. On the sphere of directions,
+$$
+\mathrm d\Omega=\sin\theta\,\mathrm d\theta\,\mathrm d\varphi,
+\qquad \int_{S^2}\mathrm d\Omega=4\pi.
+$$
+
+Define the angular photon-number density $f$ by
+$$
+\mathrm dN=f(\mathbf x,\mathbf s,t)\,\mathrm d^3x\,\mathrm d\Omega,
+$$ {#eq-angular-density}
+the expected number of photons in a spatial volume $\mathrm d^3x$ whose
+direction lies in the solid-angle element $\mathrm d\Omega$. It is more
+convenient to work with the angular intensity
+$$
+I(\mathbf x,\mathbf s,t)=v\,f(\mathbf x,\mathbf s,t).
+$$ {#eq-intensity-definition}
+
+::: {.callout-note collapse="true" title="Why the extra factor of v"}
+In time $\mathrm dt$, the photons that cross an area element $\mathrm dA$
+perpendicular to $\mathbf s$ come from a cylinder of volume
+$v\,\mathrm dt\,\mathrm dA$, so
+$$
+\mathrm dN_{\mathrm{cross}}=I\,\mathrm dA\,\mathrm dt\,\mathrm d\Omega.
+$$
+For a surface with normal $\mathbf n$ and $\mathbf s\cdot\mathbf n>0$, its
+projected area contributes an extra factor $\mathbf s\cdot\mathbf n$. The
+signed flux through an oriented surface is $I\,\mathbf s\cdot\mathbf n$; its
+sign distinguishes an outgoing from an incoming crossing.
+
+With length in metres and time in nanoseconds,
+$$
+[f]=\frac{\text{photon}}{\mathrm m^3\,\mathrm{sr}},\qquad
+[I]=\frac{\text{photon}}{\mathrm m^2\,\mathrm{ns}\,\mathrm{sr}}.
+$$
+The photon count can be treated as dimensionless, but keeping the word
+"photon" in the units is a useful check on every normalization below. A
+spectral intensity $I_\lambda$ carries an additional inverse wavelength
+unit; every equation in this chapter then applies wavelength by wavelength,
+as long as scattering is elastic.
+:::
+
+## Streaming across a volume boundary {#sec-streaming}
+
+Take a fixed volume $W$ with outward normal $\mathbf n$. For a narrow
+direction element $\mathrm d\Omega$, the number of photons inside it is
+$$
+N_{W,\mathrm d\Omega}(t)=\mathrm d\Omega\int_W\frac{I}{v}\,\mathrm d^3x,
+$$
+and the signed outward flux through the boundary is
+$$
+\mathrm d\Omega\oint_{\partial W}I\,\mathbf s\cdot\mathbf n\,\mathrm dA,
+$$
+which already contains the incoming contribution with a negative sign. For
+photons that only stream freely, with no interaction, the balance reads
+$$
+\frac{\mathrm d}{\mathrm dt}\int_W\frac{I}{v}\,\mathrm d^3x
+=-\oint_{\partial W}I\,\mathbf s\cdot\mathbf n\,\mathrm dA.
+$$
+
+::: {.callout-note collapse="true" title="From the surface integral to the streaming term"}
+By the divergence theorem the surface integral becomes a volume integral;
+at fixed direction $\mathbf s$,
+$$
+\int_W\left(\frac1v\frac{\partial I}{\partial t}
++\mathbf s\cdot\nabla I\right)\mathrm d^3x=0.
+$$
+$W$ is arbitrary, so without interactions
+$$
+\left(\frac1v\partial_t+\mathbf s\cdot\nabla\right)I=0.
+$$ {#eq-free-streaming}
+The two terms are not two separate mechanisms: together they say that the
+distribution is unchanged along a ray. The first term is the change seen at
+a fixed point; the second is the imbalance between what leaves and what
+enters that point.
+:::
+
+## Losses out of a chosen direction {#sec-losses}
+
+On a short path $\mathrm d\ell$,
+$$
+\Pr(\text{absorption on }\mathrm d\ell)=\mu_a\,\mathrm d\ell+o(\mathrm d\ell),
+\qquad
+\Pr(\text{scattering on }\mathrm d\ell)=\mu_s\,\mathrm d\ell+o(\mathrm d\ell),
+$$
+with $\mu_a,\mu_s$ in $\mathrm m^{-1}$. In a homogeneous medium
+$\ell_a=1/\mu_a$ and $\ell_s=1/\mu_s$ are the absorption and scattering
+lengths treated as separate processes; the mean free path to the first
+interaction of either kind is $1/(\mu_a+\mu_s)$.
+
+In time $\mathrm dt$ a photon covers $v\,\mathrm dt$, so out of the phase
+volume $\mathrm d^3x\,\mathrm d\Omega$ absorption removes, on average,
+$$
+\mathrm dN_a=\mu_a\,v f\,\mathrm d^3x\,\mathrm d\Omega\,\mathrm dt
+=\mu_a I\,\mathrm d^3x\,\mathrm d\Omega\,\mathrm dt.
+$$
+Scattering removes photons from the chosen direction with the same
+structure, $\mu_s I$. The combined loss term in the equation for $I$ is
+$$
+-\mu_t I,\qquad \mu_t=\mu_a+\mu_s.
+$$
+An absorbed photon leaves the field being modeled. A scattered photon does
+not disappear; the next section puts it back, in a new direction. For an
+ordinary continuous phase function the probability of scattering into
+exactly the original direction is zero; landing in a finite angular bin is
+correctly handled by the gain term below.
+
+## Gain from scattering into a chosen direction {#sec-scattering-gain}
+
+Let $p(\mathbf s,\mathbf s')$ be the conditional probability density of the
+new direction $\mathbf s$ given the old direction $\mathbf s'$ — first
+argument outgoing, second incoming — normalized on the outgoing direction:
+$$
+p(\mathbf s,\mathbf s')\ge0,\qquad
+\int_{S^2}p(\mathbf s,\mathbf s')\,\mathrm d\Omega=1
+\quad\text{for every }\mathbf s'.
+$$ {#eq-phase-normalization}
+Out of the incoming direction element $\mathrm d\Omega'$,
+$\mu_s I(\mathbf s')\,\mathrm d^3x\,\mathrm d\Omega'$ photons scatter per
+unit time; a fraction $p(\mathbf s,\mathbf s')\mathrm d\Omega$ of them lands
+in the outgoing direction under consideration. Summing over incoming
+directions gives the gain term
+$$
+\mu_s\int_{S^2}p(\mathbf s,\mathbf s')
+I(\mathbf x,\mathbf s',t)\,\mathrm d\Omega'.
+$$ {#eq-scattering-gain}
+Scattering changes direction locally: position and time are the same on
+both sides of this integral. Spatial displacement between collisions is
+already carried by the streaming term $\mathbf s\cdot\nabla I$.
+
+Isotropic scattering corresponds to $p=1/(4\pi)$: it makes the direction
+**after** a collision uniform on the sphere. It does not follow that the
+full field $I(\mathbf x,\mathbf s,t)$ is isotropic — a directed source,
+boundaries, or unequal path lengths to the source can all keep an angular
+structure in $I$ even when every individual scattering event forgets
+direction completely.
+
+## Source and the complete balance {#sec-final-balance}
+
+Let
+$$
+q(\mathbf x,\mathbf s,t)\,\mathrm d^3x\,\mathrm d\Omega\,\mathrm dt
+$$
+be the mean number of photons created in the given volume, direction, and
+time interval, so $[q]=\text{photon}/(\mathrm m^3\,\mathrm{ns}\,\mathrm{sr})$.
+For isotropic emission with total directional rate $q_0$, $q=q_0/(4\pi)$.
+
+Collecting every term,
+$$
+\boxed{
+\frac1v\frac{\partial I}{\partial t}
++\mathbf s\cdot\nabla I
+=-\mu_a I-\mu_s I
++\mu_s\int_{S^2}p(\mathbf s,\mathbf s')I(\mathbf s')\,\mathrm d\Omega'
++q.
+}
+$$ {#eq-rte-balance}
+Every term has units $\text{photon}/(\mathrm m^3\,\mathrm{ns}\,\mathrm{sr})$;
+in particular, $q$ carries no separate factor of $v$, since it is already
+defined as a volumetric creation rate. Writing the direction-changing
+operator as
+$$
+(\mathcal KI)(\mathbf s)=\int_{S^2}p(\mathbf s,\mathbf s')I(\mathbf s')\,\mathrm d\Omega',
+$$
+the balance condenses to
+$$
+\boxed{\left(\frac1v\partial_t+\mathbf s\cdot\nabla+\mu_t-\mu_s\mathcal K\right)I=q.}
+$$ {#eq-rte}
+This is the equation LightHit solves; @sec-point-source specializes it to a
+point source and a point detector in an infinite homogeneous medium and
+puts it in the exact form used by the code, $(D-V)h=1$ after a Fourier and
+adjoint transform.
+
+The same equation follows directly along a short ray segment:
+$$
+I(\mathbf x+\mathbf s\,\mathrm d\ell,\mathbf s,t+\mathrm d\ell/v)
+-I(\mathbf x,\mathbf s,t)
+=\bigl[-\mu_tI+\mu_s\mathcal KI+q\bigr]\mathrm d\ell+o(\mathrm d\ell).
+$$
+The left side is the change in intensity moving with the photons; the right
+side is loss, gain from other directions, and creation on that same
+segment. Expanding the left side to first order returns @eq-rte.
+
+## Check: scattering conserves photon number {#sec-number-conservation}
+
+Define
+$$
+\phi(\mathbf x,t)=\int I\,\mathrm d\Omega,\qquad
+n_\gamma(\mathbf x,t)=\frac{\phi}{v},\qquad
+\mathbf J(\mathbf x,t)=\int\mathbf sI\,\mathrm d\Omega,
+\qquad q_0=\int q\,\mathrm d\Omega,
+$$ {#eq-moments-def}
+the photon-number density $n_\gamma$, the scalar flux $\phi$, and the flux
+vector $\mathbf J$ through an oriented surface — $\phi$ and $\mathbf J$ are
+not interchangeable: in an isotropic field $\mathbf J=0$ even though $\phi$
+is positive and a detector still registers photons from every side.
+
+::: {.callout-note collapse="true" title="Integrating the balance over direction"}
+Integrate @eq-rte-balance over the outgoing direction. By the phase-function
+normalization @eq-phase-normalization,
+$$
+\int\mathrm d\Omega\int\mathrm d\Omega'\,
+p(\mathbf s,\mathbf s')I(\mathbf s')=\int I(\mathbf s')\,\mathrm d\Omega',
+$$
+so the scattering loss and gain terms cancel exactly, leaving
+$$
+\boxed{\partial_tn_\gamma+\nabla\cdot\mathbf J
+=-v\mu_an_\gamma+q_0.}
+$$ {#eq-number-balance}
+:::
+
+@eq-number-balance is a local photon-number conservation law with
+absorption and a source. It is worth checking both in a closed-form result
+and in code: a non-canceling $\mu_s$ term in the full angular integral
+usually points to a phase-function normalization or quadrature-weight bug.
+
+## What else has to be specified {#sec-conditions}
+
+One differential equation is not enough. An initial distribution
+$I(\mathbf x,\mathbf s,t_0)$ is needed, and, if there is a boundary, the
+intensity on incoming directions $\mathbf s\cdot\mathbf n<0$ there; the
+solution then determines the outgoing intensity. A reflecting boundary
+couples incoming and outgoing directions by an additional law — a different
+boundary-value problem from the one treated here.
+
+Throughout this book the medium is infinite, homogeneous, and stationary.
+Before the source switches on there are no photons — the causal solution is
+selected. Early on the optical coefficients could depend on position while
+the ray geometry stays straight, but the independence of the spectral
+problem across different $\mathbf k$, used from @sec-point-source onward,
+does require a homogeneous medium.
+
+The scalar RTE ignores polarization correlations and interference.
+Inelastic scattering couples different wavelengths. A spatially varying
+refractive index bends rays and requires changing the free-streaming
+operator. None of these should be assumed already included in @eq-rte
+merely because it is called the radiative transfer equation.
+
+## Exercises {.unnumbered}
+
+Why does the equation for $I$ carry a $1/v$ in front of the time
+derivative while the equation for $f$ does not? Derive both forms starting
+from the same definition of photon number.
+
+Show that in a homogeneous infinite medium, once a pulsed source has
+finished, the total number of unabsorbed photons obeys
+$\mathrm dN/\mathrm dt=-v\mu_aN$, given no flux at spatial infinity. Why
+does $\mu_s$ not appear in that answer?
+
+Consider a field with $I$ the same in every direction. Compute $\phi$,
+$\mathbf J$, and the one-sided flux through a small area. Confirm that a
+vanishing $\mathbf J$ does not mean the area sees no crossings.
