@@ -1,0 +1,367 @@
+# From angular projections to the arrays in the solver {#sec-finite-system}
+
+This appendix specifies the matrices and right-hand sides used by
+`src/lighthit/angular.py`. It concerns the same monochromatic, homogeneous,
+isotropic medium and point isotropic receiver as @sec-point-source.
+No source model, finite optical-module surface, or private optical table is
+introduced here. The complete field of photon intensity is not reconstructed.
+
+## Equation and the unknown
+
+Let $\mu_a>0$ and $\mu_s\ge0$ be the absorption and scattering coefficients
+in $\mathrm m^{-1}$, and let $v$ be the photon group speed in m/ns.
+Define $\mu_t=\mu_a+\mu_s$. For the Fourier convention of @eq-fourier-def,
+
+$$
+(D-V)\tilde I=\tilde q,\qquad
+D(\mathbf s)=d_0+i\mathbf k\cdot\mathbf s,\qquad
+ d_0=\mu_t-i\omega/v.
+$$
+
+Here $\mathbf s$ is a unit photon direction, $\mathbf k$ is the spatial
+wavenumber, and $\omega$ is the temporal frequency in rad/ns. The scattering
+kernel is real and symmetric under interchange of its two arguments.
+
+Using the bilinear reciprocity pairing $\int f g\,d\Omega$ of @sec-adjoint,
+we solve
+
+$$
+\boxed{(D-V_L)h=1.}
+$$
+
+For a directed flash at direction $\mathbf s_0$, the measured Fourier response
+is $\tilde K(\mathbf k,\omega;\mathbf s_0)=h(\mathbf s_0)$. In the Hermitian
+notation the adjoint solves $(D^*-V_L)\psi=1$, and $h=\psi^*$.
+Thus the source direction is an argument at which to evaluate the result;
+it does not appear in the right-hand side being solved for.
+
+## Choosing the angular indices
+
+At fixed nonzero $\mathbf k$, choose the polar axis along $\mathbf k$ and write
+$\mu=\widehat{\mathbf k}\cdot\mathbf s$. Then $D=d_0+ik\mu$, where
+$k=|\mathbf k|$. The operator and the right-hand side 1 are invariant under
+rotation about that axis. Only $m=0$ is required for **this adjoint problem**.
+This remains true when the emitted photon has an arbitrary direction.
+At $k=0$ the choice of axis is immaterial.
+
+The code uses orthonormal Legendre functions on $[-1,1]$:
+
+$$
+p_\ell(\mu)=\sqrt{\frac{2\ell+1}{2}}P_\ell(\mu),\qquad
+\int_{-1}^{1}p_\ell p_j\,d\mu=\delta_{\ell j},\qquad
+Y_{\ell0}=\frac{p_\ell}{\sqrt{2\pi}}.
+$$
+
+$P_\ell$ is a Legendre polynomial; $p_\ell$ here is a basis function,
+not the phase function. Expand
+
+$$
+h(\mu)=\sum_{j=0}^\infty h_jp_j(\mu),\qquad
+h_j=\int_{-1}^{1}p_j(\mu)h(\mu)\,d\mu.
+$$
+
+The **row index** $\ell$ selects the basis function against which to project.
+The **column index** $j$ selects the unknown coefficient $h_j$. All indices
+in the arrays below start at zero. The coefficients $h_j$ have units of metres.
+For an isotropic emitted photon, $\tilde K_{\rm iso}=h_0/\sqrt2$.
+
+The HG scattering operator is kept through degree $L$:
+
+$$
+\gamma_\ell=\begin{cases}\mu_sg^\ell,&0\le\ell\le L,\\0,&\ell>L.\end{cases}
+\qquad
+V_Lh=\sum_{\ell=0}^{L}\gamma_\ell h_\ell p_\ell.
+$$
+
+$L$ limits the scattering operator. The expansion of $h$ is still infinite.
+More generally, every rotationally invariant phase function
+$p(\mathbf s\cdot\mathbf s')$ is diagonal in spherical harmonics, with
+
+$$
+\gamma_\ell=\mu_s\chi_\ell,\qquad
+\chi_\ell=2\pi\int_{-1}^{1}p(x)P_\ell(x)\,dx.
+$$
+
+HG supplies the particular values $\chi_\ell=g^\ell$. The current API implements
+HG; accepting arbitrary measured $\chi_\ell$ would be a separate extension.
+The dense reference in the code uses the same diagonal HG coefficients;
+it is not an implemented arbitrary-phase-matrix solver.
+
+## The first three rows, one projection at a time
+
+The first four normalized functions are
+
+$$
+p_0=\frac1{\sqrt2},\quad
+p_1=\sqrt{\frac32}\mu,\quad
+p_2=\sqrt{\frac52}\frac{3\mu^2-1}{2},\quad
+p_3=\sqrt{\frac72}\frac{5\mu^3-3\mu}{2}.
+$$
+
+Multiplication by $\mu$ gives
+
+$$
+\mu p_0=\frac{p_1}{\sqrt3},\qquad
+\mu p_1=\frac{p_0}{\sqrt3}+\frac{2p_2}{\sqrt{15}},\qquad
+\mu p_2=\frac{2p_1}{\sqrt{15}}+\frac{3p_3}{\sqrt{35}}.
+$$
+
+For row $\ell$, multiply $(d_0+ik\mu)h-V_Lh=1$ by $p_\ell$ and integrate.
+The constant multiplier gives $d_0h_\ell$; scattering gives
+$\gamma_\ell h_\ell$; the right-hand side is
+$\int p_\ell d\mu=\sqrt2\delta_{\ell0}$. Only the streaming term mixes rows.
+
+For $\ell=0$,
+
+$$
+\int p_0\mu h\,d\mu=\frac{h_1}{\sqrt3},\qquad
+\boxed{(\mu_a-i\omega/v)h_0+\frac{ik}{\sqrt3}h_1=\sqrt2.}
+$$
+
+Here $\gamma_0=\mu_s$, which cancels scattering from the angularly integrated
+balance. For $\ell=1$,
+
+$$
+\int p_1\mu h\,d\mu=\frac{h_0}{\sqrt3}+\frac{2h_2}{\sqrt{15}},\qquad
+\boxed{\frac{ik}{\sqrt3}h_0+(d_0-\gamma_1)h_1+
+\frac{2ik}{\sqrt{15}}h_2=0.}
+$$
+
+For $\ell=2$,
+
+$$
+\int p_2\mu h\,d\mu=\frac{2h_1}{\sqrt{15}}+\frac{3h_3}{\sqrt{35}},\qquad
+\boxed{\frac{2ik}{\sqrt{15}}h_1+(d_0-\gamma_2)h_2+
+\frac{3ik}{\sqrt{35}}h_3=0.}
+$$
+
+These are not yet three closed equations: $h_3$ appears in the third row.
+Even if $L=2$ and all higher $\gamma_\ell$ vanish, the streaming couplings remain.
+
+For any row,
+
+$$
+\mu p_\ell=a_\ell p_{\ell-1}+a_{\ell+1}p_{\ell+1},\quad
+ a_\ell=\frac{\ell}{\sqrt{4\ell^2-1}}\ (\ell\ge1),\quad a_0=0,
+$$
+
+$$
+ik a_\ell h_{\ell-1}+(d_0-\gamma_\ell)h_\ell+
+ik a_{\ell+1}h_{\ell+1}=\sqrt2\delta_{\ell0}.
+$$
+
+## Free moments and their normalization
+
+Define the free solution and two kinds of coefficients:
+
+$$
+h^{(0)}(\mu)=\frac1{d_0+ik\mu},\quad
+F_\ell=\int_{-1}^{1}\frac{P_\ell(\mu)}{d_0+ik\mu}\,d\mu,\quad
+b_\ell=\int_{-1}^{1}\frac{p_\ell(\mu)}{d_0+ik\mu}\,d\mu
+=\sqrt{\frac{2\ell+1}{2}}F_\ell.
+$$
+
+The array named `b` holds these **free coefficients**, not the right-hand side
+of the full linear system. For $k>0$, put $z=id_0/k$. Direct integration gives
+
+$$
+F_0=\frac2k\arctan(k/d_0),\qquad F_1=zF_0+\frac2{ik}.
+$$
+
+The Legendre recursion, together with
+$\mu/(d_0+ik\mu)=1/(ik)+z/(d_0+ik\mu)$, gives for $\ell\ge1$
+
+$$
+F_{\ell+1}=\frac{(2\ell+1)zF_\ell-\ell F_{\ell-1}}{\ell+1}.
+$$
+
+The ratios in the unnormalized and normalized bases are different:
+
+$$
+R_\ell=\frac{F_{\ell+1}}{F_\ell},\qquad
+r_\ell=\frac{b_{\ell+1}}{b_\ell}
+=\sqrt{\frac{2\ell+3}{2\ell+1}}R_\ell.
+$$
+
+The normalized $r_\ell$ is the value passed to `solve_tail_system`.
+At $k=0$, set $b_0=\sqrt2/d_0$, $b_{\ell>0}=0$, and $r_\ell=0$ by the limit;
+do not calculate ratios of the vanishing moments.
+
+## Eliminating the infinite free tail
+
+For every degree above $L$, the equations have zero forcing and zero scattering.
+Their decaying solution is proportional to the free sequence. Therefore
+
+$$
+h_{L+1}=r_Lh_L.
+$$
+
+Substitution into row $L$ adds $ik a_{L+1}r_L$ to its diagonal. With all row
+and column indices in $0,\ldots,L$, the finite matrix is
+
+$$
+\boxed{
+(M_\gamma)_{\ell j}=(d_0-\gamma_\ell)\delta_{\ell j}
++ik a_\ell\delta_{j,\ell-1}+ik a_{\ell+1}\delta_{j,\ell+1}
++ik a_{L+1}r_L\delta_{\ell L}\delta_{jL}.
+}
+$$
+
+There are no columns outside that interval. The full response satisfies
+$M_\gamma\mathbf h=\mathbf f$, with $f_\ell=\sqrt2\delta_{\ell0}$.
+For $L=2$ this is the explicit three-by-three system
+
+$$
+\boxed{
+\begin{pmatrix}
+d_0-\gamma_0&ik/\sqrt3&0\\
+ik/\sqrt3&d_0-\gamma_1&2ik/\sqrt{15}\\
+0&2ik/\sqrt{15}&d_0-\gamma_2+(3ik/\sqrt{35})r_2
+\end{pmatrix}
+\begin{pmatrix}h_0\\h_1\\h_2\end{pmatrix}
+=
+\begin{pmatrix}\sqrt2\\0\\0\end{pmatrix}.
+}
+$$
+
+The matrix is complex symmetric, not Hermitian. Its entries have units
+$\mathrm m^{-1}$. The tail reduction is an identity for the minimal free
+solution; computing $r_L$ by a finite numerical recurrence still has rounding
+and termination errors to check. It does not set $h_{L+1}=0$.
+
+## The two systems actually solved
+
+Write $h=h^{(0)}+h^{(1)}+h^{(\ge2)}$. The component equations are
+
+$$
+D h^{(1)}=V_Lh^{(0)},\qquad
+(D-V_L)h^{(\ge2)}=V_Lh^{(1)}.
+$$
+
+Let $M_{\rm free}$ be the finite matrix above with every $\gamma_\ell$ set
+to zero **but with the same free-tail term retained**. Let
+$\Gamma=\operatorname{diag}(\gamma_0,\ldots,\gamma_L)$. Then the code solves
+
+$$
+\boxed{M_{\rm free}\mathbf h^{(1)}=\mathbf f^{(1)},\qquad
+ f^{(1)}_\ell=\gamma_\ell b_\ell,}
+$$
+
+$$
+\boxed{M_\gamma\mathbf h^{(\ge2)}=\mathbf f^{(\ge2)},\qquad
+ f^{(\ge2)}_\ell=\gamma_\ell h^{(1)}_\ell.}
+$$
+
+For $L=2$, the two right-hand sides are
+$(\gamma_0b_0,\gamma_1b_1,\gamma_2b_2)^T$ and
+$(\gamma_0h^{(1)}_0,\gamma_1h^{(1)}_1,\gamma_2h^{(1)}_2)^T$.
+Both have zero support above $L$, so the same tail reduction applies to both.
+The second solve sums all collision orders from two onwards.
+
+Let $J$ be the output angular degree for spatial inversion and put
+$N=\max(L,J)$. The finite solves have $L+1$ unknowns, regardless of $J$.
+If $N>L$, extend either scattered solution by
+
+$$
+h^{(p)}_\ell=h^{(p)}_L\prod_{j=L}^{\ell-1}r_j,
+\qquad L<\ell\le N,\quad p=1,\ge2.
+$$
+
+In `angular_components`, this is `cumprod(ratios[:, L:N], axis=1)`.
+The function returns arrays of shape `(K, N+1)`, where K is the number
+of spatial-wavenumber nodes. Its linear solves use arrays `(K, L+1)`.
+
+The internal $h^{(1)}$ uses the truncated $V_L$. The reported real-space
+first order is instead evaluated separately with the full HG phase function.
+Consequently the returned signal is
+$K^{(0)}+K_{\rm HG}^{(1)}+K_L^{(\ge2)}$, as described in @sec-orders.
+
+## Computing the tail stably
+
+Backward recursion for the unnormalized ratio is
+
+$$
+R_{\ell-1}=\frac{\ell}{(2\ell+1)z-(\ell+1)R_\ell}.
+$$
+
+Choose the square-root branch for which
+
+$$
+\chi=\frac1{z+\sqrt{z^2-1}},\quad |\chi|<1,\qquad
+\eta=-\log|\chi|>0.
+$$
+
+The minimal solution behaves approximately as $\chi^\ell/\sqrt\ell$.
+The growing independent solution contaminates forward recursion when
+$\eta\ell$ is large. The implemented switch
+`eta*(N+3) < 3` therefore permits forward recursion for a **small** value
+of that product. Backward recursion selects the minimal solution.
+
+The NumPy branch uses
+$T=N+1+\max(32,\lceil28/\eta_{\min}\rceil)$, where the minimum is over its
+backward batch. It initializes
+$R_T\simeq\chi[1-1/(2(T+1))]$ and sweeps down to degree zero.
+The optional Numba branch uses the same rule independently for each node.
+The constants and accuracy settings are not reduced by enabling Numba.
+
+At $\omega=0$ the branch can be written explicitly:
+
+$$
+\chi=-i\exp[-\operatorname{arsinh}(\mu_t/k)],\qquad
+\boxed{\eta=\operatorname{arsinh}(\mu_t/k).}
+$$
+
+Thus $k\to0$ means **large** $\eta$ and a rapidly decaying sequence. Deep
+backward runs occur near the forward/backward switching boundary, not at
+$k=0$. At nonzero frequency the classification must use that frequency's $d_0$.
+
+A longer backward run and independent angular quadrature check the selected
+solution. A recurrence residual alone cannot exclude the growing solution,
+which also satisfies the recurrence. In the backward branch ratios are stored
+before forming moments, so they remain available after high moments underflow.
+
+## Array construction example
+
+This example uses the explicit synthetic coefficients from
+`examples/point-green.toml`, not private water. It builds a dense matrix only
+to make every entry inspectable. Production code stores three diagonals.
+
+```python
+import numpy as np
+from lighthit.angular import free_moments_and_tail, solve_tail_system
+
+L, k = 2, 0.2
+d0 = 0.09 + 0j
+gamma = 0.05 * 0.7 ** np.arange(L + 1)
+b, tail = free_moments_and_tail([k], d0, L)
+ell = np.arange(1, L + 2)
+a = ell / np.sqrt(4 * ell**2 - 1)
+M = (np.diag(d0 - gamma)
+     + np.diag(1j * k * a[:-1], 1)
+     + np.diag(1j * k * a[:-1], -1))
+M[-1, -1] += 1j * k * a[-1] * tail[0]
+f = np.zeros(L + 1, complex)
+f[0] = np.sqrt(2)
+full = np.linalg.solve(M, f)
+one = solve_tail_system([k], d0, tail, np.zeros(L + 1), b * gamma)
+multi = solve_tail_system([k], d0, tail, gamma, one * gamma)
+np.testing.assert_allclose(full, (b + one + multi)[0], rtol=1e-13)
+print(M, f, full, sep="\n")
+```
+
+## Formula-to-code map
+
+| Quantity or step | Implementation |
+|---|---|
+| Backend selection, validation | `angular._free_moments_and_ratios` |
+| Reference $F_\ell,b_\ell,r_\ell$ | `angular._free_moments_and_ratios_numpy` |
+| Compiled per-node recurrence | `_angular_numba._nodewise` |
+| Diagonals of $M$ and Thomas sweeps | `angular.solve_tail_system` |
+| Both right-hand sides and extension to $J$ | `angular.angular_components` |
+| Independent dense HG reference | `angular.dense_finite_rank_reference` |
+| Spatial inversion shared by observations | `green.PointGreenSolver.solve` |
+| Analytic low-order time bins and Fourier inversion of the remainder | `readout.time_bins` |
+
+The sources for the normalized Legendre identities and minimal-solution
+recurrences are NIST DLMF §§14.10 and 3.6. This appendix derives their use in
+the specific LightHit finite system; it does not change the transport model.

@@ -1,0 +1,461 @@
+# Building the matrix, step by step {#sec-numerical-scheme}
+
+@sec-point-source derives *what* is solved. This chapter is about *how*, at
+the level of individual matrix entries, and is meant to be read with an
+editor open: everything in it can be rebuilt from scratch in about twenty
+lines of NumPy, and every number printed below can be reproduced.
+
+The goal is a working understanding of four things that recur far beyond
+this particular code: projecting an integro-differential operator onto an
+orthonormal basis; recognising when the resulting matrix is tridiagonal and
+why; closing an infinite system *exactly* rather than truncating it; and
+splitting one linear system into a sequence that separates physically
+distinct contributions. @sec-finite-system states the same results compactly,
+as a specification to check an implementation against.
+
+## What is being discretized {#sec-scheme-target}
+
+Everything starts from the one equation established in @sec-adjoint. At a
+fixed spatial wavenumber $\mathbf k$ and a fixed frequency $\omega$,
+
+$$
+(D-V)h=1,\qquad
+D(\mathbf s)=d_0+i\mathbf k\cdot\mathbf s,\qquad
+d_0=\mu_t-i\omega/v .
+$$ {#eq-scheme-master}
+
+Three reminders about what the symbols mean, because every later step
+depends on reading them correctly.
+
+$h$ is a *function on the unit sphere*, not a number and not a field in
+space: $h(\mathbf s)$ for every direction $\mathbf s$. Discretizing means
+replacing that function by finitely many numbers.
+
+The right-hand side is the constant function $1$, not a delta function. That
+is the whole payoff of reciprocity: the emitted photon direction
+$\mathbf s_0$ is absent from @eq-scheme-master and returns only at the end,
+when the solved $h$ is *evaluated* at $\mathbf s_0$ to give
+$\tilde K(\mathbf k,\omega;\mathbf s_0)$.
+
+$D$ multiplies pointwise — it is a number at each $\mathbf s$, not a
+derivative — while $V$ integrates over the sphere. A pointwise multiplier is
+trivial in *angle* space and dense in any spectral basis; an integral
+operator is the reverse. The basis chosen below is the one that makes the
+second one diagonal, and the price is paid in the first.
+
+## Step 1: choose the polar axis along $\mathbf k$ {#sec-scheme-axis}
+
+$\mathbf k$ is fixed while this system is solved, so its direction is
+available as a coordinate axis, and nothing forces the same axis to be used
+at a different $\mathbf k$. Taking $\widehat{\mathbf k}$ as the polar axis
+and writing $\mu=\widehat{\mathbf k}\cdot\mathbf s$,
+
+$$
+D=d_0+ik\mu ,\qquad k=|\mathbf k| .
+$$
+
+$D$ now depends on one variable instead of two. Both $D$ and the right-hand
+side $1$ are unchanged by rotations about the axis, and $V$ is invariant
+under *all* rotations, so no azimuthal structure can be generated: the
+solution depends on $\mu$ alone. In spherical-harmonic language only $m=0$
+is populated, and the problem is one-dimensional.
+
+This step is free, and it is the reason the method costs what it does. It
+survives an arbitrary source direction, because $\mathbf s_0$ is not in the
+equation (@sec-method-choice). It does *not* survive a directional detector,
+whose acceptance is axisymmetric about the module axis instead
+(@sec-om-acceptance).
+
+## Step 2: choose the basis {#sec-scheme-basis}
+
+Use Legendre polynomials normalized to unity on $[-1,1]$,
+
+$$
+p_\ell(\mu)=\sqrt{\frac{2\ell+1}{2}}\,P_\ell(\mu),
+\qquad
+\int_{-1}^{1}p_\ell(\mu)\,p_j(\mu)\,\mathrm d\mu=\delta_{\ell j},
+$$ {#eq-scheme-basis}
+
+and expand the unknown,
+$h(\mu)=\sum_{j\ge0}h_j\,p_j(\mu)$, with $h_j=\int_{-1}^1p_jh\,\mathrm d\mu$.
+
+Two conventions here cause more implementation bugs than anything else in
+the chapter, so they are worth stating flatly. First, $p_\ell$ is
+orthonormal, $P_\ell$ is not; mixing them misplaces factors of
+$\sqrt{(2\ell+1)/2}$ that are easy to hide and hard to find. Second, this
+$p_\ell$ is a *basis function* and has nothing to do with the phase function
+$p(\cos\Theta)$, which is an unrelated use of the same letter inherited from
+the transport literature.
+
+Orthonormality is what makes projection trivial: multiplying by $p_\ell$ and
+integrating extracts $h_\ell$ with no metric factor and no matrix inversion.
+
+## Step 3: project, one row at a time {#sec-scheme-rows}
+
+A matrix row is the equation tested against one basis function. Multiply
+@eq-scheme-master by $p_\ell(\mu)$ and integrate over $\mu\in[-1,1]$, term
+by term.
+
+**The $d_0$ term.** $d_0$ is a constant, so
+$\int p_\ell\,d_0\,h\,\mathrm d\mu=d_0h_\ell$. It lands on the diagonal.
+
+**The scattering term.** By @eq-gamma-general, $V$ is diagonal in this basis:
+$\int p_\ell\,Vh\,\mathrm d\mu=\gamma_\ell h_\ell$, with
+$\gamma_\ell=\mu_s\chi_\ell$, and $\chi_\ell=g^\ell$ for Henyey–Greenstein.
+Also on the diagonal.
+
+**The right-hand side.** $\int p_\ell\cdot1\,\mathrm d\mu=\sqrt2\,
+\delta_{\ell0}$, since $p_0=1/\sqrt2$ and every higher $p_\ell$ integrates to
+zero. Only the first row is forced.
+
+**The streaming term.** This is the only one that couples rows. Multiplying
+by $\mu$ is not diagonal, but it is as close as an operator gets:
+
+$$
+\mu\,p_\ell=a_\ell\,p_{\ell-1}+a_{\ell+1}\,p_{\ell+1},
+\qquad
+a_\ell=\frac{\ell}{\sqrt{4\ell^2-1}}\ (\ell\ge1),\quad a_0=0 .
+$$ {#eq-scheme-recursion}
+
+This is the standard three-term recursion for Legendre polynomials, rewritten
+in the orthonormal basis. Because $\mu p_\ell$ contains *only* the neighbours
+$\ell\pm1$, the streaming term produces exactly two off-diagonal entries.
+That, and nothing else, is where the tridiagonal structure comes from.
+
+Writing the three rows out explicitly makes the pattern visible. For
+$\ell=0$, using $a_0=0$ and $\gamma_0=\mu_s$ so that $d_0-\gamma_0=
+\mu_a-i\omega/v$:
+
+$$
+(\mu_a-i\omega/v)\,h_0+\frac{ik}{\sqrt3}\,h_1=\sqrt2 .
+$$
+
+The disappearance of $\mu_s$ from this row is not an accident — it is photon
+number conservation (@sec-number-conservation): scattering moves photons
+between directions and cannot remove them from the $\ell=0$ moment. For
+$\ell=1$ and $\ell=2$ the right-hand side is zero:
+
+$$
+\frac{ik}{\sqrt3}h_0+(d_0-\gamma_1)h_1+\frac{2ik}{\sqrt{15}}h_2=0,
+\qquad
+\frac{2ik}{\sqrt{15}}h_1+(d_0-\gamma_2)h_2+\frac{3ik}{\sqrt{35}}h_3=0 .
+$$
+
+The general row is
+
+$$
+\boxed{\;
+ik\,a_\ell\,h_{\ell-1}
++(d_0-\gamma_\ell)\,h_\ell
++ik\,a_{\ell+1}\,h_{\ell+1}
+=\sqrt2\,\delta_{\ell0}\; }
+$$ {#eq-scheme-row}
+
+and the reason it cannot simply be stopped is already visible above: row 2
+contains $h_3$. Every row reaches one degree higher than itself.
+
+## Step 4: the infinite tail, and why truncating it is the wrong fix {#sec-scheme-tail}
+
+@eq-scheme-row is an infinite system. The obvious response — keep degrees
+$0\ldots L$ and declare $h_{L+1}=0$ — is a modelling choice disguised as a
+numerical one, and an expensive one.
+
+The exact alternative costs one extra number. Above $L$ the scattering
+coefficients vanish, $\gamma_\ell=0$ for $\ell>L$, and the right-hand side
+vanishes too, so every coefficient above $L$ belongs to *free* transport.
+The free problem has a known solution: the moments of $1/(d_0+ik\mu)$,
+
+$$
+b_\ell=\int_{-1}^{1}\frac{p_\ell(\mu)}{d_0+ik\mu}\,\mathrm d\mu ,
+$$ {#eq-scheme-free-moments}
+
+which satisfy the same homogeneous recursion. Of the two solutions of that
+recursion, only the decaying one is physical, so the tail of $h$ must be
+proportional to the tail of $b$, and in particular
+
+$$
+h_{L+1}=r_L\,h_L ,\qquad r_L=\frac{b_{L+1}}{b_L} .
+$$ {#eq-scheme-ratio}
+
+Substituting this single relation into row $L$ eliminates $h_{L+1}$ and with
+it the entire infinite remainder. Only the last diagonal entry changes:
+
+$$
+\boxed{\;
+M_{\ell\ell}=d_0-\gamma_\ell\quad(\ell<L),
+\qquad
+M_{LL}=d_0-\gamma_L+ik\,a_{L+1}\,r_L,
+\;}
+$$
+$$
+M_{\ell,\ell-1}=ik\,a_\ell,
+\qquad
+M_{\ell,\ell+1}=ik\,a_{\ell+1},
+\qquad \ell=0,\dots,L .
+$$
+
+Every other entry is zero. The matrix is
+$(L+1)\times(L+1)$ — one row per retained degree, no more — and it is
+complex symmetric, not Hermitian.
+
+How much this matters is a number, not an opinion. For the medium of
+`examples/point-green.toml` at $k=0.2\,\mathrm m^{-1}$, $\omega=0$, comparing
+the exact closure against imposing $h_{L+1}=0$ at the same $L$:
+
+| $L$ | exact tail, $h^{(\ge2)}_0$ | truncated, $h^{(\ge2)}_0$ | relative difference |
+|---:|---:|---:|---:|
+| 3  | $+2.23509176\times10^{-1}$ | $-1.83529526\times10^{-1}$ | $1.8$ |
+| 8  | $+2.70399606\times10^{-1}$ | $+2.80471983\times10^{-1}$ | $3.7\times10^{-2}$ |
+| 16 | $+2.70251689\times10^{-1}$ | $+2.70262058\times10^{-1}$ | $3.8\times10^{-5}$ |
+| 32 | $+2.70251680\times10^{-1}$ | $+2.70251680\times10^{-1}$ | $3.4\times10^{-11}$ |
+
+At $L=3$ truncation does not merely lose accuracy, it returns the wrong
+sign. The two agree only once $L$ is large enough that the tail is
+negligible anyway — which is exactly the regime the closure exists to avoid
+having to reach.
+
+A detail worth internalizing: the ratio @eq-scheme-ratio is *not* computed by
+dividing two computed moments. Both $b_{L+1}$ and $b_L$ underflow for large
+$L$, and their quotient is then $0/0$. The ratio is computed directly by its
+own backward recursion, described in @sec-matrix's collapsed derivation; the
+moments themselves are recovered afterwards from the ratios.
+
+## Step 5: why two systems instead of one {#sec-scheme-orders}
+
+@eq-scheme-master could be solved once. The code instead splits
+$h=h^{(0)}+h^{(1)}+h^{(\ge2)}$ and solves twice. The reason is that the
+three pieces have completely different behaviour in space and time — a
+delta, a near-singular front, and a smooth remainder (@sec-histogram-binning)
+— and recovering them by subtracting nearly equal totals would destroy the
+small one.
+
+Splitting is exact. Expanding $(D-V)h=1$ by collision order,
+
+$$
+Dh^{(0)}=1,\qquad
+Dh^{(1)}=Vh^{(0)},\qquad
+(D-V)h^{(\ge2)}=Vh^{(1)} ,
+$$
+
+so that $h^{(0)}=b$ is already known in closed form from
+@eq-scheme-free-moments, and the remaining two systems share the matrices
+already assembled. With $\Gamma=\operatorname{diag}(\gamma_0,\dots,\gamma_L)$
+and $M_{\text{free}}$ denoting the same matrix with every $\gamma_\ell$ set
+to zero *but the free-tail term retained*:
+
+$$
+\boxed{\;M_{\text{free}}\,\mathbf h^{(1)}=\Gamma\,\mathbf b,
+\qquad
+M\,\mathbf h^{(\ge2)}=\Gamma\,\mathbf h^{(1)}\; }
+$$ {#eq-scheme-two-systems}
+
+The last system sums **all** collision orders from two upward; nothing is
+truncated in collision number. $L$ truncates the angular *rank* of the
+scattering operator, which is a different statement (@sec-orders).
+
+Neither right-hand side has support above $L$ — each is $\Gamma$ times
+something — so the same tail closure is valid for both.
+
+## Step 6: assemble it, with numbers {#sec-scheme-worked}
+
+The following uses the open synthetic parameters of
+`examples/point-green.toml` — $\mu_a=0.04$, $\mu_s=0.05$, $g=0.7$ — with
+$L=3$, $k=0.2\,\mathrm m^{-1}$, $\omega=0$, so $d_0=\mu_t=0.09$. A $4\times4$
+system is small enough to print in full and large enough to show every
+structural feature.
+
+```python
+import numpy as np
+from lighthit.angular import free_moments_and_tail, solve_tail_system
+from lighthit.medium import Medium
+
+med = Medium(0.04, 0.05, 0.7, 1.35, 450.0, "synthetic-example-not-Baikal")
+L, k, omega = 3, 0.2, 0.0
+d0 = med.extinction_per_m - 1j * omega / med.speed_m_per_ns
+
+ell = np.arange(1, L + 2)
+a = ell / np.sqrt(4 * ell**2 - 1)                    # streaming couplings
+gamma = med.scattering_per_m * med.g ** np.arange(L + 1)   # scattering
+b, tail = free_moments_and_tail([k], d0, L)          # free moments and r_L
+b, r_L = b[0], tail[0]
+
+M = (np.diag(d0 - gamma)
+     + np.diag(1j * k * a[:-1], 1)
+     + np.diag(1j * k * a[:-1], -1))
+M_free = (np.diag(np.full(L + 1, d0))
+          + np.diag(1j * k * a[:-1], 1)
+          + np.diag(1j * k * a[:-1], -1))
+M[-1, -1] += 1j * k * a[-1] * r_L                    # the exact tail closure
+M_free[-1, -1] += 1j * k * a[-1] * r_L
+
+h1 = np.linalg.solve(M_free, gamma * b)
+h2 = np.linalg.solve(M, gamma * h1)
+```
+
+The intermediate quantities are
+
+$$
+a_\ell=(0.577350,\;0.516398,\;0.507093,\;0.503953),\qquad
+\gamma_\ell=(0.05,\;0.035,\;0.0245,\;0.01715),
+$$
+$$
+b_\ell=(8.117179,\;-5.920734\,i,\;-3.915828,\;+2.554428\,i),
+\qquad
+r_L=-0.649567\,i ,
+$$
+
+and the assembled matrix is
+
+$$
+M=\begin{pmatrix}
+0.04 & 0.11547\,i & 0 & 0\\
+0.11547\,i & 0.055 & 0.10328\,i & 0\\
+0 & 0.10328\,i & 0.0655 & 0.101419\,i\\
+0 & 0 & 0.101419\,i & 0.13832
+\end{pmatrix}.
+$$
+
+Everything about this matrix can be read off the derivation. The diagonal is
+$d_0-\gamma_\ell=0.09-(0.05,0.035,0.0245,0.01715)$, and the first entry is
+$0.04=\mu_a$ exactly, as @sec-scheme-rows requires. The off-diagonals are
+$ik\,a_\ell=0.2i\times(0.577350,0.516398,0.507093)$, purely imaginary and
+symmetric. The last diagonal entry is *not* $0.09-0.01715=0.07285$: it
+carries the tail term $ik\,a_4r_L=0.2i\times0.503953\times(-0.649567i)=
++0.065473$, giving $0.13832$. That single real addition is the entire
+infinite tail.
+
+Solving the two systems gives
+
+$$
+\mathbf h^{(1)}=(1.648458,\;-2.229996\,i,\;-1.906220,\;+1.525273\,i),
+$$
+$$
+\mathbf h^{(\ge2)}=(0.223509,\;-0.636377\,i,\;-0.666712,\;+0.677959\,i).
+$$
+
+The alternation between real and imaginary entries is a consequence of
+$\omega=0$, where $d_0$ is real and every off-diagonal is purely imaginary;
+it disappears at nonzero frequency and is a useful smoke test at $\omega=0$.
+
+## Step 7: verify the implementation {#sec-scheme-verify}
+
+An implementation that runs is not an implementation that is right. These
+five checks are independent of each other and catch different errors; all
+five are in the shipped test suite.
+
+**Reproduce the library.** `solve_tail_system` should return the same
+vectors as the dense `np.linalg.solve` above. Measured agreement for the
+worked example: $1.1\times10^{-15}$ for $\mathbf h^{(1)}$ and
+$4.7\times10^{-16}$ for $\mathbf h^{(\ge2)}$. This catches nothing about the
+physics and everything about indexing.
+
+**Re-sum the split.** The three pieces must add up to the solution of the
+unsplit system, $M(\mathbf b+\mathbf h^{(1)}+\mathbf h^{(\ge2)})=
+\sqrt2\,\mathbf e_0$. Measured: $1.8\times10^{-15}$. This catches a wrong
+right-hand side in @eq-scheme-two-systems.
+
+**Compare against a different algorithm.** `dense_finite_rank_reference`
+solves the same problem by direct Gauss quadrature on the sphere and a dense
+resolvent, using neither the tridiagonal elimination nor the tail recursion.
+Measured agreement on the worked example: $4.7\times10^{-13}$. This is the
+check that the exact tail closure is right, because the two routes share no
+part of that reasoning.
+
+**Move a degree that must not matter.** Raising the output degree $J$ while
+holding $L$ fixed must not move the low-degree coefficients at all: $J$ is a
+reporting length, not part of the linear algebra (@sec-matrix). A test moves
+$J$ from 20 to 90 at $L=12$.
+
+**Check a closed form.** At $g=0$ the whole series sums analytically
+(@sec-checks), and at $k=0$ the monopole is $1/(\mu_a-i\omega/v)$ for any
+$g$ — photon-number conservation again, and the single most useful one-line
+check when something is wrong, because it is independent of every angular
+detail.
+
+## Common mistakes {#sec-scheme-mistakes}
+
+The failures below are the ones that actually occur, in rough order of how
+long they take to find.
+
+*Unnormalized Legendre polynomials.* Using $P_\ell$ with the $a_\ell$ of
+@eq-scheme-recursion, or vice versa. The result stays plausible and is wrong
+by degree-dependent factors; the $g=0$ closed form catches it at once.
+
+*Dividing the free moments.* Computing $r_L=b_{L+1}/b_L$ from separately
+computed moments. Correct for small $L$, $0/0$ for large $L$
+(@sec-matrix).
+
+*Forward recursion everywhere.* The free moments are the decaying solution of
+their recursion, so forward recursion amplifies rounding error into the
+growing solution. This is not a stability nuisance to be dampened, it is a
+wrong answer that looks smooth.
+
+*Confusing $L$ with the number of collisions.* $L$ truncates the angular rank
+of $V$. The $\ge2$ system sums every collision order (@sec-orders).
+
+*Confusing $J$ with $L$.* $J$ controls only the spatial inversion, and must
+track $k_{\max}r$ (@sec-spatial); $L$ controls the scattering operator. Tying
+them together produces convergence studies that appear to fail for the wrong
+reason, as @sec-bgvd-water documents from experience.
+
+*Assuming diagonality is a Henyey–Greenstein privilege.* It follows from the
+kernel depending on $\mathbf s\cdot\mathbf s'$ alone (@eq-gamma-general). A
+tabulated phase function changes the numbers $\chi_\ell$, not the structure.
+
+## What the scheme costs {#sec-performance}
+
+The cost is dominated by neither the matrix solve nor the spatial inversion.
+Profiling the configuration of `examples/point-green.toml` — $L=32$, $J=160$,
+1200 nodes in $k$, 241 frequencies, one observation point — the tridiagonal
+sweeps take about $0.4\,\mathrm s$ of a $6.6\,\mathrm s$ solve, while
+`_free_moments_and_ratios` takes about $4.5\,\mathrm s$: the free-tail
+recursion of @sec-scheme-tail, not the linear algebra it feeds.
+
+That recursion is a scalar three-term sweep, so its cost is the number of
+sweeps, and the number of sweeps is set by the Miller start depth
+$N+1+\max(32,\lceil28/\eta\rceil)$ of @sec-matrix's callout. Applying one
+batch-wide depth charges every node the margin of the slowest-decaying node
+in the batch, which by @eq-eta sits at the forward/backward threshold and
+needs roughly $9.3N$ extra sweeps. Giving each node its own depth changes no
+constant, no tolerance and no result — the outputs are bit-identical — and
+removes that excess:
+
+| configuration | batch-wide depth | per-node depth | ratio |
+|---|---:|---:|---:|
+| $L=32$, $J=160$, $\omega=0$ | $0.038\,\mathrm s$ | $0.024\,\mathrm s$ | $1.6$ |
+| $L=96$, $J=450$, $\omega=0$ | $0.470\,\mathrm s$ | $0.181\,\mathrm s$ | $2.6$ |
+| $J=1200$, $\omega=0.6$ | $0.827\,\mathrm s$ | $0.280\,\mathrm s$ | $3.0$ |
+
+End to end the gain is smaller, because the recursion is only one part of a
+solve and because at high frequency the batch-wide depth was already close to
+the per-node one. Median of three repeats, whole-solve wall time, outputs
+bit-identical in every case:
+
+| configuration | batch-wide | per-node | ratio |
+|---|---:|---:|---:|
+| $L=32$, $J=160$, 241 frequencies | $10.29\,\mathrm s$ | $8.79\,\mathrm s$ | $1.17$ |
+| $L=96$, $J=450$, 41 frequencies | $7.75\,\mathrm s$ | $7.33\,\mathrm s$ | $1.06$ |
+| $L=64$, $J=1255$, 5 frequencies | $2.83\,\mathrm s$ | $2.77\,\mathrm s$ | $1.02$ |
+
+The pattern is worth reading rather than averaging: the change pays where
+many frequencies are swept, which is the case the spectrum needs, and barely
+registers where only a handful are, which is the case a charge-only cache
+build needs. It is a real but small effect on its own.
+
+The remaining cost is dominated by *dispatch*, not arithmetic: the recursion
+performs one short vector operation per degree, and the loop runs to the
+deepest start in the batch. Two routes shorten it, and both have been
+measured rather than assumed. Compiling the sweep removes the per-iteration
+overhead; the optional Numba backend of `docs/ACCELERATION.md` is that route.
+Batching the *frequencies* removes the iterations themselves — the recursion
+has identical structure at every $\omega$, so stacking frequencies into the
+node axis replaces 241 loops by one, at the cost of holding more
+coefficients at once. Measured on the example configuration, in chunks of 32
+frequencies, with bit-identical output: $10.6\,\mathrm s\to5.4\,\mathrm s$
+for the recursion, a further factor of about $2$. Chunk size matters — 16 and
+64 both performed worse than 32 on the test machine — because the working set
+has to stay in cache.
+
+Neither route touches $L$, $J$, the quadratures or the constants $3$, $32$
+and $28$ that set the recursion's accuracy. Those are the things not to
+trade for speed: @sec-discretizations lists what each of them controls.

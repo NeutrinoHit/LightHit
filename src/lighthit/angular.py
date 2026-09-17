@@ -4,7 +4,6 @@ The medium scattering operator is truncated at L; streaming is not.
 The output degree J controls the subsequent spatial angular inversion.
 No discretized intensity I(x,s,t) is constructed.
 """
-from functools import lru_cache
 import numpy as np
 from scipy.special import eval_legendre, roots_legendre
 
@@ -15,7 +14,7 @@ def _degree(value, name):
     return int(value)
 
 
-def _free_moments_and_ratios(k, d0, degree):
+def _free_moments_and_ratios_numpy(k, d0, degree):
     r"""Return free moments and all successive normalized tail ratios.
 
     p_l = sqrt((2*l+1)/2) P_l, l=0..N. The tail ratio is computed
@@ -57,24 +56,79 @@ def _free_moments_and_ratios(k, d0, degree):
         ratios_normalized[forward] = moments[forward, 1:] / moments[forward, :-1]
     if np.any(~forward):
         zz = z[~forward]
-        top = N + 1 + max(32, int(np.ceil(28 / eta[~forward].min())))
-        ratio = decay[~forward] * (1 - 0.5 / (top + 1))
+        # Each node gets exactly the Miller start depth its own decay rate
+        # requires, N+1+max(32, ceil(28/eta_i)); the constants are unchanged.
+        # Taking one batch-wide maximum instead would charge every node the
+        # margin of the single slowest-decaying node, which sits at the
+        # forward/backward threshold eta=3/(N+3) and needs about 9.3*N extra
+        # sweeps. Sorting by depth makes the still-inactive nodes a suffix,
+        # so one descending loop visits each node over its own depth only.
+        depth = N + 1 + np.maximum(32, np.ceil(28 / eta[~forward]).astype(np.int64))
+        order = np.argsort(-depth, kind="stable")
+        depth_sorted = depth[order]
+        top = int(depth_sorted[0])
+        zz = zz[order]
+        ratio = decay[~forward][order] * (1 - 0.5 / (depth_sorted + 1))
         ratios = np.empty((len(zz), N + 1), dtype=complex)
-        for ell in range(top, 0, -1):
+        # active[ell] = number of leading nodes whose depth is at least ell.
+        # Every node is active once ell <= N+1, since the smallest depth is
+        # N+33, so the stored block needs no masking.
+        active = np.searchsorted(-depth_sorted, -np.arange(top + 2), side="right")
+        for ell in range(top, N + 1, -1):
+            view = slice(0, active[ell])
+            ratio[view] = ell / ((2 * ell + 1) * zz[view] - (ell + 1) * ratio[view])
+        for ell in range(N + 1, 0, -1):
             ratio = ell / ((2 * ell + 1) * zz - (ell + 1) * ratio)
-            if ell <= N + 1:
-                ratios[:, ell - 1] = ratio
-        moments[~forward, 1:] = moments[~forward, :1] * np.cumprod(ratios, axis=1)
-        ratios_normalized[~forward] = ratios
+            ratios[:, ell - 1] = ratio
+        # Results are in depth-sorted order; scatter them back in one pass.
+        destination = np.flatnonzero(~forward)[order]
+        moments[destination, 1:] = (moments[destination, :1]
+                                    * np.cumprod(ratios, axis=1))
+        ratios_normalized[destination] = ratios
     b[nz] = moments[:, :N + 1] * np.sqrt((2 * np.arange(N + 1) + 1) / 2)
     j = np.arange(N + 1)
     ratios_all[nz] = np.sqrt((2 * j + 3) / (2 * j + 1)) * ratios_normalized
     return b, ratios_all
 
 
-def free_moments_and_tail(k, d0, degree):
+
+def _check_backend(backend):
+    if backend not in ("numpy", "numba"):
+        raise ValueError("angular_backend must be 'numpy' or 'numba'")
+    return backend
+
+
+def _free_moments_and_ratios(k, d0, degree, *, backend="numpy"):
+    """Dispatch the same free-tail calculation to an explicit backend.
+
+    The NumPy implementation remains the default and does not import Numba.
+    Selecting Numba requires the optional ``accelerate`` extra; a missing
+    dependency raises an error rather than silently changing the backend.
+    """
+    _check_backend(backend)
+    if backend == "numpy":
+        return _free_moments_and_ratios_numpy(k, d0, degree)
+    N = _degree(degree, "degree")
+    k = np.asarray(k, dtype=float)
+    d0 = complex(d0)
+    if k.ndim != 1 or not len(k) or not np.isfinite(k).all() or np.any(k < 0):
+        raise ValueError("k must be a nonempty 1-D array of finite nonnegative wave numbers")
+    if not np.isfinite(d0) or d0.real <= 0:
+        raise ValueError("d0 must be finite with positive real part")
+    try:
+        from ._angular_numba import free_moments_and_ratios
+    except ModuleNotFoundError as exc:
+        if exc.name == "numba":
+            raise ImportError(
+                "The numba backend requires the optional accelerate extra: "
+                "python -m pip install -e '.[accelerate]'"
+            ) from exc
+        raise
+    return free_moments_and_ratios(k, d0, N)
+
+def free_moments_and_tail(k, d0, degree, *, backend="numpy"):
     """Free moments (K,N+1) and exact normalized tail ratio (K,)."""
-    b, ratios = _free_moments_and_ratios(k, d0, degree)
+    b, ratios = _free_moments_and_ratios(k, d0, degree, backend=backend)
     return b, ratios[:, -1]
 
 
@@ -115,7 +169,8 @@ def solve_tail_system(k, d0, tail, gamma, rhs):
     return x
 
 
-def angular_components(k, omega_per_ns, medium, scattering_degree, output_degree):
+def angular_components(k, omega_per_ns, medium, scattering_degree, output_degree,
+                       *, backend="numpy"):
     """Return (free, one, >=2) coefficients of the truncated-scattering RTE.
 
     Each array has shape (K, max(L,J)+1). The >=2 part is obtained
@@ -128,7 +183,7 @@ def angular_components(k, omega_per_ns, medium, scattering_degree, output_degree
         raise ValueError("Frequency must be finite")
     N = max(L, J)
     d0 = medium.extinction_per_m - 1j * omega_per_ns / medium.speed_m_per_ns
-    b, ratios = _free_moments_and_ratios(k, d0, N)
+    b, ratios = _free_moments_and_ratios(k, d0, N, backend=backend)
     gamma = medium.scattering_per_m * medium.g ** np.arange(L + 1)
     # Eliminate the free tail immediately above L, independent of output degree J.
     first_low = solve_tail_system(k, d0, ratios[:, L], np.zeros(L + 1), b[:, :L + 1] * gamma)

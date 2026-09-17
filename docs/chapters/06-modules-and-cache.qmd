@@ -1,0 +1,382 @@
+# Optical modules and a reusable cache {#sec-modules-cache}
+
+Everything so far assumed an ideal detector: a point, isotropically
+sensitive, fully efficient. A real optical module (OM) is none of those. This
+chapter removes the second assumption exactly, and shows that doing so costs
+one change of a right-hand side — after which a single stored solve answers
+for an entire detector array.
+
+## The acceptance is the right-hand side {#sec-om-acceptance}
+
+Let the module have an angular acceptance $A(\mathbf s)$: the probability,
+relative to head-on, that a photon arriving with direction $\mathbf s$ is
+registered. The quantity measured is no longer $\int I\,\mathrm d\Omega$ but
+
+$$
+K_A(\mathbf r,t;\mathbf s_0)=\int_{S^2}A(\mathbf s)\,I(\mathbf r,\mathbf s,t)
+\,\mathrm d\Omega .
+$$ {#eq-om-measured}
+
+Run the reciprocity argument of @sec-adjoint again, changing nothing except
+the function paired against $\tilde I$. With $L=D-V$ and the bilinear pairing,
+
+$$
+\tilde K_A=\langle A,L^{-1}\delta(\cdot-\mathbf s_0)\rangle
+=\langle L^{-1}A,\delta(\cdot-\mathbf s_0)\rangle
+=\bigl[L^{-1}A\bigr](\mathbf s_0),
+$$
+
+so that
+
+$$
+\boxed{(D-V)\,h_A=A,\qquad
+\tilde K_A(\mathbf k,\omega;\mathbf s_0)=h_A(\mathbf s_0).}
+$$ {#eq-om-adjoint}
+
+This is @eq-adjoint-h with $1$ replaced by $A$, and $1$ is exactly the
+acceptance of an isotropic detector of unit efficiency. The operator on the
+left is untouched: **the matrix built in @sec-numerical-scheme does not
+change at all**, neither its diagonal, nor its off-diagonals, nor its tail
+closure. Only the vector on the right does. Every property that made the
+matrix cheap — tridiagonal, exactly closed, independent of the source
+direction — survives unchanged.
+
+What does change is the symmetry. $1$ is axisymmetric about every axis;
+$A$ is axisymmetric only about the module axis $\widehat{\mathbf n}$. Expanding
+$A$ about that axis and applying the addition theorem in the
+$\widehat{\mathbf k}$ frame,
+
+$$
+A(\widehat{\mathbf n}\cdot\mathbf s)=\sum_{l}\alpha_l
+\sum_{m=-l}^{l}Y^*_{lm}(\widehat{\mathbf n})\,Y_{lm}(\mathbf s),
+\qquad
+\alpha_l=2\pi\int_{-1}^{1}A(x)P_l(x)\,\mathrm dx ,
+$$ {#eq-om-alpha}
+
+which carries $m\ne0$ unless $\widehat{\mathbf n}$ happens to align with
+$\mathbf k$. This is the case @sec-method-choice flagged: a directional
+*detector*, not a directional source, is what brings the azimuthal index
+back. Since $D$ and $V$ both preserve $m$, the system stays block-diagonal,
+one tridiagonal block per $m$ with couplings
+$a^m_l=\sqrt{(l^2-m^2)/(4l^2-1)}$ — a bounded, well-defined extension rather
+than a different method.
+
+The normalization is fixed by the isotropic limit: $A\equiv1$ gives
+$\alpha_0=4\pi$ and $\alpha_{l>0}=0$, which must reproduce the ideal detector
+of @sec-setup. It does.
+
+## An isotropic flash needs no new solve at all {#sec-om-isotropic}
+
+For the one case this chapter actually computes — an isotropic flash, as a
+diffuser-ball laser produces — the $m\ne0$ blocks never appear, and the
+existing machinery is already enough.
+
+The reason is that $\tilde I$ for an isotropic source is axisymmetric about
+$\mathbf k$, since its source term is the constant $1/4\pi$. Its Legendre
+coefficients about that axis are the $h_l$ already computed. The detector
+acceptance is axisymmetric about $\widehat{\mathbf n}$. The overlap of two
+axisymmetric functions about different axes is a Legendre series in the angle
+between the axes,
+
+$$
+\tilde K_A(\mathbf k)=\sum_l \alpha_l\,\frac{h_l(k,\omega)}{4\pi}
+\sqrt{\tfrac{2l+1}{2}}\;P_l(\widehat{\mathbf n}\cdot\widehat{\mathbf k}),
+$$
+
+and the plane-wave identity
+$\int\mathrm d\Omega_{\widehat{\mathbf k}}\,e^{i\mathbf k\cdot\mathbf r}
+P_l(\widehat{\mathbf n}\cdot\widehat{\mathbf k})
+=4\pi i^lj_l(kr)P_l(\widehat{\mathbf n}\cdot\widehat{\mathbf r})$ then carries
+it back to coordinate space:
+
+$$
+\boxed{
+K_A(r,\omega)=\frac1{2\pi^2}\sum_{l=0}^{J}i^l\sqrt{\frac{2l+1}{2}}\,
+\frac{\alpha_l}{4\pi}\,P_l(\cos\Theta)
+\int_0^\infty k^2j_l(kr)\,h_l(k,\omega)\,\mathrm dk ,
+}
+$$ {#eq-om-multipole}
+
+with $\cos\Theta=\widehat{\mathbf n}\cdot\widehat{\mathbf r}$ the cosine at
+which the source-to-module line meets the module's head-on direction.
+
+@eq-om-multipole is the same sum as @sec-spatial, with $P_l(\nu)$ replaced by
+$\alpha_lP_l(\cos\Theta)/4\pi$. Two consequences follow immediately.
+
+*One solve serves every module type.* The radial integrals do not know about
+$A$. Computing them once and applying different $\alpha_l$ afterwards gives
+the response of an ideal detector, of a real module, and of any hypothetical
+module, at the cost of a contraction each.
+
+*A smooth acceptance is cheap.* The sum runs only as far as $A$ has
+coefficients. For $A(x)=(1+x)/2$ exactly two terms contribute; a bare cosine
+$\max(x,0)$ has a kink and needs hundreds. The cost of a query therefore
+measures the *angular bandwidth of the detector*, which is a satisfying thing
+for a cost to measure.
+
+::: {.callout-note collapse="true" title="Checks on eq-om-multipole"}
+Three independent checks were run before this formula was used for anything.
+
+Setting $\alpha_0=4\pi$ and $\alpha_{l>0}=0$ reproduces the solver's own
+isotropic-source branch to $2\times10^{-14}$ in orders 0 and 1.
+
+Weighting by $P_l(\nu)$ instead reproduces the solver's *directed*-source
+result to $6\times10^{-14}$, which tests the shared radial integrals.
+
+The angular identity behind it — $\int A(\widehat{\mathbf n}\cdot\mathbf s)
+\tilde I(\widehat{\mathbf k}\cdot\mathbf s)\,\mathrm d\Omega$ equals the
+Legendre series above — was checked at fixed $k$ against a direct
+two-dimensional quadrature over the sphere on a $400\times400$ grid,
+agreeing to $6\times10^{-13}$.
+:::
+
+Orders 0 and 1 need one remark each. The ballistic photon travels straight
+from the flash, so it arrives exactly along $\widehat{\mathbf r}$ and its
+weight is simply $A(\cos\Theta)$, evaluated from the acceptance itself rather
+than from its truncated series — a point evaluation near a kink is exactly
+where a truncated Legendre series rings. The first order is available two
+ways: through the exact full-HG quadrature of @sec-coordinate-first, which
+applies only to an isotropic detector, and through the finite-$L$ multipole
+coefficients, which is what @eq-om-multipole needs. Their difference is a
+property of $L$ and is measured, not assumed: at $L=64$ it is below
+$10^{-6}$ of the first order itself out to $60\,\mathrm m$, and stays below
+$1.3\times10^{-3}$ of the *total* charge everywhere in the cached range.
+
+## What is not covered {#sec-om-limits}
+
+A directed source read by a directional module is not implemented. It needs
+the $m\ne0$ blocks of @sec-om-acceptance, and its spatial inversion no longer
+collapses to a single $j_l$ sum, because the integrand then depends on
+$\widehat{\mathbf k}$ through two independent directions. The result would be
+a function of $r$ and three cosines rather than $r$ and one.
+
+Nothing else here is an approximation of that case: the isotropic-flash
+result of @eq-om-multipole is exact. The gap is a missing capability, not a
+hidden error.
+
+Also outside scope, and more mundane: the finite size of the module, shadowing
+by its own hardware and by the string, the cable, the glass, and any
+wavelength dependence within the flash. The module is still a point.
+
+## A cache of multipole moments {#sec-cache}
+
+@eq-om-multipole and the directed-source formula of @sec-spatial share
+everything except their angular weights. What they share is worth storing:
+
+$$
+M_l(r,\omega)=\frac{i^l}{2\pi^2}\sqrt{\frac{2l+1}{2}}
+\int_0^\infty k^2j_l(kr)\,h_l(k,\omega)\,\mathrm dk .
+$$ {#eq-cache-moments}
+
+`lighthit.cache` stores exactly these, for the first order and for the
+$\ge2$ part, on a grid in $r$. A query contracts them against whichever
+weights the detector calls for. Because the angular dependence is applied at
+query time in closed form, it carries **no interpolation error at all**: the
+only interpolated variable is distance.
+
+The grid follows the constraint of @sec-discretizations that $J$ must track
+$k_{\max}r$, so the cache is banded, each band carrying its own converged
+settings. The bands used below, for the synthetic near-Baikal medium, were
+fixed by the scan recorded in `docs/cache-baikal/report.json`:
+
+| band | $k_{\max}$ | $J$ | radii | build |
+|---|---:|---:|---:|---:|
+| $10$–$20\,\mathrm m$ | $12$ | $364$ | 20 | $15\,\mathrm s$ |
+| $20$–$60\,\mathrm m$ | $6$ | $526$ | 32 | $35\,\mathrm s$ |
+| $60$–$400\,\mathrm m$ | $3$ | $1620$ | 50 | $175\,\mathrm s$ |
+
+Building is dominated by the spherical Bessel tables, not by transport: the
+angular solve is about $1\,\mathrm s$ of the total, because it is computed
+once per frequency and shared by every radius. That is the same sharing
+`PointGreenSolver` already does within one call, kept across calls.
+
+Interpolation in distance uses a cubic spline in $\log r$ applied to the
+moments divided by $e^{-\mu_ar}/4\pi r^2$, a smooth positive reference that
+removes most of the dynamic range. Measured against exact solves at off-grid
+geometry, with errors quoted relative to the total charge:
+
+| band | median | maximum |
+|---|---:|---:|
+| $10$–$20\,\mathrm m$ | $2.9\times10^{-7}$ | $1.2\times10^{-5}$ |
+| $20$–$60\,\mathrm m$ | $1.5\times10^{-6}$ | $1.1\times10^{-5}$ |
+| $60$–$300\,\mathrm m$ | $5.9\times10^{-5}$ | $2.2\times10^{-1}$ |
+
+The outlier in the far band is not an interpolation failure. It occurs where
+the charge itself has fallen to $\sim10^{-16}$ per square metre per emitted
+photon, and at that level the *exact* reference is not converged either:
+changing $k_{\max}$ between $2$, $3$ and $4\,\mathrm m^{-1}$ moves it by tens
+of percent (@sec-discretizations). The disagreement is below the method's own
+floor, at signals around $10^{-4}$ photoelectrons.
+
+## What a module is sensitive to {#sec-om-maps}
+
+With the acceptance in the right-hand side, "what does this module see" is a
+computation rather than an intuition. The cached moments answer it directly,
+because they *are* the angular structure of the arriving light. Writing
+$I(x)$ for the distribution of arrival directions at the module, with $x$
+measured from the source-to-module line, the derivation above inverts to
+
+$$
+I(x)=\frac1{4\pi}\sum_l M_l\,P_l(x),
+\qquad
+\langle\cos\rangle=\frac{M_1}{3M_0},
+$$ {#eq-arrival}
+
+so the mean arrival cosine needs only the first two cached moments and no
+truncation at all.
+
+The result contradicts the intuition that multiple scattering isotropizes
+light.
+
+![Mean arrival cosine against distance, for singly and multiply scattered
+light.](../cache-baikal/figures/arrival-mean-cos.png){#fig-arrival width=70%}
+
+At every distance reached here the arriving light is strongly forward
+directed: $\langle\cos\rangle$ is $0.959\to0.983$ for single scattering and
+$0.893\to0.937$ for everything above it, against $g=0.9$ for a single
+collision. Multiply scattered light arrives barely less directed than singly
+scattered light.
+
+The reason is a length scale. Deflection accumulates over the transport
+length $1/[\mu_s(1-g)]$, which for this medium is
+$$
+\frac1{0.022\times(1-0.9)}=455\ \mathrm m ,
+$$
+while absorption removes light over $1/\mu_a=14.3\,\mathrm m$. Photons are
+absorbed long before they can random-walk into isotropy, so at $r\ll455\,
+\mathrm m$ the problem is quasi-ballistic, not diffusive — a regime where the
+Green's function still carries direction. Note that this is *not* the same
+statement as the orders being small: by $200\,\mathrm m$ the $\ge2$ component
+carries most of the charge (@sec-baikal-laser). It carries it forward.
+
+The consequence for a module is that its effective directionality is close to
+its acceptance curve, order by order.
+
+![Response of three module models against the angle to the source, split by
+scattering order, at $r=60\,\mathrm m$. The dashed curve is the acceptance
+$A(x)$ itself.](../cache-baikal/figures/om-angular-map.png){#fig-om-angular width=100%}
+
+The ballistic order follows $A$ exactly — it must, arriving from one
+direction. What @fig-om-angular shows is that the scattered orders very
+nearly do too: each is a mildly broadened copy of the acceptance rather than
+a flat pedestal. For the smooth $(1+x)/2$ module every order is exactly
+linear in $\cos\Theta$, because that acceptance has only two Legendre
+coefficients and @eq-om-multipole then has only two terms; the orders differ
+only in slope. The one-sided $\max(x,0)$ module shows the effect that does
+survive: below its cut-off it still collects a little light, entirely from the
+scattered orders, because the arrival distribution has a tail even though its
+mean is forward.
+
+![Directional contrast against distance, for the three module
+models.](../cache-baikal/figures/om-contrast.png){#fig-om-contrast width=100%}
+
+So the concrete answer is the opposite of the diffusive expectation: in
+Baikal-like water, over cluster-scale distances, a module remains sensitive
+mainly to where it points, and pointing it away from a source costs real
+signal even when almost all of that signal has scattered. A module facing the
+lake floor is a poor detector of a flash above it at any distance in this
+range.
+
+## A laser flash in three clusters {#sec-baikal-laser}
+
+The Baikal-GVD calibration laser emits at $532\,\mathrm{nm}$ with a pulse
+energy of $0.37\,\mathrm{mJ}$ through a diffuser designed to make the
+emission isotropic, in about $1\,\mathrm{ns}$. At that wavelength a photon
+carries $hc/\lambda=3.734\times10^{-19}\,\mathrm J$, so the pulse is
+
+$$
+N_\gamma=\frac{0.37\times10^{-3}}{3.734\times10^{-19}}
+=9.91\times10^{14}\ \text{photons},
+$$
+
+consistent with the $\sim10^{15}$ quoted for the source.
+
+The array is three clusters of the published Baikal-GVD layout: eight strings
+each, one central and seven at $60\,\mathrm m$, $36$ modules per string at
+$15\,\mathrm m$ spacing between $750$ and $1275\,\mathrm m$ depth, with the
+clusters $250\,\mathrm m$ apart; $864$ modules in total. The laser sits on a
+string at the centroid, at mid-depth. Modules face the lake floor.
+
+::: {.callout-important}
+The water is the repository's synthetic near-Baikal medium, which is
+specified at $450\,\mathrm{nm}$, while the laser is a $532\,\mathrm{nm}$
+source. This run therefore pairs a real photon yield with synthetic optics.
+It demonstrates the method at a realistic scale; it is not a prediction for
+Baikal-GVD, and the absorption length of the synthetic medium
+($14.3\,\mathrm m$) is shorter than published Baikal values near
+$480\,\mathrm{nm}$ ($20$–$25\,\mathrm m$), so it is pessimistic about range.
+:::
+
+Converting to photoelectrons uses an effective photocathode area of
+$530\,\mathrm{cm}^2$ and a quantum efficiency of $0.20$. No published
+quantum efficiency at $532\,\mathrm{nm}$ was found for this module — the
+figure usually quoted, $\approx35\%$, is the peak near $400\,\mathrm{nm}$ —
+so $0.20$ is an explicit input, and every photoelectron count below scales
+linearly with it.
+
+![Plan view of the three clusters and the per-module signal against
+distance.](../cache-baikal/figures/cluster-response.png){#fig-cluster width=100%}
+
+With the full pulse and no attenuator, $469$ of the $864$ modules are above
+one photoelectron and $592$ above a tenth, the furthest of them at $225$ and
+$253\,\mathrm m$ from the flash. The three clusters see comparable numbers —
+$158$, $156$ and $155$ modules above one photoelectron — since the laser sits
+at their centroid.
+
+What the orders do with distance is the physically interesting part:
+
+| distance | 0 scattering | 1 scattering | $\ge2$ scattering |
+|---|---:|---:|---:|
+| $80$–$120\,\mathrm m$ | $0.145$ | $0.273$ | $0.581$ |
+| $120$–$160\,\mathrm m$ | $0.071$ | $0.182$ | $0.748$ |
+| $160$–$200\,\mathrm m$ | $0.035$ | $0.114$ | $0.851$ |
+| $200$–$250\,\mathrm m$ | $0.018$ | $0.069$ | $0.913$ |
+| $250$–$283\,\mathrm m$ | $0.007$ | $0.037$ | $0.956$ |
+
+Beyond about $150\,\mathrm m$ the signal is almost entirely multiply
+scattered light — and, by @sec-om-maps, multiply scattered light that still
+arrives from the direction of the laser. The unscattered component is gone
+not because it was scattered away but because it is attenuated by the full
+$\mu_t$ while the scattered component only pays $\mu_a$ along a slightly
+longer path.
+
+Two accuracy boundaries apply to this table, and both are measured rather
+than assumed. The total charge stops being trustworthy where it falls to
+about $10^{-15}$ per square metre per emitted photon: the first unphysical
+(negative) component appears at $299.6\,\mathrm m$, where the signal is
+$2.4\times10^{-3}$ photoelectrons. All $703$ modules above $10^{-2}$
+photoelectrons lie inside that boundary and none of them shows a negative
+component. The individual moments fail earlier than their sum: the
+first-order mean arrival cosine leaves $[0,1]$ beyond $228\,\mathrm m$, which
+is why @fig-arrival stops at $225\,\mathrm m$. Nothing in the table above is
+quoted past $283\,\mathrm m$.
+
+At full power the modules nearest the laser are driven far beyond any usable
+dynamic range, which is why the real calibration system includes attenuators
+between the laser and the diffuser. The interesting quantity is not the peak
+but the reach: how far the flash stays above one photoelectron, and what
+fraction of that signal is scattered rather than ballistic.
+
+The point of the cache is what it costs to ask. Building it took
+$181\,\mathrm s$ once, for $102$ exact distances across three bands. Reading
+all $864$ modules out of it then took
+
+| module model | acceptance degrees | query, $864$ modules | per module |
+|---|---:|---:|---:|
+| ideal isotropic | $0$ | $5.3\,\mathrm{ms}$ | $6.1\,\mu\mathrm s$ |
+| hemispherical $(1+x)/2$ | $1$ | $4.9\,\mathrm{ms}$ | $5.7\,\mu\mathrm s$ |
+| bare cosine $\max(x,0)$ | $364$ | $243\,\mathrm{ms}$ | $261\,\mu\mathrm s$ |
+
+against $0.091\,\mathrm s$ for one direct solve at one module with the same
+settings, measured on eight sampled modules. For the smooth acceptance that
+is a factor of about $1.6\times10^{4}$; for the kinked one, still about
+$350$. The cache pays for itself after roughly two thousand module
+evaluations, or — since the build is per medium and per settings, not per
+event — after the second flash.
+
+The asymmetry between the two acceptances is the point made in
+@sec-om-isotropic, now with numbers: what a query costs is set by the angular
+bandwidth of the detector model, because the multipole sum stops where the
+acceptance coefficients stop. A module described by a smooth curve is two
+orders of magnitude cheaper to evaluate than one described with a hard
+cut-off, and the hard cut-off is usually the less physical of the two.

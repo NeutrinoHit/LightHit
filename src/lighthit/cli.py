@@ -76,6 +76,8 @@ def main(argv=None):
     parser.add_argument("--output", default=".build/point-green")
     parser.add_argument("--preset", choices=["quick", "balanced", "refined"])
     parser.add_argument("--repeat", type=int, default=1, help="Number of fresh solves; no hidden warm-cache runs")
+    parser.add_argument("--angular-backend", choices=["numpy", "numba"], default="numpy",
+                        help="Free-tail backend; numba requires .[accelerate]. First-call JIT is timed.")
     parser.add_argument("--charge-only", action="store_true")
     parser.add_argument("--plots", action="store_true")
     args = parser.parse_args(argv)
@@ -91,7 +93,7 @@ def main(argv=None):
     obs = config.get("detector", {}).get("displacement_m", [17.32050807568877, 0, 10])
     fr = config.get("frequency", {})
     omega = np.array([0.0]) if args.charge_only else np.linspace(0, fr.get("max_per_ns", 1.2), fr.get("nodes", 241))
-    solver = PointGreenSolver(medium, settings)
+    solver = PointGreenSolver(medium, settings, angular_backend=args.angular_backend)
     runs = []
     result = None
     for index in range(args.repeat):
@@ -100,6 +102,8 @@ def main(argv=None):
         runs.append(result.timings_s)
         print(f"solve {index + 1}: {result.timings_s['total']:.6f} s", flush=True)
     report = dict(version=__version__, medium=asdict(medium), settings=asdict(settings),
+                  angular_backend=result.angular_backend,
+                  timing_note="Each run includes its real costs; first numba use may include JIT compilation/cache loading",
                   source=source, displacement_m=result.displacement_m.tolist(),
                   charge_per_m2=result.charge_per_m2.tolist(),
                   charge_components_per_m2=result.components[0].real.tolist(),
