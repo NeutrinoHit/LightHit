@@ -1,19 +1,28 @@
-# LightHit — состояние первой части
+# LightHit — state of the first part
 
-Реализованы независимый пакет, точечный изотропный приёмник, направленная
-и изотропная монохромные вспышки, все порядки, заряд, временные бины,
-CLI, синтетический пример, notebook, тесты и код приватного адаптера воды.
-Нормировка: отклик на единицу эффективной площади, эффективность=1.
+Implemented: an independent package, a point isotropic detector, directed
+and isotropic monochromatic flashes, every scattering order, charge, time
+bins, a CLI, a synthetic example, a notebook, and the private-water adapter
+code. Normalization: response per unit effective area, efficiency 1.
 
-Численная схема: точные 0 и HG 1; >=2 — finite-HG scattering с точным
-свободным угловым хвостом. Матрица размером L+1, выходные угловые степени
-до J продолжаются рекурсией. k и omega интегрируются численно.
+Numerical scheme: exact orders 0 and full-HG 1; orders $\ge2$ use finite-HG
+scattering with an exact free angular tail. The matrix has size $L+1$;
+output angular degrees up to $J$ are continued by recursion. $k$ and
+$\omega$ are integrated numerically.
 
-Математика: docs/point-green.qmd.
-Точная область проведённых проверок: docs/VALIDATION.md.
-Приватные данные в первую часть не входят. Реальный provider не запускался.
-Коммитов и публикации не было; лицензию и правообладателей определяет автор.
+Math: `docs/` (a short Quarto book — `chapters/01-rte.qmd` through
+`chapters/04-bgvd-water.qmd`, `appendices/notation.qmd`).
+Exact scope of the checks performed: `docs/VALIDATION.md`.
+`synthetic_medium()` in `src/lighthit/medium.py` now uses parameters close
+to, but not equal to, measured Baikal water at 450 nm (absorption exceeding
+scattering, a strongly forward-peaked $g=0.9$); it is still not a
+calibration (`PROVENANCE.md`). `docs/chapters/04-bgvd-water.qmd` and
+`docs/bgvd-450nm/` record one run against the actual private water table at
+450 nm, including the $(L,k_{\max})$ convergence study that run needed.
 
-Следующий небольшой проверяемый шаг обсуждается после локального запуска
-этого примера и просмотра его временного фронта. Предыдущий исследовательский
-baikal-rte остаётся отдельным проектом и не импортируется автоматически.
+No commit and no publication had happened before this pass; a license and
+copyright holders are for the author to decide.
+
+The next small, checkable step is discussed after a local run of this
+example and a look at its time front. The earlier exploratory `baikal-rte`
+project remains separate and is not imported automatically.

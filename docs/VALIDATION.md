@@ -1,86 +1,98 @@
-# Проверки первой поставки LightHit
+# Checks performed for the first LightHit delivery
 
-Срез: 2026-09-16. Все физические запуски выполнены только на открытой
-искусственной среде. Параметры и границы численного расчёта заданы в
+Snapshot: 2026-09-16. Every physics run listed here used only the public
+synthetic medium. Parameters and numerical bounds are set in
 `examples/point-green.toml`.
 
-## Основной расчёт
+## Main run
 
-Один фотон, направление +z. Приёмник в 20 м под углом 60° к начальному лучу.
-mu_a=0.04 м⁻¹, mu_s=0.05 м⁻¹, g=0.7, n_g=1.35, 450 нм.
+One photon, direction +z. Detector at 20 m, 60° from the initial ray.
+$\mu_a=0.04\ \mathrm m^{-1}$, $\mu_s=0.05\ \mathrm m^{-1}$, $g=0.7$,
+$n_g=1.35$, 450 nm.
 
-Спектр: 241 частота от 0 до 1.2 рад/нс. Многократная часть: L=32, J=160,
-k_max=6 м⁻¹, панель 0.04 м⁻¹, порядок 8 (1200 k-узлов), taper включён.
-Первый порядок использует полную HG. Единицы заряда — м⁻² на один фотон.
+Spectrum: 241 frequencies from 0 to 1.2 rad/ns. Multiply-scattered part:
+$L=32$, $J=160$, $k_{\max}=6\ \mathrm m^{-1}$, panel width
+$0.04\ \mathrm m^{-1}$, order 8 (1200 $k$ nodes), taper on. The exact first
+order uses the full HG function. Charge units are m⁻² per photon.
 
-| Величина | Результат |
+| Quantity | Result |
 |---|---:|
-| Время фронта | 90.0623057 нс |
-| Q0 | 0 |
-| Q1 | 8.6745098588e-6 м⁻² |
-| Q≥2 | 2.3222056021e-5 м⁻² |
-| Полный Q | 3.1896565880e-5 м⁻² |
-| Полный спектр, медиана 3 независимых вызовов | 7.0193 с |
-| Полный спектр, отдельные времена | 7.0107, 7.0193, 7.3961 с |
-| Только заряд, медиана 3 вызовов | 0.2369 с |
-| Readout без размытия | 0.1424 с |
-| Readout sigma=3 нс | 0.0847 с |
-| Пиковый RSS всего процесса CLI с графиками | 159.45 МиБ |
+| Front time | 90.0623057 ns |
+| $Q_0$ | 0 |
+| $Q_1$ | $8.6745098588\times10^{-6}\ \mathrm m^{-2}$ |
+| $Q_{\ge2}$ | $2.3222056021\times10^{-5}\ \mathrm m^{-2}$ |
+| Total $Q$ | $3.1896565880\times10^{-5}\ \mathrm m^{-2}$ |
+| Full spectrum, median of 3 independent runs | 7.0193 s |
+| Full spectrum, individual timings | 7.0107, 7.0193, 7.3961 s |
+| Charge only, median of 3 runs | 0.2369 s |
+| Readout without smearing | 0.1424 s |
+| Readout, sigma = 3 ns | 0.0847 s |
+| Peak RSS, whole CLI process, with plots | 159.45 MiB |
 
 Linux x86_64, Python 3.13.5, NumPy 2.3.5, SciPy 1.17.0.
-OPENBLAS_NUM_THREADS=1 и OMP_NUM_THREADS=1. Это замеры данной песочницы,
-не оценка скорости на Mac. Нет скрытого транспортного кэша между вызовами.
-RSS — high-water mark всего процесса, включая зависимости и графики.
+`OPENBLAS_NUM_THREADS=1` and `OMP_NUM_THREADS=1`. These are sandbox timings
+from this specific run, not a speed estimate for a Mac. There is no hidden
+transport cache between calls. RSS is the whole-process high-water mark,
+including dependencies and plotting.
 
-## Численные различия
+## Numerical differences
 
-Уточнение: L=48, J=208, k_max=8 м⁻¹, панель 0.025 м⁻¹, порядок 10.
-Частотная сетка та же. Один уточнённый спектр: 28.354 с.
+Refined setting: $L=48$, $J=208$, $k_{\max}=8\ \mathrm m^{-1}$, panel width
+$0.025\ \mathrm m^{-1}$, order 10. Same frequency grid. One refined
+spectrum: 28.354 s.
 
-| Сравнение основной и уточнённой конфигураций | Разность |
+| Comparison, main vs. refined | Difference |
 |---|---:|
-| Относительная разность зарядов | 3.1953e-6 = 0.00031953% |
-| L1-разность неразмытых бинов / уточнённый Q | 0.00866446 = 0.866446% |
-| L1-разность бинов sigma=3 нс / уточнённый Q | 6.4345e-5 = 0.0064345% |
+| Relative charge difference | $3.1953\times10^{-6}=0.00031953\%$ |
+| L1 difference, unsmeared bins / refined $Q$ | $0.00866446=0.866446\%$ |
+| L1 difference, sigma = 3 ns bins / refined $Q$ | $6.4345\times10^{-5}=0.0064345\%$ |
 
-Изменены одновременно несколько параметров. Эти числа не дают отдельной
-оценки каждого усечения и не проверяют шаг/полосу частоты.
+Several parameters changed at once. These numbers do not isolate the error
+of any single truncation and do not check the frequency step or band on
+their own.
 
-Основной расчёт: отрицательная масса неразмытых бинов / Q = 0.00177381
-(0.177381%); модуль неразмытого сигнала до фронта / Q = 0.00440734
-(0.440734%). При sigma=3 нс отрицательная масса / Q = 3.0453e-6.
-Никакие значения не удалялись и профиль не перенормировался.
-Гауссовский readout физически даёт хвост до фронта; его масса не служит
-проверкой строгой причинности.
+Main run: negative mass of unsmeared bins / $Q$ = 0.00177381 (0.177381%);
+absolute unsmeared signal before the front / $Q$ = 0.00440734 (0.440734%).
+At sigma = 3 ns, negative mass / $Q$ = $3.0453\times10^{-6}$. No value was
+ever removed and the profile was never renormalized. A Gaussian readout
+physically produces a tail before the front; its mass is not a test of
+strict causality.
 
-## Проверки кода
+## Code checks
 
-48 тестов прошли. Среди них:
+48 tests passed, including:
 
-- точный свободный хвост против независимого плотного B-решателя;
-- изотропный all-orders спектр и независимое бесконечное синус-обращение;
-- монополь k=0, сохранение числа фотонов при рассеянии;
-- независимый координатный первый порядок, нормировка HG;
-- общий поворот, временной сдвиг и линейность по числу фотонов;
-- пакет наблюдений, чистая баллистика, сингулярная геометрия и ошибки ввода;
-- приватный адаптер на искусственном двойнике без импорта OpticalModule.
+- the exact free tail against an independent dense $B$-matrix solver;
+- the isotropic all-orders spectrum against an independent infinite
+  sine-transform inversion;
+- the $k=0$ monopole and photon-number conservation under scattering;
+- an independent coordinate-space first order and HG normalization;
+- general rotation, time shift, and linearity in photon number;
+- batched observations, pure ballistic transport, singular geometry, and
+  invalid input;
+- the private adapter against a synthetic double, without importing
+  `OpticalModule`.
 
-Ноутбук: 26 ячеек, из них 13 исполняемых. Все выполнены, ошибок нет.
-Время полного выполнения этой версии ноутбука — 19.64 с; включает
-дополнительные примеры, проверки и графики.
+Notebook: 26 cells, 13 executable. All ran without error. Full execution of
+this notebook version took 19.64 s, including extra examples, checks, and
+plots.
 
-Wheel собран без скачивания зависимостей, установлен в отдельный каталог
-и импортирован из него при работе вне исходного дерева. Контрольный заряд
-из wheel совпал. Это не проверка установки всех зависимостей в совершенно
-пустом окружении. Сетевая установка команд README в песочнице не требовалась.
+The wheel was built without downloading dependencies, installed into a
+separate directory, and imported from there outside the source tree. The
+charge computed from the wheel matched. This is not a check of installing
+every dependency into a completely empty environment; no network install
+from the README commands was needed in the sandbox.
 
-Полные JSON, логи, NPZ и выполненный notebook идут отдельным архивом результатов.
-Исходный notebook в поставке не содержит выводов.
+Full JSON, logs, NPZ files, and the executed notebook ship as a separate
+results archive. The source notebook in this delivery carries no outputs.
 
-## Непроверенные области
+## Not checked
 
-Реальная приватная вода, её зависимости и таблицы, конечный ОМ, узкая
-окрестность прямого луча, большие расстояния без уточнения сеток, все
-возможные g, независимый MC полного направленного отклика и абсолютная
-ошибка неразмытого временного фронта. Транспортный кэш, конусы/треки,
-обработка ливней и неоднородная среда не реализованы в этой поставке.
+Real private water and its dependencies and tables (a separate,
+preliminary pass against one wavelength of the real table is in
+`docs/chapters/04-bgvd-water.qmd`), a finite OM, the narrow neighborhood of
+the direct ray, large distances without a grid refinement, every possible
+$g$, an independent full Monte Carlo of the directed response, and an
+absolute error bound on the unsmeared time front. A transport cache, cones
+and tracks, shower processing, and an inhomogeneous medium are not
+implemented in this delivery.

@@ -1,0 +1,37 @@
+project:
+  type: book
+  output-dir: _book
+  execute-dir: project
+
+book:
+  title: "LightHit"
+  subtitle: "Point-source light transport in a scattering medium"
+  author: "D. V. Naumov"
+  date: "2026-09-16"
+  date-format: "D MMMM YYYY"
+  chapters:
+    - index.qmd
+    - chapters/01-rte.qmd
+    - chapters/02-point-source.qmd
+    - chapters/03-histogram-binning.qmd
+    - chapters/04-bgvd-water.qmd
+  appendices:
+    - appendices/notation.qmd
+    - VALIDATION.md
+
+lang: en
+link-citations: true
+
+format:
+  html:
+    css: assets/styles/neutrinohit-book.css
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    code-fold: true
+    code-summary: "Show code"
+    code-copy: true
+    html-math-method: mathjax
+    fig-format: svg
+    page-layout: article
+    smooth-scroll: true

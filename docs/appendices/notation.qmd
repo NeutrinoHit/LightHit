@@ -1,0 +1,47 @@
+# Notation {#sec-notation}
+
+The chapters cover one wavelength at a time; nothing here needs a
+wavelength subscript.
+
+| Symbol | Definition | Units |
+|:--|:--|:--|
+| $\mathbf x$, $\mathbf r$ | Position, and displacement detector $-$ source | $\mathrm m$ |
+| $\mathbf s$, $\mathbf s_0$ | Unit direction of travel; initial photon direction | dimensionless |
+| $v$ | Group speed of light in the medium, $c_0/n_g$ | $\mathrm m/\mathrm{ns}$ |
+| $c_0$ | Vacuum speed of light, $0.299792458$ | $\mathrm m/\mathrm{ns}$ |
+| $f$ | Angular photon-number density | photon$/(\mathrm m^3\,\mathrm{sr})$ |
+| $I=vf$ | Angular intensity | photon$/(\mathrm m^2\,\mathrm{ns}\,\mathrm{sr})$ |
+| $q$ | Volumetric photon creation rate per direction | photon$/(\mathrm m^3\,\mathrm{ns}\,\mathrm{sr})$ |
+| $p(\mathbf s,\mathbf s')$ | Density of outgoing direction given incoming | $\mathrm{sr}^{-1}$ |
+| $\mu_a,\mu_s$ | Absorption and scattering coefficients | $\mathrm m^{-1}$ |
+| $\mu_t=\mu_a+\mu_s$ | Extinction coefficient | $\mathrm m^{-1}$ |
+| $g$ | Henyey–Greenstein mean cosine of scattering | dimensionless |
+| $n_g$ | Group refractive index | dimensionless |
+| $K(\mathbf r,t)$ | Detector response per unit effective area | $\mathrm m^{-2}\,\mathrm{ns}^{-1}$ |
+| $\phi=\int I\,\mathrm d\Omega$ | Scalar flux | photon$/(\mathrm m^2\,\mathrm{ns})$ |
+| $n_\gamma=\phi/v$ | Photon-number density | photon$/\mathrm m^3$ |
+| $\mathbf J=\int\mathbf sI\,\mathrm d\Omega$ | Flux-density vector | photon$/(\mathrm m^2\,\mathrm{ns})$ |
+| $\mathbf k$ | Spatial wavenumber | $\mathrm{rad}/\mathrm m$ |
+| $\omega$ | Angular frequency | $\mathrm{rad}/\mathrm{ns}$ |
+| $D=\mu_t-i\omega/v+ik\mu$ | Free adjoint transport operator (a scalar per $\mathbf s$) | $\mathrm m^{-1}$ |
+| $V$, $\mathcal K$ (operator) | Scattering operator, $\mu_s$ times the HG kernel | $\mathrm m^{-1}$ |
+| $h(\mathbf s_0)$ | Reciprocity response, $(D-V)h=1$; equals $\tilde K(\mathbf k,\omega;\mathbf s_0)$ | $\mathrm m$ |
+| $p_l(\mu)$ | Legendre polynomial normalized to $\int p_lp_j\,\mathrm d\mu=\delta_{lj}$ | dimensionless |
+| $L$ | Scattering degree: angular-rank truncation of $V$ | integer |
+| $J$ | Spatial angular degree of the radial inversion | integer |
+| $N$ | Last degree kept explicitly before the exact free-tail continuation | integer |
+| $Q$ | Charge, $\tilde K(\omega{=}0)$ | $\mathrm m^{-2}$ |
+
+Two conventions are easy to cross: the group refractive index $n_g$ sets
+the propagation delay used everywhere in this book; the *phase* refractive
+index instead sets the Cherenkov angle of a source (not yet modeled here).
+Mixing them changes both a phase and a normalization, silently.
+
+The operator $D$ above is unrelated to the diffusion coefficient some
+transport texts also call $D$; this book does not use a diffusion
+approximation, so the symbol is free for the adjoint operator instead.
+
+Tilde and hat mean different things throughout: a tilde ($\tilde I$,
+$\tilde K$, ...) is always a space--time Fourier transform
+(@sec-fourier of @sec-point-source); a hat ($\widehat{\mathbf k}$,
+$\widehat{\mathbf r}$) is always a unit vector, never a transform.

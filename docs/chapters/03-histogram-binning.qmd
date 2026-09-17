@@ -1,0 +1,141 @@
+# Why orders 0 and 1 are binned in physical time {#sec-histogram-binning}
+
+`readout.py` computes a 1 ns histogram two different ways at once: the
+$\ge2$-scattering component is Fourier-inverted from a finite frequency
+grid (@sec-charge), while orders 0 and 1 are integrated directly in
+physical time and then, if requested, convolved with the Gaussian
+instrument response through a difference of normal CDFs. The code says so
+in one line of its own diagnostics,
+`"low_orders": "0 and 1 integrated in physical time; only >=2 Fourier-inverted"`,
+but not why. This chapter answers that: orders 0 and 1 are singular
+functions of time, and a finite-bandwidth frequency-domain bin filter is
+the wrong tool for a singular function, however well it works for the
+smooth $\ge2$ remainder. The bin value for a singular order still has to
+be obtained by pairing the detector's window function with the transport
+solution — that part of the reasoning is completely general — it is only
+the *route* to that pairing that has to change.
+
+## The general detector-bin functional {#sec-general-bin}
+
+For a fixed observation point, the measured quantity in a bin
+$[t_1,t_2]$ is the time integral of the (possibly instrument-smeared)
+response $K(t)$:
+$$
+N_{[t_1,t_2]}=\int_{t_1}^{t_2}(h_d*K)(t)\,\mathrm dt,
+$$
+where $h_d$ is a normalized instrument response ($h_d=\delta$ when there is
+no smearing). Writing this with the Fourier transform
+$\tilde K(\omega)=\int\mathrm dt\,e^{i\omega t}K(t)$ and its inverse gives
+$$
+N_{[t_1,t_2]}=\int\frac{\mathrm d\omega}{2\pi}\,
+W_{12}(\omega)\,H_d(\omega)\,\tilde K(\omega),
+\qquad
+W_{12}(\omega)=\frac{e^{-i\omega t_1}-e^{-i\omega t_2}}{i\omega},
+$$
+with $W_{12}(0)=t_2-t_1$ and $H_d(\omega)=\int\mathrm du\,e^{i\omega u}h_d(u)$
+(for a Gaussian of width $\sigma$, $H_d(\omega)=e^{-\omega^2\sigma^2/2}$).
+This is exactly the `sinc`-and-phase kernel used in `frequency_weights` /
+`inverse_bins`: $W_{12}$ multiplied by the trapezoidal frequency weights
+and the Gaussian factor, real-part-summed over the frequency grid, is the
+`kernel` array built in `inverse_bins`.
+
+This identity holds for **every** order — 0, 1, and $\ge2$ alike — because
+it says nothing about $K$ beyond having a Fourier transform. What differs
+between orders is not this formula; it is whether evaluating the right-hand
+side on a truncated, evenly spaced frequency grid is a good approximation.
+
+## Orders 0 and 1 are singular in time {#sec-singular-orders}
+
+The ballistic order is a literal Dirac delta at the light front,
+$$
+K^{(0)}(t)=N_0\,\delta(t-\tau_0),\qquad
+N_0=\frac{e^{-\mu_tr}}{4\pi r^2}\ \text{(isotropic source; @sec-setup)}.
+$$
+A delta function has $|\tilde K^{(0)}(\omega)|=N_0$ for **every**
+$\omega$ — no decay at all. Sampling that on any finite grid and summing a
+truncated inverse transform does not converge to a delta as the number of
+retained frequencies grows in the way used for a smooth function; it
+converges to a band-limited approximation of one, i.e. a ripple of width
+$\sim1/\omega_{\max}$ centered on $\tau_0$, not a spike. There is no value
+of $\omega_{\max}$ short of "large enough that the ripple is narrower than
+the bin" that makes this route accurate, and for $\sigma=0$ no finite
+$\omega_{\max}$ ever removes the ripple entirely.
+
+Order 1 is not a delta, but it is not smooth either. In the isotropic
+check of @sec-coordinate-first,
+$$
+K^{(1)}(r,t)=\frac{\mu_s}{4\pi rt}e^{-\mu_tvt}\ln\frac{vt+r}{vt-r},
+\qquad t>r/v,
+$$
+which diverges logarithmically as $t\to(r/v)^+$ — this is exactly the
+`+inf` that `single_scattering_rate` returns at `S == r` for an isotropic
+flash. The general directed formula of @sec-coordinate-first has the same
+character: its denominator $b\,(s-r\nu)$ can approach zero near the front,
+producing a sharp near-front rise rather than a genuine infinity, depending
+on geometry. Either way, a sharp, narrowly localized feature in time is,
+by the uncertainty relation between the two domains, a **slowly decaying**
+feature in frequency: $\tilde K^{(1)}(\omega)$ (what `single_spectrum`
+computes) is perfectly finite and smooth in $\omega$, but it does not fall
+off fast enough for a frequency grid sized for the $\ge2$ remainder to
+represent its inverse transform accurately near the front.
+
+The $\ge2$-scattering remainder does not have this problem. Physically,
+each additional scattering convolves the path-length distribution with
+another single-scatter kernel; summing infinitely many scattering orders
+(@sec-orders) produces a response that turns on smoothly at the front
+rather than jumping or diverging there — there is no single sharp feature
+left to resolve. That is precisely why @sec-charge could afford to build
+its spectrum on a modest, evenly spaced grid (241 nodes to 1.2 rad/ns) and
+invert it with a plain frequency sum, at the cost of the periodic-image
+caveat already noted there — a cost worth paying for a smooth function, and
+not one that a sharp or infinite time-domain feature would tolerate.
+
+## The fix: fold the window onto the closed form, not onto a truncated spectrum {#sec-fold}
+
+@sec-general-bin's identity is still exactly what is being evaluated for
+orders 0 and 1 — only the method of evaluating it changes. Instead of
+approximating $\tilde K(\omega)$ on a grid and summing, the code uses the
+fact that $K^{(0)}$ and $K^{(1)}$ have **known closed forms in time**, and
+carries out the $\omega$-integral of @sec-general-bin analytically or by
+adaptive quadrature directly on those closed forms:
+
+- For order 0, $\int_{t_1}^{t_2}h_d*K^{(0)}\,\mathrm dt$ reduces to a single
+  evaluation: the bin containing $\tau_0$ when $\sigma=0$ (a `searchsorted`
+  lookup in `readout.py`), or
+  $N_0\bigl[\Phi((t_2-\tau_0)/\sigma)-\Phi((t_1-\tau_0)/\sigma)\bigr]$ with
+  the normal CDF $\Phi$ when $\sigma>0$ — exact, with no frequency grid
+  involved at all.
+- For order 1, `single_bins` integrates $K^{(1)}(t)$ (or its Gaussian
+  convolution, via the same CDF-difference trick applied under the
+  integral) over $[t_1,t_2]$ with adaptive quadrature (`scipy.integrate.quad`
+  / `quad_vec`), which concentrates evaluation points near the light front
+  on its own, exactly where the smooth trapezoidal frequency grid would
+  need an unreasonably high $\omega_{\max}$ to do the same job indirectly.
+
+Both routes compute the **same** number that @sec-general-bin defines, to
+the requested tolerance; `test_single_raw_bins_are_causal_and_integrate_charge`
+checks the two against each other by comparing the summed bins to
+`single_spectrum`'s own $\omega=0$ value. The difference is only that the
+time-domain route pays its accuracy cost where the singularity actually is,
+while the frequency-domain route pays an accuracy cost everywhere in
+$\omega$ whether or not the underlying function needs it there.
+
+This is the "smart" scheme: fold the detector's own window/instrument
+kernel directly onto the exact, singular pieces, and reserve the numerically
+built, truncated-frequency-grid inversion for the piece that is smooth
+enough for a fixed grid to represent well. Both are instances of the one
+identity in @sec-general-bin; neither is a different physical model, and
+neither privileges one order over another — the split follows the
+regularity of $K$, not the collision count as such.
+
+## What this does not claim {#sec-histogram-caveats}
+
+The $\ge2$ remainder is smooth **relative to the sharpness of orders 0 and
+1**, not perfectly band-limited; @sec-charge's periodic-image caveat still
+applies to it, and its own convergence in $L,J,k,\omega$ still needs
+checking case by case (@sec-checks). Splitting the computation this way
+does not by itself bound the error of the $\ge2$ part, and it says nothing
+about a finite OM's angular acceptance, which is not modeled yet
+(@sec-setup). It only removes a specific, avoidable source of error — an
+under-resolved frequency grid applied to functions that were never smooth
+enough for it in the first place.

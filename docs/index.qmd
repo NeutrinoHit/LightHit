@@ -1,0 +1,60 @@
+# About this book {.unnumbered #sec-about}
+
+LightHit computes the light seen by a point detector in a scattering medium
+without simulating individual photon histories. A photon emitted in water
+either reaches the detector directly, changes direction after one or more
+scattering events, or is absorbed. Rather than sampling this random walk,
+the package solves for the photon distribution directly and evaluates the
+part of it that a given detector would register.
+
+This book documents the first module of that package: the Green's function
+of a point source and a point isotropic detector in an infinite, homogeneous
+medium with Henyey–Greenstein scattering. @sec-rte derives the radiative
+transfer equation (RTE) that the whole package solves, starting from a
+photon balance and fixing the notation used throughout. @sec-point-source
+solves it for a point source and a point detector: an adjoint formulation
+turns the angular problem into a finite linear system with an exact free
+tail, and the result decomposes into three parts — no scattering, exactly
+one scattering, and two or more. @sec-histogram-binning explains why the
+first two parts are computed differently from the third: they are singular
+in physical time, and folding a finite time bin onto them analytically
+avoids a numerically dangerous Fourier inversion. @sec-bgvd-water applies
+the solver to the measured optical properties of Lake Baikal water at one
+wavelength.
+
+Our worked example is Cherenkov light propagating to the optical modules of
+a neutrino telescope. Nothing here yet needs a shower model, a Geant4 event
+format, or detector electronics; those attach to a transport model that is
+already understood on its own, not alongside it.
+
+Familiarity with derivatives, multivariate integrals, linear algebra, and
+elementary probability is assumed. Spherical-harmonic and operator notation
+is introduced where it is first needed. The reference implementation is in
+`src/lighthit`; equations here are cross-referenced to the functions that
+implement them.
+
+## What "solution" means here {.unnumbered}
+
+The book distinguishes an exact solution of the original RTE, an exact
+solution of an approximated equation, and a numerical estimate of one
+observable. A finite-rank truncation of the scattering operator at degree
+$L$ is an approximation of the RTE; the linear system built from that
+truncation is then solved exactly. "All orders of scattering" is likewise
+scoped to that same finite-rank approximation: increasing the number of
+retained angular moments and increasing the number of scattering events
+summed are different knobs, and both are reported separately wherever they
+matter.
+
+## Status {.unnumbered}
+
+This is the first module: a point source, a point isotropic detector, one
+wavelength at a time, an infinite homogeneous medium. A finite optical
+module, real detector acceptance, shower sources, and a spatial cache for
+reusing computations across many source–detector pairs are future work,
+tracked in `STATE.md` at the repository root.
+
+The radiative transfer equation and its photon-balance derivation in
+@sec-rte follow the treatment in the author's own lecture notes on radiative
+transfer for the Baikal-GVD programme; the material is rewritten here for
+this package, not reproduced verbatim, and is scoped to what @sec-point-source
+and @sec-histogram-binning actually use.
