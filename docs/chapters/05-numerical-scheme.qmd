@@ -10,8 +10,8 @@ this particular code: projecting an integro-differential operator onto an
 orthonormal basis; recognising when the resulting matrix is tridiagonal and
 why; closing an infinite system *exactly* rather than truncating it; and
 splitting one linear system into a sequence that separates physically
-distinct contributions. @sec-finite-system states the same results compactly,
-as a specification to check an implementation against.
+distinct contributions. Every formula below is stated so that it can be
+checked against an implementation line by line.
 
 ## What is being discretized {#sec-scheme-target}
 

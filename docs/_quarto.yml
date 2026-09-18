@@ -20,7 +20,6 @@ book:
     - chapters/07-cone-segments.qmd
   appendices:
     - appendices/notation.qmd
-    - appendices/finite-system.qmd
     - VALIDATION.md
 
 lang: en

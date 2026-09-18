@@ -372,8 +372,8 @@ $$
 \boxed{A_{LL}=d_0-\gamma_L+ik\,a_{L+1}\,r_L.}
 $$ {#eq-tail-closure}
 This is exact elimination, not truncation: the condition $h_{L+1}=0$ is
-never imposed. @sec-finite-system builds this matrix entry by entry, with a
-worked numerical example.
+never imposed. @sec-numerical-scheme builds this matrix entry by entry, with
+a worked numerical example.
 
 $N=\max(L,J)$ appears in the code as well, but it plays no part in the
 linear algebra: it is only the length of the returned coefficient arrays.
