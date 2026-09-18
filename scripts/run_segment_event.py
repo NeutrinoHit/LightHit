@@ -1,6 +1,6 @@
 """A small multi-segment event, computed in three poses from one cache.
 
-Run: python scripts/run_segment_event.py --output .build/claude-review/event
+Run: python scripts/run_segment_event.py --output .build/review/event
 
 The event is eight straight Cherenkov segments with their own positions,
 directions, start times, lengths, velocities and light yields; nothing is
@@ -270,7 +270,7 @@ def serial(value):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default=".build/claude-review/event")
+    parser.add_argument("--output", default=".build/review/event")
     parser.add_argument("--frequencies", type=int, default=101)
     parser.add_argument("--omega-max", type=float, default=0.5)
     parser.add_argument("--spatial-degree", type=int, default=340)

@@ -294,7 +294,7 @@ carries most of the charge (@sec-baikal-laser). It carries it forward.
 @fig-arrival stops at $225\,\mathrm m$, and over that stretch the $\ge2$ curve
 happens to rise. Read further out, it does not. Two calculations that share
 nothing with the cache were run to settle this, and both are reported in
-`.build/claude-review/directionality/directionality.json`.
+`.build/review/directionality/directionality.json`.
 
 The first is a stationary eigenmode sum. At $\omega=0$ the whole angular
 system can be symmetrised, $W=A^{-1/2}CA^{-1/2}$ with $A_{ll}=\mu_t-\mu_sg^l$

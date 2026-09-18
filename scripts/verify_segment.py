@@ -1,6 +1,6 @@
 """Independent controls for the finite Cherenkov segment.
 
-Run: python scripts/verify_segment.py --output .build/claude-review/segment
+Run: python scripts/verify_segment.py --output .build/review/segment
 
 Nothing here is a self-test of the cached route against itself. Every reference
 number comes from :mod:`lighthit.experimental.segment_reference`, which builds
@@ -249,7 +249,7 @@ def monte_carlo_cross_check(segments, detectors, quick):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default=".build/claude-review/segment")
+    parser.add_argument("--output", default=".build/review/segment")
     parser.add_argument("--quick", action="store_true",
                         help="Smaller caches, fewer samples, coarser references")
     arguments = parser.parse_args()

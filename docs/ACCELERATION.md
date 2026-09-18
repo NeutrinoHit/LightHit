@@ -69,6 +69,6 @@ it does not substitute the function's different defaults.
 
 ## Mathematical definitions
 
-`appendices/finite-system.qmd` derives the actual finite matrices and two right-hand
-sides, shows all three rows for L=2, explains the normalization of b and the tail
-ratio, and maps each formula to the implementing function.
+`chapters/05-numerical-scheme.qmd` derives the actual finite matrices and both
+right-hand sides, spells out the first rows, explains the normalization of b and
+the tail ratio, and maps each formula to the implementing function.

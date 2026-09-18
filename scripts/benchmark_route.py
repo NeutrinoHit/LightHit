@@ -1,6 +1,6 @@
 """Cost of the whole route: build, save, load, apply, reuse, read out.
 
-Run: python scripts/benchmark_route.py --output .build/claude-review/timing
+Run: python scripts/benchmark_route.py --output .build/review/timing
 
 Every stage is timed separately, because they scale differently and only one
 of them is paid per event. Peak resident memory is sampled around each stage
@@ -113,7 +113,7 @@ def batched_event_spectrum(cache, segments, receivers, *, longitudinal_order=48)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default=".build/claude-review/timing")
+    parser.add_argument("--output", default=".build/review/timing")
     parser.add_argument("--frequencies", type=int, default=41)
     parser.add_argument("--segments", type=int, default=8)
     parser.add_argument("--receivers", type=int, default=14)

@@ -1,6 +1,6 @@
 """Independent controls for the arrival-direction claims.
 
-Run: python scripts/verify_directionality.py --output .build/claude-review/directionality
+Run: python scripts/verify_directionality.py --output .build/review/directionality
 
 Four things are separated on purpose, because they are different statements:
 
@@ -221,7 +221,7 @@ def track_length_cross_check(medium, quick):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default=".build/claude-review/directionality")
+    parser.add_argument("--output", default=".build/review/directionality")
     parser.add_argument("--quick", action="store_true")
     arguments = parser.parse_args()
     out = Path(arguments.output)
