@@ -1,0 +1,277 @@
+# From a point flash to a track segment {#sec-cone-segment}
+
+Everything so far started from a flash: light released at one place, at one
+time, in one direction or in all of them. A particle does not oblige. It
+travels, it radiates as it goes, and what it radiates leaves at a fixed angle
+to its path. This chapter turns the point-source machinery into the response
+to a straight Cherenkov segment of finite length, and then to a small event
+made of several such segments — without solving the transport equation again
+even once.
+
+The claim that nothing new has to be solved needs proof, not assertion, so
+this chapter also builds an independent control for the result and reports
+what it found, including one thing it found the hard way.
+
+## The cone is a source, not a new equation {#sec-cone-source}
+
+A particle at $\mathbf x_0$ moving along the unit vector $\mathbf u$ with
+speed $\beta c$ radiates, per unit path, into the cone of directions at fixed
+angle $\theta_C$ to $\mathbf u$,
+
+$$
+\cos\theta_C=\mu_C=\frac1{\beta n_{\rm ph}},
+$$ {#eq-cone-angle}
+
+uniformly in azimuth. Note which index appears: $n_{\rm ph}$, the **phase**
+index, sets the angle, while the photons then travel at the group speed
+$c/n_{\rm g}$. Mixing the two is one of the easiest mistakes to make here,
+and the code keeps them as separate inputs for that reason.
+
+Write the emission as a direction density normalised over the sphere,
+$$
+p_C(\mathbf s)=\frac{\delta(\mathbf s\cdot\mathbf u-\mu_C)}{2\pi}.
+$$
+
+The response to one emission point is then the directed point response of
+@sec-spatial averaged over that density. That average is where the work
+disappears, because of one identity: for any two unit vectors and any degree,
+
+$$
+\int p_C(\mathbf s)\,P_l(\widehat{\mathbf r}\cdot\mathbf s)\,\mathrm d\Omega
+=P_l(\mu_C)\,P_l(\widehat{\mathbf r}\cdot\mathbf u).
+$$ {#eq-cone-addition}
+
+This is the addition theorem again, in the same role it played in
+@sec-om-acceptance: averaging a Legendre polynomial over a cone of directions
+about $\mathbf u$ multiplies it by $P_l$ of the cone angle. The azimuthal
+integral is done, exactly, once and for all.
+
+So the once- and multiply-scattered response of a cone element at $a$ along
+the track, seen by an isotropic point receiver at $\mathbf R$, is
+
+$$
+\boxed{
+\widehat N^{(p)}(\omega)=y\int_0^{h}\mathrm da\;
+e^{i\omega\left(t_0+a/\beta c\right)}
+\sum_{l=0}^{J}M^{(p)}_l\bigl(r(a),\omega\bigr)\,
+P_l(\mu_C)\,P_l\bigl(\widehat{\mathbf r}(a)\cdot\mathbf u\bigr),}
+$$ {#eq-segment-orders}
+
+with $y$ the yield per metre in the band the cache was built for, $p$ running
+over the scattered orders, $r(a)=|\mathbf R-\mathbf x_0-a\mathbf u|$ and
+$\widehat{\mathbf r}(a)$ the unit vector along it. The $M_l$ are exactly the
+cached multipole moments of @eq-cache-moments. **Moving, rotating or
+re-timing the segment changes only the arguments $r(a)$, the cosine and the
+phase.** The transport solve behind $M_l$ never sees any of it.
+
+Three things in @eq-segment-orders are worth naming explicitly, because each
+is a place where a shortcut would be tempting and wrong. The time in the
+exponent is the emission time of *that* element, $t_0+a/\beta c$, so a long
+segment is never collapsed to a single emission time. The distance is the
+distance from *that* element, not from a midpoint. And the angular factor is
+evaluated at the true $\widehat{\mathbf r}(a)\cdot\mathbf u$, which swings
+through a wide range along a segment that passes close to the receiver.
+
+## The unscattered light is a Jacobian {#sec-segment-ballistic}
+
+The unscattered term is not part of @eq-segment-orders and must not be: for a
+point receiver it is a $\delta$-function in the emission variables, and the
+cache never sees it. It has an exact closed form.
+
+Put the receiver at distance $b$ from the track axis and $z$ along it,
+measured from the segment start. A photon emitted at $a$ reaches it without
+scattering only if the direction $\mathbf R-\mathbf x(a)$ lies on the cone,
+which happens at exactly one point,
+
+$$
+a_*=z-\frac{b\,\mu_C}{\sin\theta_C},
+\qquad
+d_*=\frac{b}{\sin\theta_C},
+$$ {#eq-ballistic-root}
+
+and only if $0\le a_*<h$. The fluence follows from the $\delta$ in $p_C$
+against the $1/d^2$ spreading of the flight,
+
+$$
+\boxed{
+Q_0=\frac{y\,e^{-\mu_t d_*}}{2\pi\,b\,\sin\theta_C},
+\qquad
+t_0^{\rm arr}=t_0+\frac{a_*}{\beta c}+\frac{d_*\,n_{\rm g}}{c}.}
+$$ {#eq-ballistic-fluence}
+
+Two features deserve attention. The result falls as $1/b$, not $1/b^2$: a
+line source seen through a cone concentrates light onto a ring, and the
+exponent is the one-dimensional one. And the attenuation is the full $\mu_t$
+over the flight $d_*$, not $\mu_a$ — this is the unscattered term, and any
+scattering removes a photon from it.
+
+The interval is half-open, $0\le a_*<h$, so that splitting a segment at any
+interior point counts the junction once. That convention is what makes the
+additivity test below exact rather than approximately exact.
+
+::: {.callout-note collapse="true" title="Counting rays through a small sphere"}
+@eq-ballistic-fluence was checked by an estimate that shares no factor with
+it: emission points and cone azimuths are sampled, each ray is tested
+geometrically for passage through a sphere of radius $\rho$ around the
+receiver, and the accepted weight $e^{-\mu_t d}$ is divided by $\pi\rho^2$.
+Shrinking $\rho$ must converge to the point-receiver value.
+
+Because only a narrow band of azimuths and emission points can hit a small
+sphere, the sampler restricts both to windows around the ones aimed at the
+receiver and carries the window widths in the weight. The windows are an
+importance-sampling device, not an assumption; the routine reports the
+fraction of accepted rays that landed near a window rim, and a nonzero
+fraction means the answer is a lower bound rather than an estimate. That
+diagnostic earned its keep immediately: at $\rho=0.2\,\mathrm m$ on a tilted
+segment it flagged $29\%$ of hits at the rim and the estimate came out
+$12\%$ low, while at $\rho\le0.05\,\mathrm m$ the flag was zero and the
+agreement was within one standard error.
+:::
+
+## The independent control, and what it cost {#sec-segment-independent}
+
+The scattered orders of @eq-segment-orders reuse the cached moments, the
+$k$ quadrature, the taper, the radial interpolation and the truncation at
+$L$. A check that reuses any of them proves nothing about them. So the
+control is built in coordinate space, from the three things a
+once-scattered photon does:
+
+$$
+K_1(\omega)=y\int_0^h\!\!\mathrm da\int_0^{2\pi}\!\!\frac{\mathrm d\varphi}{2\pi}
+\int_0^\infty\!\!\mathrm dd\;
+\mu_s\,e^{-\mu_t d}\,p\!\left(\cos\theta_s\right)
+\frac{e^{-\mu_t \ell}}{\ell^2}\,
+e^{i\omega\left(t_0+a/\beta c+(d+\ell)/v\right)},
+$$ {#eq-segment-control}
+
+where the photon leaves the element at $a$ along the cone ray of azimuth
+$\varphi$, scatters once at distance $d$, and covers $\ell$ to the receiver.
+No multipoles, no Bessel functions, no Fourier inversion, no interpolation.
+
+The kernel $p$ is available in two forms, and using the right one is the
+whole point of the exercise. With the full Henyey-Greenstein kernel,
+@eq-segment-control is what nature does. With the kernel truncated at the
+solver's own $L$,
+$$
+p_L(x)=\sum_{l\le L}\frac{2l+1}{4\pi}g^l P_l(x),
+$$
+it is what the finite-$L$ solver is *trying* to compute. Comparing against
+the first isolates nothing; comparing against the second isolates everything
+except the angular truncation, which the two kernels then measure on their
+own. @sec-om-isotropic quotes the resulting separation for a directed point
+flash; the same machinery drives it for a segment.
+
+::: {.callout-important title="The lesson that cost the most time"}
+For a receiver the cone reaches ballistically, @eq-segment-control has an
+integrable singularity, and a product rule in $(a,\varphi)$ does not converge
+against it. The reason is physical: photons that scatter by a vanishing angle
+just before the receiver arrive from rays passing arbitrarily close to it, so
+the inner integral behaves as $1/\rho$ with $\rho$ the distance to the
+ballistic emission point and azimuth in @eq-ballistic-root. The integral
+converges, since the area element in the plane supplies another factor of
+$\rho$; a tensor Gauss rule does not.
+
+Three quadratures were tried. A product rule in $(a,\varphi)$ drifted:
+$5.72$, $5.25$, $4.87$ in units of $10^{-3}$ as the order rose — moving
+steadily, converging to nothing. A rule in arrival directions at the
+receiver, which cancels the $1/\ell^2$ analytically, drifted the same way
+because the unscattered cone field it needs is itself ridged along the track.
+What works is polar coordinates centred on the singular point, whose Jacobian
+cancels the $1/\rho$ exactly, with the azimuth first rescaled into a
+transverse distance so that one polar radius means the same thing along both
+axes. That converges to seven digits by order $24$: $3.0465664$,
+$3.0466247$, $3.0466359$, $3.0466364\times10^{-3}$.
+
+The lesson generalises past this integral. A slowly drifting quadrature is
+not a converging one, and the fix is almost never more nodes.
+:::
+
+### What the comparison says {#sec-segment-numbers}
+
+With the reference converged — its own refinement moves it by $10^{-8}$ to
+$3\times10^{-5}$, below every difference quoted — the cached route stands at:
+
+| geometry | cone reaches it | difference |
+|---|---|---:|
+| short segment, receiver just off the cone | no, root at $2.53$ m past a $2$ m segment | $6.4\times10^{-3}$ |
+| short segment, receiver behind | no | $5.4\times10^{-7}$ |
+| long segment, receiver on the cone | yes | $2.8\times10^{-5}$ |
+| long segment, receiver behind | no | $2.2\times10^{-7}$ |
+| long segment, far receiver | no | $6.3\times10^{-5}$ |
+| tilted slow segment, receiver on the cone | yes | $6.6\times10^{-3}$ |
+| tilted slow segment, receiver behind | no | $1.1\times10^{-6}$ |
+
+The pattern is not random. The cached route is at its best when the receiver
+is nowhere near the cone surface, and at its worst when the receiver sits on
+it or just off it — the same near-singularity in $\nu\to1$ that made the
+control hard to integrate is the feature the multipole sum has to resolve.
+Raising $L$ does not help: at the worst geometry, $L=32\to64$ at fixed spatial
+settings changes the answer by $10^{-6}$, while raising $k_{\max}$ from $10$
+to $24\,\mathrm m^{-1}$ moves the difference from $-0.9\%$ through $-0.6\%$ to
+$+0.3\%$. The cost of that last setting is real: the same cache took $491$ s
+to build instead of $37$.
+
+Two more comparisons, on the lit long segment: at nonzero frequency the
+complex difference is $2.9\times10^{-5}$ at $\omega=0.05$ and
+$6.8\times10^{-5}$ at $0.2\,\mathrm{ns^{-1}}$, so nothing degrades with the
+time structure; and the prototype's longitudinal quadrature needs more nodes
+there than elsewhere — $16$ nodes give $7\times10^{-3}$, $32$ give
+$2.8\times10^{-5}$, and past that it stops moving. Geometries the cone misses
+are converged at $16$.
+
+A sampled control runs alongside it, with the volume element written as
+$\ell^2\,\mathrm d\ell\,\mathrm d\Omega_n$ about the receiver so that the
+$1/\ell^2$ cancels, sampling arrival directions uniformly and $\ell$
+exponentially. It shares no variable with @eq-segment-control. It agrees to a
+few parts in a thousand and no better, and the reason is worth recording: the
+unscattered cone field carries a $1/b$ ridge along the track, which gives the
+estimator a logarithmically divergent variance. Its batch spread therefore
+understates its own uncertainty, and it is quoted here as a
+cross-check at the per-mille level, not as a precision reference.
+
+## A small event, in three poses {#sec-segment-event}
+
+An event is a sum. Each segment carries its own start, direction, length,
+$\beta$, start time and yield; the receiver array stays where it is. Because
+@eq-segment-orders only ever asks the cache for $M_l(r,\omega)$, the same
+cache answers the original event, a translated copy and a rotated copy.
+
+The demonstration in `scripts/run_segment_event.py` is eight segments — a
+primary that changes direction twice, plus five delayed branches — read by
+fourteen receivers on two strings. Four invariances are checked by
+recomputing, never by construction:
+
+* rotating and translating event and receivers together must change nothing;
+* delaying the whole event by $\Delta t$ must multiply the spectrum by
+  $e^{i\omega\Delta t}$;
+* doubling every yield must double every component;
+* splitting a segment in half, with the second half starting at the time the
+  particle arrives there, must reproduce the whole.
+
+The first three hold to the floating-point level, the fourth to the accuracy
+of the longitudinal quadrature. A fifth check is negative on purpose: a
+receiver outside the cached radial range must raise, not quietly return zero.
+
+Time bins need one distinction. Orders $1$ and $\ge2$ are inverted from the
+spectrum on a finite frequency window, which produces ringing and negative
+bins near sharp features; those are kept as computed, because clipping them
+hides exactly the diagnostic that says the window is too narrow. Order $0$ is
+not inverted at all: @eq-ballistic-fluence gives its charge and its arrival
+time exactly, so it is placed in the bin that contains that time.
+
+## What this does not yet do {#sec-segment-limits}
+
+The receiver here is an isotropic point. A directional module in front of a
+*directed* source is the case @sec-om-limits already flagged as unimplemented,
+and a Cherenkov cone is a directed source; the combination needs the $m\ne0$
+blocks.
+
+The $\ge2$ order has no independent control. It inherits the checks of
+@sec-numerical-scheme through the cache, and it passes the invariance and
+splitting tests above, but nothing here recomputes it from a different
+construction. Saying so is part of the result.
+
+One wavelength, one constant $\beta$ per segment, no spectral weighting of
+$n_{\rm ph}$, and no conversion from a real shower's step list: those are the
+next pieces, and each of them is a place where an average would be easy and
+wrong.
