@@ -36,10 +36,21 @@ $$ {#eq-om-adjoint}
 This is @eq-adjoint-h with $1$ replaced by $A$, and $1$ is exactly the
 acceptance of an isotropic detector of unit efficiency. The operator on the
 left is untouched: **the matrix built in @sec-numerical-scheme does not
-change at all**, neither its diagonal, nor its off-diagonals, nor its tail
-closure. Only the vector on the right does. Every property that made the
-matrix cheap — tridiagonal, exactly closed, independent of the source
-direction — survives unchanged.
+change at all**, neither its diagonal nor its off-diagonals. Only the vector
+on the right does.
+
+The tail closure needs one condition stated, because it is a property of the
+*pair* and not of the matrix alone. @sec-scheme-tail closes the system at $L$
+by solving the recursion above $L$ with no source in it: that is what makes
+the closure exact and the ratio $r_L$ a pure continued fraction. A right-hand
+side of $1$ satisfies the condition trivially, since it lives entirely at
+$l=0$. An acceptance does not, unless its coefficients $\alpha_l$ vanish
+above $L$. **The free tail is exact only above the support of the right-hand
+side**; for an acceptance with significant $\alpha_l$ beyond $L$ the closure
+has to be rederived with the source terms kept, or $L$ raised until the
+remaining $\alpha_l$ are negligible. The isotropic-flash route used in this
+chapter avoids the question entirely, as @sec-om-isotropic shows: there the
+acceptance never enters the angular solve at all, only the output weights.
 
 What does change is the symmetry. $1$ is axisymmetric about every axis;
 $A$ is axisymmetric only about the module axis $\widehat{\mathbf n}$. Expanding
@@ -137,10 +148,28 @@ than from its truncated series — a point evaluation near a kink is exactly
 where a truncated Legendre series rings. The first order is available two
 ways: through the exact full-HG quadrature of @sec-coordinate-first, which
 applies only to an isotropic detector, and through the finite-$L$ multipole
-coefficients, which is what @eq-om-multipole needs. Their difference is a
-property of $L$ and is measured, not assumed: at $L=64$ it is below
-$10^{-6}$ of the first order itself out to $60\,\mathrm m$, and stays below
-$1.3\times10^{-3}$ of the *total* charge everywhere in the cached range.
+coefficients, which is what @eq-om-multipole needs. Their difference is
+measured, not assumed: at $L=64$ it is below $10^{-6}$ of the first order
+itself out to $60\,\mathrm m$, and stays below $1.3\times10^{-3}$ of the
+*total* charge everywhere in the cached range.
+
+That difference must not be read as a measurement of $L$ alone. The multipole
+route also carries the $k$ cutoff, the taper, the $k$ quadrature, the output
+degree $J$ and, off the grid, the radial interpolation; the quadrature route
+carries its own. Separating them takes a reference that shares none of them.
+@sec-segment-independent builds one — the same once-scattered signal
+integrated in coordinate space, with either the full kernel or its own
+truncation at the same $L$ — and the separation is unambiguous: comparing the
+cached first order against that reference *at the same $L$*, for a directed
+flash at $12\,\mathrm m$, the residual falls from $1.3\times10^{-3}$ at
+$k_{\max}=6\,\mathrm m^{-1}$ to $1.3\times10^{-4}$ at $10$, $2.7\times10^{-5}$
+at $16$ and $4.6\times10^{-7}$ at $24\,\mathrm m^{-1}$, with $L$ fixed
+throughout. At this geometry the residual is therefore a spatial-cutoff
+effect, while the angular truncation is a separate number the same reference
+gives directly, by comparing its own two kernels: $8.0\times10^{-2}$ at
+$L=8$, $4.5\times10^{-5}$ at $L=16$ and $1.2\times10^{-5}$ at $L=32$. Which
+of the two dominates depends on the settings, which is the whole point of
+measuring them apart.
 
 ## What is not covered {#sec-om-limits}
 
@@ -174,9 +203,19 @@ weights the detector calls for. Because the angular dependence is applied at
 query time in closed form, it carries **no interpolation error at all**: the
 only interpolated variable is distance.
 
-The grid follows the constraint of @sec-discretizations that $J$ must track
-$k_{\max}r$, so the cache is banded, each band carrying its own converged
-settings. The bands used below, for the synthetic near-Baikal medium, were
+Three degrees are in play here and they are independent. $L$ truncates the
+*scattering* operator and is set by $g$; $J$ is the number of *output*
+multipoles the cache stores; the acceptance has its own bandwidth, the
+highest $l$ with a non-negligible $\alpha_l$. A query needs $J$ only as large
+as the weights it applies. For the isotropic flash of @eq-om-multipole with
+the linear acceptance $(1+x)/2$ that is $J=1$, at whatever $L$ the scattering
+demands — two stored moments per distance answer a hemispherical module
+exactly. It is the *directed*-source weight $P_l(\nu)$ that is not band
+limited: there $J$ has to track $k_{\max}r$ as @sec-discretizations requires,
+because the angular structure of a directed flash sharpens with distance.
+
+The bands below are sized for that harder case, so that the same cache also
+serves directed sources and the cone segments of @sec-cone-segment. They were
 fixed by the scan recorded in `docs/cache-baikal/report.json`:
 
 | band | $k_{\max}$ | $J$ | radii | build |
@@ -226,7 +265,8 @@ so the mean arrival cosine needs only the first two cached moments and no
 truncation at all.
 
 The result contradicts the intuition that multiple scattering isotropizes
-light.
+light — but it does not license the opposite slogan either, and the
+difference matters enough to be worth the next two pages.
 
 ![Mean arrival cosine against distance, for singly and multiply scattered
 light.](../cache-baikal/figures/arrival-mean-cos.png){#fig-arrival width=70%}
@@ -249,6 +289,87 @@ Green's function still carries direction. Note that this is *not* the same
 statement as the orders being small: by $200\,\mathrm m$ the $\ge2$ component
 carries most of the charge (@sec-baikal-laser). It carries it forward.
 
+### Directionality does not simply grow with distance {#sec-arrival-trend}
+
+@fig-arrival stops at $225\,\mathrm m$, and over that stretch the $\ge2$ curve
+happens to rise. Read further out, it does not. Two calculations that share
+nothing with the cache were run to settle this, and both are reported in
+`.build/claude-review/directionality/directionality.json`.
+
+The first is a stationary eigenmode sum. At $\omega=0$ the whole angular
+system can be symmetrised, $W=A^{-1/2}CA^{-1/2}$ with $A_{ll}=\mu_t-\mu_sg^l$
+and $C$ the streaming tridiagonal, and its eigenvalues $\lambda_n$ give the
+charge outside the source as a sum of positive decaying terms,
+$Q_N(r)=\sum_n w_n e^{-r/\lambda_n}/(2\pi\mu_a\lambda_n^2r)$, with no
+oscillatory $k$ integral anywhere. This is a **different truncation from the
+solver of @sec-numerical-scheme**: it cuts the entire angular space at $N$
+and has no exact free tail, so it needs its own convergence study rather than
+inheriting ours. It converges quickly — the charge moves by $4.1\times10^{-9}$
+between $N=128$ and $N=256$, and by $3.8\times10^{-13}$ from $256$ to $512$ —
+and it agrees with the real-$k$ route of this book to $4\times10^{-6}$ in
+charge at $k_{\max}=6\,\mathrm m^{-1}$. Two discretisations that disagree in
+kind agreeing to that level is the evidence; neither is exact on its own.
+
+The second is a surface-crossing Monte Carlo written for the check: exact
+sphere crossings, no shell width, absorption carried as a path weight. With
+$1.6\times10^5$ photons it reproduces the eigenmode mean cosines within
+$1.7$ standard errors at $20$, $80$ and $128\,\mathrm m$ and the total charge
+to $5\times10^{-4}$.
+
+What they give, in this medium, is:
+
+| $r$ [m] | 1 scattering | $\ge2$ | all orders |
+|---:|---:|---:|---:|
+| $11$ | $0.9589$ | $0.8929$ | $0.9891$ |
+| $38$ | $0.9715$ | $0.9261$ | $0.9748$ |
+| $128$ | $0.9818$ | $0.9377$ | $0.9509$ |
+| $225$ | $0.9855$ | $0.9336$ | $0.9374$ |
+| $400$ | $0.9886$ | $0.9236$ | $0.9239$ |
+| $800$ | $0.9916$ | $0.9115$ | $0.9115$ |
+
+The $\ge2$ component sharpens out to roughly $130\,\mathrm m$ and then turns
+around, drifting back towards a limit. The total is not monotonic either: it
+falls throughout, because the ballistic order that dominates it nearby is
+extinguished fastest. Only the single-scattering curve rises all the way, and
+it is the least interesting of the three at long range.
+
+The limit the multiple component drifts towards is not zero. If the longest
+attenuation length $\lambda_*$ is isolated, the far field is
+$Q\sim Ce^{-\kappa_*r}/r$ with $\kappa_*=1/\lambda_*$, and
+
+$$
+\langle\cos\rangle\longrightarrow\frac{\mu_a}{\kappa_*}
+=0.8972\quad(\kappa_*=0.07802\,\mathrm m^{-1}),
+$$ {#eq-far-cosine}
+
+so the asymptotic light field here is anisotropic, not diffusive. That single
+mode is not a shortcut at detector distances, though: it carries $90.3\%$ of
+the charge at $225\,\mathrm m$, $97.9\%$ at $400$ and $99.92\%$ at $800$, so
+using it alone inside a few hundred metres is a percent-level error, not a
+small one.
+
+The mechanism behind all of this is a selection rule, and it is exact. For an
+instantaneous flash in a uniform medium, absorption factorises out of the
+transport equation,
+$$
+I_a(\mathbf r,\mathbf s,t)=e^{-a v t}\,I_0(\mathbf r,\mathbf s,t),
+$$ {#eq-absorption-factor}
+separately for each scattering order, because every path arriving at time $t$
+has the same length $S=vt$. **At fixed place and time, uniform absorption
+therefore does not change the angular shape at all** — it cancels in any
+normalised angular distribution. What absorption does change is the weight
+each *path length* carries once the signal is integrated over time, and for
+any observable $f$ of the arrival direction,
+$$
+\frac{\partial\langle f\rangle_a}{\partial a}=-\operatorname{Cov}_a(f,S).
+$$ {#eq-absorption-covariance}
+Sharper arrival under stronger absorption means arrival cosine and path
+length are negatively correlated — a measured property of the medium and the
+distance, not a theorem. It was measured here: the finite difference of
+$\langle\cos\rangle$ in $a$ matches $-\operatorname{Cov}(\cos,S)$ to four
+digits on the same trajectories, and @eq-absorption-factor was confirmed to
+$3\times10^{-15}$ on the exact coordinate first order.
+
 The consequence for a module is that its effective directionality is close to
 its acceptance curve, order by order.
 
@@ -270,12 +391,15 @@ mean is forward.
 ![Directional contrast against distance, for the three module
 models.](../cache-baikal/figures/om-contrast.png){#fig-om-contrast width=100%}
 
-So the concrete answer is the opposite of the diffusive expectation: in
-Baikal-like water, over cluster-scale distances, a module remains sensitive
+So the concrete answer is the opposite of the diffusive expectation: in this
+synthetic water, over cluster-scale distances, a module remains sensitive
 mainly to where it points, and pointing it away from a source costs real
 signal even when almost all of that signal has scattered. A module facing the
 lake floor is a poor detector of a flash above it at any distance in this
-range.
+range. The caveat of @sec-arrival-trend applies to the wording, not to that
+conclusion: the arriving light stays anisotropic everywhere computed here,
+but its sharpness does not grow without bound, and these numbers belong to
+one $(\mu_a,\mu_s,g)$ and one wavelength.
 
 ## A laser flash in three clusters {#sec-baikal-laser}
 
@@ -291,11 +415,19 @@ $$
 
 consistent with the $\sim10^{15}$ quoted for the source.
 
-The array is three clusters of the published Baikal-GVD layout: eight strings
-each, one central and seven at $60\,\mathrm m$, $36$ modules per string at
-$15\,\mathrm m$ spacing between $750$ and $1275\,\mathrm m$ depth, with the
-clusters $250\,\mathrm m$ apart; $864$ modules in total. The laser sits on a
-string at the centroid, at mid-depth. Modules face the lake floor.
+The array is three clusters of the Baikal-GVD layout as described in the
+collaboration's published papers: eight strings each, one central and seven
+at $60\,\mathrm m$, $36$ modules per string at $15\,\mathrm m$ spacing
+between $750$ and $1275\,\mathrm m$ depth, with the clusters $250\,\mathrm m$
+apart; $864$ modules in total. The laser sits on a string at the centroid, at
+mid-depth. Modules face the lake floor.
+
+Everything in this section is either a published figure or an explicitly
+stated input: published are the wavelength, the pulse energy, the layout
+distances and the photocathode area; stated inputs are the quantum efficiency
+below, the exactly regular geometry, the perfectly isotropic diffuser and the
+synthetic optics. Nothing here comes from unpublished detector data, and no
+number in it should be read as a collaboration result.
 
 ::: {.callout-important}
 The water is the repository's synthetic near-Baikal medium, which is
@@ -340,16 +472,26 @@ not because it was scattered away but because it is attenuated by the full
 $\mu_t$ while the scattered component only pays $\mu_a$ along a slightly
 longer path.
 
-Two accuracy boundaries apply to this table, and both are measured rather
-than assumed. The total charge stops being trustworthy where it falls to
-about $10^{-15}$ per square metre per emitted photon: the first unphysical
-(negative) component appears at $299.6\,\mathrm m$, where the signal is
-$2.4\times10^{-3}$ photoelectrons. All $703$ modules above $10^{-2}$
-photoelectrons lie inside that boundary and none of them shows a negative
-component. The individual moments fail earlier than their sum: the
-first-order mean arrival cosine leaves $[0,1]$ beyond $228\,\mathrm m$, which
-is why @fig-arrival stops at $225\,\mathrm m$. Nothing in the table above is
-quoted past $283\,\mathrm m$.
+Two accuracy boundaries apply to this table. The total charge stops being
+trustworthy where it falls to about $10^{-15}$ per square metre per emitted
+photon: the first unphysical (negative) component appears at
+$299.6\,\mathrm m$, where the signal is $2.4\times10^{-3}$ photoelectrons.
+The individual moments fail earlier than their sum: the first-order mean
+arrival cosine leaves $[0,1]$ beyond $228\,\mathrm m$, which is why
+@fig-arrival stops at $225\,\mathrm m$. Nothing in the table above is quoted
+past $283\,\mathrm m$.
+
+A word on what that boundary is worth. All $703$ modules above $10^{-2}$
+photoelectrons lie inside it and none of them shows a negative component —
+but **the absence of a negative component is not an error bound**. A
+quantity built by cancellation between much larger terms can be positive and
+still wrong, and non-negativity is a necessary condition, never a sufficient
+one. The bound that does say something is the grid scan of
+@sec-discretizations: moving $k_{\max}$ between $2$, $3$ and $4\,\mathrm
+m^{-1}$ changes the charge at $r\approx261\,\mathrm m$ by tens of percent,
+which is why nothing past the boundary is quoted, and leaves it unchanged at
+the level of the interpolation error inside $60\,\mathrm m$. Where a number
+matters, the scan is what has to be shown.
 
 At full power the modules nearest the laser are driven far beyond any usable
 dynamic range, which is why the real calibration system includes attenuators

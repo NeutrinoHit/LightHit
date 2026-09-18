@@ -17,6 +17,7 @@ book:
     - chapters/04-bgvd-water.qmd
     - chapters/05-numerical-scheme.qmd
     - chapters/06-modules-and-cache.qmd
+    - chapters/07-cone-segments.qmd
   appendices:
     - appendices/notation.qmd
     - appendices/finite-system.qmd
