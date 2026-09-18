@@ -18,6 +18,7 @@ book:
     - chapters/05-numerical-scheme.qmd
     - chapters/06-modules-and-cache.qmd
     - chapters/07-cone-segments.qmd
+    - chapters/08-event-moments.qmd
   appendices:
     - appendices/notation.qmd
     - VALIDATION.md

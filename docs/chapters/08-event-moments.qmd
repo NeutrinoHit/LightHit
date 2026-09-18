@@ -1,0 +1,467 @@
+# From one event to a whole array {#sec-event-moments}
+
+@sec-cone-segment left an event as a sum: every radiating element is put to
+the cache separately, and the receiver array is walked once per element. That
+is correct and it is what the control in this chapter compares against, but
+it does not scale. A stored $100\,\mathrm{GeV}$ electron shower, converted by
+the contract of @sec-source-contract, is $221\,393$ radiating elements. An
+array of $576$ modules therefore asks for $1.3\times10^8$ evaluations of
+@eq-segment-orders, each of them a truncated multipole sum. Measured, that is
+about a quarter of an hour per event per scattered order, on one machine, at
+one frequency.
+
+The way out is not a faster loop. It is to notice that the element sum and
+the receiver loop can be *separated*: everything that depends on the event and
+nothing on the receiver can be accumulated once, and everything that depends
+on the receiver is then a small contraction against that accumulation. This
+chapter builds that separation, states exactly what it costs in accuracy, and
+records the two proposals that were tried and discarded on the way.
+
+## The source contract {#sec-source-contract}
+
+A stored shower is a list of steps: two vertices, an energy and a speed at
+each end, a true path length, a time. Turning that list into light is the
+first place where an average would be easy and wrong, so the conversion is
+written once, in one object, and every order and every control uses that same
+object.
+
+Six decisions are fixed there, and each one is a place where the obvious
+shortcut is a different physical claim:
+
+The emission line is the **chord** between the two vertices, because that is
+the only geometry the step file gives. The yield is taken from the **true
+path**, not from the chord, because a step that curls carries its full length
+of radiation even though its endpoints are closer together. The cone angle
+comes from the **physical** $\beta$ of the step — the mean of the two ends —
+and never from chord divided by time, which is smaller and would open the
+cone. Time runs linearly along the chord. Below threshold there is no light
+at all, rather than a small amount. And the yield is Frank–Tamm in an
+**explicitly named** wavelength band, so that a number of photons always
+comes with the band it was counted in.
+
+For event $5$ of the stored $100\,\mathrm{GeV}$ sample this gives $221\,393$
+elements carrying $5.10\times10^6$ photons in $400$–$500\,\mathrm{nm}$, with
+$520\,\mathrm m$ of summed chord, a photon-weighted extent of
+$4.97\,\mathrm m$ about the centroid and emission times spanning
+$28\,\mathrm{ns}$. Each element keeps its row index in the source file, so any
+claim about the event can be traced back to the steps that made it.
+
+::: {.callout-note collapse="true" title="Why the reader is written out"}
+The step files are ordinary HDF5, but not every environment that has to read
+them has a full HDF5 stack. The repository therefore carries a small
+read-only parser for exactly the layout these files use — superblock $0$,
+old-style groups, version-$1$ object headers, chunked storage with deflate
+and shuffle. Where a real HDF5 library is installed, it is used instead. The
+parser writes nothing and is not a general reader; it exists so that the
+source contract has no installation prerequisite.
+:::
+
+## Moments that carry angle and time, not only position {#sec-joint-moments}
+
+Write the response of receiver $d$ as a sum over elements $i$, each an
+integral along its own chord. Group the elements into spatial blocks $B$ with
+centres $\mathbf x_B$. Inside a block the kernel — the cached response of
+@eq-cache-moments, weighted for the cone as in @eq-segment-orders — is a
+smooth function of where the element sits, so replace it by a polynomial in
+the displacement from the block centre. Then the element integral and the
+receiver factor separate, and what survives the element integral is
+
+$$
+\boxed{
+\mathcal M_{B,\alpha,\ell m}(\omega)=\sum_{i\in B}\int\mathrm da\;
+(\mathbf x_i(a)-\mathbf x_B)^\alpha\,y_i(a)\,e^{i\omega t_i(a)}\,
+P_\ell(\mu_{C,i})\,Y^{\mathrm R}_{\ell m}(\mathbf u_i),}
+$$ {#eq-joint-moment}
+
+with $\alpha$ a multi-index of total degree at most $p$ and
+$Y^{\mathrm R}_{\ell m}$ the real spherical harmonics. The response is then
+
+$$
+N_d(\omega)\;\approx\;\sum_B\sum_{|\alpha|\le p}\sum_{\ell m}
+c^{(d,B)}_{\alpha,\ell m}(\omega)\;\mathcal M_{B,\alpha,\ell m}(\omega).
+$$ {#eq-moment-response}
+
+Three features of @eq-joint-moment decide whether the scheme is worth
+anything.
+
+**The angular integral of the cone is already done.** The factor
+$P_\ell(\mu_{C,i})Y^{\mathrm R}_{\ell m}(\mathbf u_i)$ is not a sampled
+direction distribution; it is the exact projection of the Cherenkov cone onto
+the harmonics,
+$$
+\int p_C(\mathbf s)\,Y^{\mathrm R}_{\ell m}(\mathbf s)\,\mathrm d\Omega
+=P_\ell(\mu_C)\,Y^{\mathrm R}_{\ell m}(\mathbf u),
+$$ {#eq-cone-harmonics}
+which is @eq-cone-addition written for harmonics instead of Legendre
+polynomials. No optical photon is ever generated, and no direction is ever
+binned.
+
+**The moment is joint, not marginal.** Position, emission direction and time
+sit inside one integral. A scheme that stored a spatial profile, an angular
+profile and a time profile separately would throw away precisely the
+correlations — the head of a shower is earlier, more forward and more
+collimated than its tail — that distinguish one event from another. This is
+the point on which an earlier version of the proposal was wrong, and it is
+worth stating as a rule: the moment must be of the joint density, or the
+compression is a statistical fit to the event rather than a representation of
+it.
+
+**The receiver coefficients need no new transport solve.** For an isotropic
+point receiver, the angular channels of the kernel are known in closed form
+from the same multipoles the cache already stores:
+
+$$
+K_{\ell m}(\mathbf r,\omega)=\frac{4\pi}{2\ell+1}\,M_\ell(r,\omega)\,
+Y^{\mathrm R}_{\ell m}(\widehat{\mathbf r}).
+$$ {#eq-kernel-channels}
+
+The index $\ell$ that counts the source's angular channels and the index
+$\ell$ that counts the cache's multipoles are the same index. That is the
+whole reason the scheme is cheap: the angular resolution of the source costs
+nothing beyond the multipoles that were computed anyway.
+
+The count that has to be reported is therefore not the number of spatial
+monomials. It is
+$$
+N_{\text{coef}}=N_{\rm blocks}\times N_p\times(L_q+1)^2\times N_\omega,
+\qquad N_p=\binom{p+3}{3},
+$$
+with $N_p=1,4,10,20$ for $p=0,1,2,3$. The angular factor dominates it.
+
+## How many angular channels {#sec-event-channels}
+
+The angular spectrum of the source does **not** truncate. Every element
+radiates on a $\delta$-cone, and its harmonic coefficients decay only as
+$P_\ell(\mu_C)\sim\ell^{-1/2}$. Measured on the stored event, the coefficient
+magnitude at $\ell=48$ is still $14\%$ of the $\ell=0$ value and the summed
+tail beyond it is larger than the $\ell=0$ term. Nothing about the source
+alone tells you where to stop.
+
+What truncates is the *product* with the kernel, so the convergence that
+matters is the convergence of the response. Six modules spanning
+$25.7$–$260\,\mathrm m$ from the shower centroid, $\ge2$ component, element
+by element, against $L_q=128$:
+
+| $L_q$ | channels | difference from $L_q=128$ | time |
+|---:|---:|---|---:|
+| 16 | 289 | $8\times10^{-3}$ … $0.41$ | $3.9$ s |
+| 32 | 1089 | $8.6\times10^{-4}$ … $9.7\times10^{-3}$ | $10.0$ s |
+| 64 | 4225 | $\le3.5\times10^{-3}$ | $36.0$ s |
+| 128 | 16641 | — | $132.9$ s |
+
+So $L_q=32$ buys about a percent and $L_q=64$ a few parts in a thousand, and
+the cost of the channel index is close to linear in $(L_q+1)^2$ as it should
+be. This is a truncation error of its own; it does not mix with the
+block-expansion error measured next, and the comparisons below are run at
+fixed $L_q$ against the same $L_q$ so that only the expansion is on trial.
+
+## Fitting the kernel instead of differentiating it {#sec-event-fit}
+
+The coefficients $c^{(d,B)}_{\alpha,\ell m}$ are the Taylor coefficients of
+the kernel about the block centre, and the obvious way to get them is to
+differentiate the cached interpolant. That is a trap for a reason worth
+spelling out: moving the source inside the block changes both the distance to
+the receiver and the direction to it, so
+
+$$
+\frac{\partial f}{\partial r_j}
+=\hat r_j\,\frac{\partial f}{\partial r}
++\bigl(u_j-\nu\hat r_j\bigr)\frac1r\frac{\partial f}{\partial \nu},
+$$ {#eq-source-derivative}
+
+and a scheme that differentiates only the radial spline silently drops the
+second term. Beyond first order the bookkeeping of mixed radial–angular
+derivatives gets worse, and every one of them inherits the spline's own
+derivative error.
+
+What is used instead is a **local least-squares fit**. The kernel is
+evaluated on a small tensor stencil of points filling the block, and the
+polynomial coefficients come from one pseudo-inverse of the design matrix.
+The same pseudo-inverse serves every receiver, every angular channel and
+every frequency, because the design matrix depends only on the stencil
+geometry; only the right-hand side changes. Nothing is differentiated, and
+the spline is asked only for values.
+
+One rule had to be learned by breaking it. The stencil must carry at least as
+many points as the fit has monomials, with margin: a fixed $3\times3\times3$
+stencil has $27$ points against the $20$ monomials of $p=3$, which is enough
+to be solvable and not enough to be stable, and convergence in $p$ broke
+there. The stencil order is now $p+2$ nodes per axis.
+
+::: {.callout-note collapse="true" title="A suspicion that measurement did not support"}
+Because the fit is a fit *across* the block, a radial table too coarse
+compared with the block should show up as fit noise rather than as a small
+bias, and that was the first explanation offered for the broken convergence.
+It is wrong, at least here. Repeating the comparison with $60$, $160$ and
+$400$ radial nodes — nearest-neighbour spacing at $250\,\mathrm m$ of $13.1$,
+$4.7$ and $1.9\,\mathrm m$ against a block half-size of about
+$2.5\,\mathrm m$ — moves the median error at $p=2$ from $4.2\times10^{-4}$ to
+$8.9\times10^{-4}$ to $8.5\times10^{-4}$, and at $p=3$ from $6.6$ to $6.2$ to
+$8.3\times10^{-5}$: flat, within its own scatter, over a sevenfold change in
+spacing. The stencil order was the whole of it. The table is recorded because
+a suspicion that measurement kills is worth as much as one it confirms.
+:::
+
+## Blocks, and the partition that does not shrink them {#sec-event-blocks}
+
+Raising $p$ is one way to follow a kernel across a block; making the block
+smaller is the other. They are not interchangeable, and which one to spend on
+turned out to depend on a detail of how the blocks are cut.
+
+The first partition tried was the natural one: recursively cut every block at
+the photon-weighted median along its widest axis. On a shower that fails in a
+specific way. A shower is a bright core inside a sparse halo, so the median
+sits inside the core, and one block inherits almost the whole halo. Asking for
+$32$ blocks left the largest of them with a half-diagonal of $3.0\,\mathrm m$
+against an event extent of $5.0\,\mathrm m$; at $256$ blocks it was still
+$2.2\,\mathrm m$. The count went up and the quantity that actually matters
+barely moved.
+
+The partition used now cuts by extent instead: take the block with the largest
+half-diagonal and cut its widest axis at the midpoint of its bounding box.
+Each cut halves that axis of that block, so the largest block shrinks by
+construction — $1.6\,\mathrm m$ at $32$ blocks and $0.53\,\mathrm m$ at $256$,
+against $3.0$ and $2.2$ for the median cut. Block centres stay photon
+weighted; only which points go together changes.
+
+| blocks | 1 | 2 | 4 | 8 | 32 | 256 |
+|---|---:|---:|---:|---:|---:|---:|
+| largest half-diagonal, median cut | $5.63$ | $4.78$ | $4.28$ | $3.92$ | $3.01$ | $2.21$ |
+| largest half-diagonal, extent cut | $5.63$ | $4.31$ | $3.03$ | $2.24$ | $1.57$ | $0.53$ |
+
+There is a second reason the block size matters, and it is not the bending of
+the kernel at all. The channel of @eq-kernel-channels carries
+$Y^{\mathrm R}_{\ell m}(\widehat{\mathbf r})$. Across a block of half-size $h$
+at distance $r$ that direction swings by about $h/r$, while a harmonic of
+degree $\ell$ oscillates on an angular scale $1/\ell$. So the polynomial has to
+follow
+
+$$
+s=\frac{L_q\,h}{r}
+$$ {#eq-block-oscillations}
+
+radians of harmonic phase, and once $s$ is large no polynomial degree helps,
+because the difficulty is a wiggle rather than a bend. Measured directly, at
+$p=3$, on the $\ge2$ component, with $h$ the block half-diagonal and $s$ quoted
+at the nearest receiver:
+
+| blocks | $h$, m | $L_q=8$ | $L_q=16$ | $L_q=32$ | $L_q=64$ |
+|---:|---:|---|---|---|---|
+| 1 | $5.64$ | $1.2\times10^{-4}$ ($s=1.8$) | $6.9\times10^{-5}$ ($3.5$) | $9.4\times10^{-5}$ ($7.0$) | $1.4\times10^{-3}$ ($14.1$) |
+| 4 | $3.03$ | $3.6\times10^{-6}$ ($0.9$) | $8.0\times10^{-6}$ ($1.9$) | $6.6\times10^{-6}$ ($3.8$) | $3.5\times10^{-5}$ ($7.5$) |
+| 16 | $1.81$ | $1.0\times10^{-6}$ ($0.6$) | $3.1\times10^{-6}$ ($1.1$) | $1.9\times10^{-6}$ ($2.3$) | $1.1\times10^{-5}$ ($4.5$) |
+| 64 | $1.09$ | $1.1\times10^{-8}$ ($0.3$) | $8.4\times10^{-8}$ ($0.7$) | $4.4\times10^{-8}$ ($1.4$) | $4.5\times10^{-7}$ ($2.7$) |
+
+Read along a row: the error is flat in $L_q$ while $s$ stays small and turns
+up once $s$ passes about five, and the turn-up is a factor of $15$ at
+$s=14$ where the block is one whole event. Read down a column: smaller blocks
+help at every $L_q$, and they help more where $s$ was the binding constraint.
+
+This is a second, independent condition on the partition, and it couples the
+two truncations that would otherwise be chosen separately: pick $L_q$ from the
+response convergence of @sec-event-channels, then pick the number of blocks so
+that $s$ stays below about five at the closest receiver.
+
+## What the comparison says {#sec-event-numbers}
+
+The experiment is the stored event at its own $221\,393$ elements, the array
+of $576$ modules at $25.7$–$317.3\,\mathrm m$ from the shower centroid,
+$L_q=32$, $\omega=0$, and a reference that is the *same kernel* summed element
+by element. Median relative error over six modules spanning the whole distance
+range:
+
+| blocks | $h$, m | $p$ | monomials | coefficients | MB | compile, s | apply $576$, s | order $1$ | order $\ge2$ |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 1 | $5.63$ | 0 | 1 | $1\,089$ | $0.0$ | $47.9$ | $2.0$ | $7.2\times10^{-2}$ | $5.8\times10^{-2}$ |
+| 1 | $5.63$ | 1 | 4 | $4\,356$ | $0.1$ | $48.5$ | $2.0$ | $7.2\times10^{-2}$ | $5.4\times10^{-2}$ |
+| 1 | $5.63$ | 2 | 10 | $10\,890$ | $0.2$ | $50.4$ | $4.6$ | $2.6\times10^{-3}$ | $2.6\times10^{-4}$ |
+| 1 | $5.63$ | 3 | 20 | $21\,780$ | $0.3$ | $49.5$ | $9.1$ | $2.5\times10^{-3}$ | $2.7\times10^{-4}$ |
+| 2 | $4.31$ | 2 | 10 | $21\,780$ | $0.3$ | $50.3$ | $9.8$ | $1.9\times10^{-4}$ | $1.6\times10^{-5}$ |
+| 4 | $3.03$ | 2 | 10 | $43\,560$ | $0.7$ | $49.2$ | $17.9$ | $2.1\times10^{-4}$ | $6.4\times10^{-6}$ |
+| 4 | $3.03$ | 3 | 20 | $87\,120$ | $1.3$ | $50.3$ | $37.3$ | $1.4\times10^{-4}$ | $2.2\times10^{-6}$ |
+| 8 | $2.24$ | 2 | 10 | $87\,120$ | $1.3$ | $48.8$ | $36.0$ | $2.2\times10^{-4}$ | $3.7\times10^{-6}$ |
+| 8 | $2.24$ | 3 | 20 | $174\,240$ | $2.7$ | $49.9$ | $74.5$ | $1.2\times10^{-4}$ | $2.2\times10^{-6}$ |
+
+Five things in that table are worth naming.
+
+**Degree one buys nothing.** The moments are taken about the block centre, and
+the centre is the photon-weighted centroid, so the first-order moments very
+nearly vanish by construction. Adding them changes the least-squares fit of
+the constant and nothing else. The useful ladder is $p=0,2,3$; the $p=1$ row
+is kept in the table precisely because the obvious reading of a convergence
+study — each order helps a little — is wrong here.
+
+**Blocks are worth more than degree.** At $p=2$, going from one block to four
+improves the $\ge2$ component by a factor of forty, while going from $p=2$ to
+$p=3$ at one block improves it by nothing at all. That asymmetry is the $s$ of
+@eq-block-oscillations at work: with one block $s=7$ at the nearest module,
+and no polynomial degree fixes a wiggle.
+
+**The $\ge2$ component is one to two orders better than order $1$**, at every
+setting. That is the measurement behind the order split of @sec-cone-segment:
+order $1$ carries the near-cone ridge, which is exactly the feature a smooth
+expansion across a block cannot follow, and it keeps its own per-segment route.
+
+**Memory is not a constraint.** The largest moment array in the table is
+$2.7\,\mathrm{MB}$, and the peak resident set of the whole run — event,
+cache, moments and stencils together — was $723\,\mathrm{MB}$.
+
+**The cost structure is the point.** Compiling the moments took $48$–$50\,$s
+whatever the block count or degree, because it is a pass over elements and
+never sees a receiver. Applying them cost $2$–$75\,$s for all $576$ modules.
+The reference cost $10.8\,\mathrm s$ for six modules, that is $1.80\,$s per
+module, so the same $576$ would take about $17$ minutes per scattered order.
+At the accuracy of the $2$-block, $p=2$ row the moment route needs
+$50+10=60\,$s for the same answer, and the compile is shared between the two
+scattered orders. Per module the apply is $17\,\mathrm{ms}$ against
+$1.8\,\mathrm s$, a factor of a hundred, and that is the number that decides
+what happens when the array grows.
+
+The unscattered order is in the same budget and is not helped by any of this:
+the closed cone formula of @eq-ballistic-fluence over all $221\,393$ elements
+and all $576$ modules takes $4.9\,\mathrm s$. Reading the event out of its
+file and applying the source contract takes $0.1\,\mathrm s$, and the cache
+itself — built once for a medium and reused by every event afterwards — took
+$45\,\mathrm s$ for $160$ radii at $\omega=0$. So of a $65\,\mathrm s$
+per-event budget the moment compile is three quarters of it, the apply an
+eighth, and everything else the rest; that is the shape to attack next, and it
+is not the one an unmeasured guess would have picked.
+
+## Two proposals that did not survive {#sec-event-rejected}
+
+Both concern the *time* axis, and both were attractive enough to be worth
+recording with their reasons.
+
+**Compressing the pulse into a few exponentials.** The stationary response
+falls with distance roughly as $e^{-\kappa_* r}$, and it is tempting to read
+$\kappa_*$ as a decay constant of the pulse and to fit the arrival-time
+distribution with three to five exponentials of related rate. The step does
+not hold: $\kappa_*$ describes the spatial decay of the response *after*
+integration over time, and says nothing about the shape at fixed $r$. Worse,
+the proposed family cannot represent the target: a sum of decaying
+exponentials with positive coefficients is monotonically decreasing, and an
+arrival-time distribution rises to a peak before it falls. A compression that
+cannot produce a rising edge is not a compression of this signal. Time
+compression is deferred until there is a verified time-domain answer to
+compress, and any fit adopted then has to carry positivity and causality as
+explicit constraints rather than as hopes.
+
+**Treating the source as a statistical distribution.** The temptation is to
+summarise the shower by a longitudinal profile and an angular spread and to
+sample from it. That is the route whose error dominated everything else in
+earlier work — the source term, not the transport numerics, is what limited
+accuracy there. The moment route is deliberately the opposite: @eq-joint-moment
+is an exact linear functional of the true element list, evaluated without
+sampling, and its error is the truncation of a polynomial and a harmonic
+series, both of which can be measured and reduced.
+
+## Frequency changes the criterion {#sec-event-frequency}
+
+Everything above is at $\omega=0$. It does not carry over, and the reason is
+sharp enough to be worth stating before the numbers.
+
+At zero frequency the only thing limiting a block is how far the kernel bends
+across it, so "small compared with the distance" is a fair guide. At nonzero
+frequency the arrival phase swings across the block as well, by
+
+$$
+\delta=\frac{\omega\,h}{v},
+$$ {#eq-block-phase}
+
+and this has nothing to do with the distance to the receiver: a block four
+metres across at $\omega=0.6\,\mathrm{ns^{-1}}$ carries eleven radians of
+phase whether the module is at thirty metres or at three hundred. A
+low-order polynomial cannot follow eleven radians, and no amount of distance
+makes it easier.
+
+Two cache settings also have to follow the frequency, and leaving them at
+their $\omega=0$ values produces a comparison that looks converged on a kernel
+that is not resolved. The spectral kernel carries structure out to
+$k\sim|\mu_t-i\omega/v|$, which is $\omega/v$ once the frequency matters at
+all — at $\omega=0.6$ that is $2.7\,\mathrm m^{-1}$ against an extinction of
+$0.092\,\mathrm m^{-1}$ — so the wavenumber cutoff is set to
+$3\omega/v=8.2\,\mathrm m^{-1}$, and the stored degree, which must follow
+$k_{\max}r_{\max}$, rises to $780$. That is also why this scan is run over a
+restricted distance range, out to $80\,\mathrm m$: the cache cost grows with
+$k_{\max}r_{\max}$, and a frequency scan at full array scale is a different
+and much larger computation. Saying so is part of the result.
+
+Median relative error of the $\ge2$ component over five modules at
+$25.7$–$78.8\,\mathrm m$, $L_q=16$, $p=2$, with the phase spread of
+@eq-block-phase in brackets:
+
+| blocks | $h$, m | $\omega=0$ | $\omega=0.1$ | $\omega=0.3$ | $\omega=0.6$ |
+|---:|---:|---|---|---|---|
+| 1 | $5.63$ | $1.3\times10^{-3}$ | $1.3\times10^{-1}$ ($2.6$) | $1.2$ ($7.7$) | $1.0$ ($15.3$) |
+| 4 | $3.03$ | $1.7\times10^{-4}$ | $2.8\times10^{-3}$ ($1.4$) | $1.7\times10^{-1}$ ($4.1$) | $1.3$ ($8.2$) |
+| 16 | $1.92$ | $6.1\times10^{-6}$ | $6.3\times10^{-4}$ ($0.9$) | $8.3\times10^{-2}$ ($2.6$) | $4.4\times10^{-1}$ ($5.2$) |
+| 64 | $1.11$ | $8.5\times10^{-7}$ | $4.8\times10^{-5}$ ($0.5$) | $3.2\times10^{-3}$ ($1.5$) | $3.4\times10^{-2}$ ($3.0$) |
+| 256 | $0.53$ | $1.7\times10^{-7}$ | $2.9\times10^{-6}$ ($0.2$) | $2.7\times10^{-4}$ ($0.7$) | $1.4\times10^{-3}$ ($1.5$) |
+| 1024 | $0.23$ | $1.0\times10^{-8}$ | $1.9\times10^{-7}$ ($0.1$) | $1.6\times10^{-5}$ ($0.3$) | $6.3\times10^{-5}$ ($0.6$) |
+
+The error tracks $\delta$ and not the block count: every entry near
+$\delta\approx1.5$ sits near $10^{-3}$, every entry near $\delta\approx3$ near
+$3\times10^{-2}$, wherever in the table it appears. So the frequency is not a
+wall — it is a price, paid in blocks, and the scan says how many: roughly
+$\delta\lesssim1.5$ for a part in a thousand.
+
+What that price is worth has to be measured rather than argued, because the
+two sides scale differently. Per receiver the element sum costs
+$N_{\rm el}(L_q+1)$ and the moment apply costs
+$N_{\rm blocks}S^3(L_q+1)^2$, with $S$ the stencil order; the compile is a
+one-off that no receiver count changes. Timed head to head on $65$ modules
+within $80\,\mathrm m$, at $L_q=16$ and $p=2$, against the same element sum:
+
+| route | accuracy at $\omega=0$ | accuracy at $\omega=0.6$ | compile | apply per module |
+|---|---|---|---:|---:|
+| element sum | exact by definition | exact by definition | — | $1.66\,\mathrm s$ |
+| moments, $4$ blocks | $5.2\times10^{-5}$ | $1.0$ | $11.5\,\mathrm s$ | $0.011\,\mathrm s$ |
+| moments, $64$ blocks | $7.7\times10^{-7}$ | $8.1\times10^{-2}$ | $11.8\,\mathrm s$ | $0.175\,\mathrm s$ |
+| moments, $256$ blocks | $9.8\times10^{-8}$ | $3.6\times10^{-3}$ | $12.2\,\mathrm s$ | $0.644\,\mathrm s$ |
+
+At $\omega=0$, four blocks are enough and the apply is $150$ times cheaper
+than the element sum. At $\omega=0.6$, the same accuracy target needs $256$
+blocks and the factor falls to about $2.6$. The advantage survives, but only
+just, and the work-unit estimate explains why: at $256$ blocks the two sides
+are within a factor of two of each other by operation count, and what is left
+is the difference between dense linear algebra and a walk over a quarter of a
+million elements.
+
+The conclusion is a design one. Chasing a swinging phase with a polynomial is
+the wrong instrument, and the right one is already in the scheme. The residual
+carrier across a block is $e^{-i\mathbf q\cdot\mathbf x}$ with
+$\mathbf q=\omega\widehat{\mathbf r}/v$, a plane wave whose direction is the
+direction to the receiver — and the Rayleigh expansion
+$$
+e^{-i\mathbf q\cdot\mathbf x}=4\pi\sum_{\ell m}(-i)^\ell
+j_\ell(q|\mathbf x|)\,Y^{\mathrm R}_{\ell m}(\widehat{\mathbf x})\,
+Y^{\mathrm R}_{\ell m}(\widehat{\mathbf q})
+$$ {#eq-rayleigh}
+puts it into exactly the angular index the route already carries, at the cost
+of Gaunt coefficients coupling it to the source harmonics. That is the next
+piece of work on this axis, and it is named here rather than claimed: nothing
+below the line has been implemented or measured.
+
+One practical note that the table makes obvious and that costs nothing: the
+partition need not be the same at every frequency. The moments are compiled
+per block, so a run that wants $\omega=0$ and $\omega=0.6$ can use a coarse
+partition for the low band and a fine one for the high band, and pay the fine
+apply only where it is needed.
+
+## What has not been shown {#sec-event-limits}
+
+The reference throughout this chapter is the **same kernel** summed element by
+element. That isolates the error of the moment expansion, which is what the
+chapter is about, and it deliberately does not test the cache: the cached
+response carries its own truncations, measured in @sec-numerical-scheme and
+@sec-segment-numbers. The $\ge2$ component still has no independent physical
+control, as @sec-segment-limits already said; the moment route does not change
+that, and stacking an untested expansion on an untested component would be a
+poor trade. Building that control is the next piece of physics rather than the
+next piece of speed.
+
+The receiver is still an isotropic point. A module with a real acceptance in
+front of a directed source needs the $m\ne0$ blocks of @sec-om-limits; the
+moment machinery is written in the real harmonics that those blocks require,
+so the step is a matter of carrying the acceptance coefficients into
+@eq-kernel-channels rather than of new transport.
