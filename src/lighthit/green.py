@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 from scipy.special import roots_legendre, spherical_jn, eval_legendre
 from .angular import angular_components, _degree, _check_backend
-from .single import single_spectrum
+from .single import single_spectrum, single_quadrature_backend
 
 
 @dataclass(frozen=True)
@@ -67,6 +67,7 @@ class GreenResult:
     photons: float = 1.0
     emission_time_ns: float = 0.0
     angular_backend: str = "numpy"
+    single_backend: str = "numpy"
 
     @property
     def spectrum(self):
@@ -105,6 +106,7 @@ class GreenResult:
         path.parent.mkdir(parents=True, exist_ok=True)
         metadata = dict(medium=asdict(self.medium), settings=asdict(self.settings),
                         angular_backend=self.angular_backend,
+                        single_backend=self.single_backend,
                         timings_s=self.timings_s, photons=self.photons,
                         emission_time_ns=self.emission_time_ns,
                         component_names=["ballistic", "one_exact_HG", "two_or_more_HG_L"],
@@ -124,10 +126,12 @@ class PointGreenSolver:
     direction=None selects an isotropic flash (one photon over the full sphere).
     Each solve recomputes transport; all observations in that solve share it.
     """
-    def __init__(self, medium, settings=None, *, angular_backend="numpy"):
+    def __init__(self, medium, settings=None, *, angular_backend="numpy",
+                 single_backend="auto"):
         self.medium = medium
         self.settings = settings or SolverSettings()
         self.angular_backend = _check_backend(angular_backend)
+        self.single_backend = single_quadrature_backend(single_backend)
 
     def solve(self, omega_per_ns, displacement_m, *, direction=(0.0, 0.0, 1.0),
               photons=1.0, emission_time_ns=0.0, progress=None):
@@ -189,7 +193,9 @@ class PointGreenSolver:
             if photons == 0:
                 errors.append(0.0)
                 continue
-            first, error = single_spectrum(omega, rad, None if cosine is None else cosine[d], self.medium)
+            first, error = single_spectrum(
+                omega, rad, None if cosine is None else cosine[d], self.medium,
+                backend=self.single_backend)
             values[:, d, 1] = first
             errors.append(error)
             if direction is None:
@@ -204,4 +210,5 @@ class PointGreenSolver:
                        observations=len(radius), frequencies=len(omega))
         return GreenResult(omega.copy(), rvec.copy(), None if direction is None else direction.copy(),
                            self.medium, settings, values, timings, errors,
-                           float(photons), float(emission_time_ns), self.angular_backend)
+                           float(photons), float(emission_time_ns), self.angular_backend,
+                           self.single_backend)

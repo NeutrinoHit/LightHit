@@ -1,8 +1,8 @@
 ---
-title: "A point source in scattering water"
+title: "A point source in a scattering medium"
 subtitle: "LightHit: the Green's function module"
 author: "D. V. Naumov"
-date: "2026-09-16"
+date: "2026-09-19"
 format:
   revealjs:
     theme: [dark, shared/styles/neutrinohit-reveal.scss]
@@ -14,10 +14,11 @@ format:
 
 ## The main idea {.center}
 
-A photon emitted in water either reaches a detector directly, scatters one
-or more times, or is absorbed. LightHit solves for the **distribution**
-directly instead of sampling photon histories, and reports the part a
-point detector would register — split by the number of scatterings.
+A photon emitted in a scattering medium either reaches a detector directly,
+scatters one or more times, or is absorbed. LightHit solves for the
+**distribution** directly instead of sampling photon histories, and reports
+the part a point detector would register — split by the number of
+scatterings.
 
 ::: {.takeaway}
 No scattering, one scattering, and everything beyond are three separate,
@@ -26,16 +27,20 @@ exact pieces of the same spectral solve — not three separate simulations.
 
 ## Headline result {.center}
 
-Real Lake Baikal water at 450 nm, $g=0.9$: front / horizon / back, 15 m and
-30 m from the source, six points from one shared solve.
+Isotropic flash, JUNO-like liquid-scintillator medium (test optical
+parameters, not a calibration): the scattered fraction of the signal grows
+steadily with distance.
 
-![](../docs/bgvd-450nm/figures/grid-readout.png){.slide-image-center width=92%}
+<img src="../docs/juno-430nm/figures/order-fractions.png" class="slide-image-center" style="width:62%">
 
 ::: {.compact}
-- Charge falls two decades from front/15 m to back/30 m
-- The $\ge2$-scattering share **grows** with angle and distance: 27% (front,
-  15 m) $\to$ 54% (back, 30 m) — one wide deflection is rare, several small
-  ones are not
+- 5 m: 80% ballistic / 16% single-scattered / 5% multiply-scattered
+- 25 m: 40% / 28% / 32% — the $\ge1$-scattering share nearly triples
+:::
+
+::: {.takeaway}
+Even with isotropic scattering ($g=0$) the scattered share still grows with
+distance — it is path-length geometry, not a forward-peaked phase function.
 :::
 
 ## What is transported {.smaller}
@@ -58,7 +63,8 @@ $$
 ## Detector
 A point isotropic detector measures
 $K=\int I\,\mathrm d\Omega$, m⁻²·ns⁻¹ per unit effective area, efficiency 1.
-No OM surface, no shadowing, no acceptance yet.
+An arbitrary angular acceptance $A(\mathbf s)$ is supported for an isotropic
+source (see later slides); no finite OM size, no shadowing.
 
 ## Source
 Directed or isotropic single-photon flash at $t=0$. The exact forward ray
@@ -93,23 +99,6 @@ $$
 $$
 Tridiagonal in $l$; $\gamma_l=\mu_sg^l$ for $l\le L$, else 0.
 
-## Worked example {.smaller}
-$L=3$ (a 4x4 toy, not production), real water at $g=0.9$, $k=0.5\,
-\mathrm m^{-1}$, $\omega=0$: $d_0=\mu_t=0.0992$,
-$\gamma=(0.0202,0.0181,0.0163,0.0147)$.
-$$
-A_L=\begin{pmatrix}
-0.0791 & 0.289i & 0 & 0\\
-0.289i & 0.0811 & 0.258i & 0\\
-0 & 0.258i & 0.0829 & 0.254i\\
-0 & 0 & 0.254i & 0.292
-\end{pmatrix}
-$$
-Two solves, not one: $A_0h^{(1)}=\Gamma b\Rightarrow h^{(1)}=(0.092,
--0.240i,-0.261,0.334i)$; then $A_Lh^{(\ge2)}=\Gamma h^{(1)}\Rightarrow
-h^{(\ge2)}=(-0.006,-0.008i,-0.007,0.023i)$. ($A_0$: same shape, $\gamma=0$
-on the diagonal.) Checked against `solve_tail_system` to $10^{-10}$.
-
 ## Exact free tail
 Above degree $L$, only **free** transport remains. Its exact moment ratio
 $r_N=b_{N+1}/b_N$ closes the system analytically — no cutoff of the free
@@ -118,6 +107,154 @@ propagator, ever.
 ## Orders, not truncation
 $$h^{(0)}=b,\quad A_0h^{(1)}=\Gamma b,\quad A_Lh^{(\ge2)}=\Gamma h^{(1)}$$
 $L$ truncates angular **rank**, not the number of collisions summed.
+:::
+
+## Isotropic source: full solution in one place {.smaller}
+
+The three orders are exact closed forms, not a simulation of any kind:
+
+$$
+\boxed{K^{(0)}_{\text{iso}}(r,t)=\frac{e^{-\mu_tr}}{4\pi r^2}\,\delta(t-r/v)}
+$$
+
+$$
+\boxed{K^{(1)}_{\text{iso}}(r,t)=\frac{\mu_s}{4\pi rt}\,e^{-\mu_tvt}\ln\frac{vt+r}{vt-r}}
+\qquad(g=0,\ t>r/v)
+$$
+
+$$
+\boxed{\tilde K^{(\ge2)}_{\text{iso}}(r,\omega)=\frac1{2\pi^2\sqrt2}
+\int_0^\infty k^2j_0(kr)\,h_0^{(\ge2)}(k,\omega)\,\mathrm dk}
+$$
+
+::: {.takeaway}
+$K=K^{(0)}+K^{(1)}+K^{(\ge2)}$ — the same three-order split as the
+directed source, with every angular sum collapsed to its $l=0$ term.
+:::
+
+## Why the isotropic case is the cheap special case {.smaller}
+
+::: {.panel-tabset}
+## No angular sum
+A directed source needs the full Legendre/multipole sum, up to $L$ (set
+by the medium) and $J$ (set by the spatial inversion). An isotropic
+source kills every term but $l=0$: one radial integral, no angular loop.
+
+## $g\ne0$
+$K^{(1)}$ has a closed form only at $g=0$. For $g\ne0$ a 1-D quadrature
+over the ellipsoid $a+b=vt$ is used instead (substitution
+$a=(vt/2)(1+\tanh y)$ removes the $1/(ab)$ singularity) — still one
+dimension, not two.
+
+## Independent check
+The $g=0$ closed form is not the production path — it is the exact
+cross-check the general quadrature is validated against.
+
+## In the API
+`direction=None` in `PointGreenSolver.solve`;
+`single_scattering_rate`/`single_spectrum`/`single_bins` in
+`src/lighthit/single.py`. No forward-ray exclusion needed — the
+isotropic front is a clean delta in every direction.
+:::
+
+## Full field $I(r,\mathbf s,t)$ for an isotropic source {.smaller}
+
+$$
+I^{(0)}(\mathbf r,\mathbf s,t)=\frac{e^{-\mu_tr}}{4\pi r^2}\,
+\delta_{S^2}(\mathbf s-\hat{\mathbf r})\,\delta(t-r/v)
+$$
+
+$$
+\boxed{\tilde I^{(k)}(r,\omega,\cos\theta)=\frac12\sum_{l=0}^{\ell_{\max}}
+M_l^{(k)}(r,\omega)\,P_l(\cos\theta)}
+,\qquad k\in\{1,\ge2\},\quad\cos\theta=\hat{\mathbf r}\cdot\mathbf s
+$$
+
+$M_l(r,\omega)$ is the exact multipole moment `cache.py` already stores for
+$K$ — no new transport solve. The weight is $\alpha_l=2\pi$ for every $l$:
+the Legendre expansion of a delta on the sphere, pointed along $\mathbf s$
+instead of averaged over it.
+
+::: {.takeaway}
+A true delta's $\alpha_l$ never decays: any finite $\ell_{\max}$ returns a
+band-limited $I$, smeared over $\sim1/\ell_{\max}$ radians — the same
+trade-off as $J\gtrsim k_{\max}r$ for the ordinary spatial inversion, now
+on the *output* angle.
+:::
+
+## Same machinery, arbitrary OM acceptance {.smaller}
+
+::: {.panel-tabset}
+## $L(r,\mathbf s,t)$ — full field
+```python
+from lighthit.cache import acceptance_coefficients
+
+alpha = np.full(cache.degree + 1, 2 * np.pi)   # delta at cos(theta)=1
+cos_theta = ...                                # r_hat . s per query point
+spectrum = cache.acceptance_spectrum(radii_m, cos_theta, alpha)
+```
+
+## Arbitrary OM
+```python
+def my_om_acceptance(cos_theta):
+    return np.clip(0.15 + 0.85 * cos_theta, 0.0, None)   # any measured shape
+
+alpha = acceptance_coefficients(my_om_acceptance, cache.degree)
+charge = cache.charge_for_modules(displacement_m, axis=(0, 0, -1), alpha,
+                                   acceptance=my_om_acceptance, photons=n_photons)
+spectrum = cache.acceptance_spectrum(radii_m, arrival_cosines, alpha,
+                                      acceptance=my_om_acceptance)
+```
+
+## Time binning
+```python
+from lighthit.readout import inverse_bins
+
+profile = inverse_bins(cache.grid.omega_per_ns,
+                        spectrum[:, :, 1] + spectrum[:, :, 2],
+                        edges_ns, sigma_ns)
+# order 0 is placed analytically, at t = r/v + t_emission (see readout.py)
+```
+:::
+
+## Worked example: a JUNO-like medium {.smaller}
+
+Test optical parameters, not a calibration (same convention as
+`synthetic_medium()`): $\mu_a=0.005\,\mathrm m^{-1}$ (~200 m absorption
+length), $\mu_s=0.02\,\mathrm m^{-1}$ (~50 m scattering length), $g=0$ —
+Rayleigh scattering is front–back symmetric, unlike a strongly
+forward-peaked medium — $n_g=1.5$, 430 nm.
+
+Isotropic flash, `PointGreenSolver.solve(direction=None)`,
+`SolverSettings.refined()`, 241 frequencies, 3 distances (5/15/25 m) from
+one shared solve.
+
+<img src="../docs/juno-430nm/figures/isotropic-timing.png" class="slide-image-center" style="width:95%">
+
+::: {.compact}
+- Order 0 arrives as a sharp, delta-like pulse exactly at $t_{\text{front}}$
+- Order 1 and order $\ge2$ build up the slower, longer tail that dominates
+  the late-time rate at every distance shown
+:::
+
+## Execution time {.smaller}
+
+One shared solve for all 3 points and 241 frequencies (`result.timings_s`):
+
+| stage | time |
+|---|---:|
+| spatial weights (Bessel) | 0.8 ms |
+| **angular solve** | **5.10 s** |
+| spatial inversion | 15 ms |
+| orders 0/1, in physical time | 1.95 s |
+| **total** | **7.07 s** |
+
+::: {.compact}
+- `angular_components` depends only on the medium, settings and $\omega$ —
+  never on the detector position, so the angular solve is paid **once**
+  and shared by every observation point in the same `solve()` call
+- Adding more distances on top of an existing solve costs seconds, not
+  minutes
 :::
 
 ## Why two of the three orders skip the FFT {.smaller}
@@ -145,83 +282,26 @@ $\int W_{12}(\omega)H_d(\omega)\tilde K(\omega)\,\mathrm d\omega/2\pi$;
 only the numerical path differs. See `docs/chapters/03-histogram-binning.qmd`.
 :::
 
-## Real water needs its own convergence study {.smaller}
-
-::: {.panel-tabset}
-## What actually breaks
-Not $L$ (the medium's angular truncation) — $J$, the spatial multipole
-degree of the *spatial* inversion. At fixed $L=64$, $r=30\,\mathrm m$,
-$k_{\max}=6\,\mathrm m^{-1}$:
-$$
-J=100:\ Q^{(\ge2)}=9.3\times10^{-8}\quad\text{vs.}\quad
-J\ge330:\ Q^{(\ge2)}=1.30\times10^{-8}
-$$
-7x off, sign of the error flips in between — a genuine trap, not noise.
-
-## The rule
-$J\gtrsim k_{\max}\cdot r$: a Fourier–Bessel sum needs that many multipoles
-to represent a function localized at radius $r$. $L$ (medium truncation)
-only needs a mild margin at $g=0.9$: $L{=}96$ agrees with $L{=}128$ to
-$0.006\%$.
-
-## An earlier mistake, corrected
-A first pass matched $L=J$ and blamed the resulting instability on
-$g\approx0.999$ (see `docs/chapters/04-bgvd-water.qmd`, §Medium). Separating
-$L$ from $J$ shows the real constraint, and it does not depend on $g$
-being close to 1 at all.
-
-## Where
-`docs/chapters/04-bgvd-water.qmd`, `docs/bgvd-450nm/report.json` — every
-scan point, every setting, every timing.
-:::
-
-## Sharing the angular solve {.smaller}
-
-`angular_components` depends on the medium, settings and $\omega$ — never
-on the detector position. One `solve()` call already shares it across
-every row of `displacement_m`; six independent calls redo it six times.
-
-::: {.panel-tabset}
-## Measured, not assumed
-![](../docs/bgvd-450nm/figures/caching-timing.png){width=70%}
-
-## Breakdown (shared call, 6 points, 241 frequencies)
-::: {.compact}
-- spatial weights (Bessel): 6.5 s — one-time
-- **angular solve: 31.6 s** — the same cost for 1 point or 6
-- spatial inversion: 18.0 s — scales with points, still cheap
-- orders 0/1: 0.8 s — one-time
-:::
-
-## What this means
-Not a persisted cache — `report.json`'s `caching` field still says "none".
-It is in-memory reuse already available today: pass every detector
-position to one `solve()` call (or one config's `detector` section)
-instead of looping. For an OM array this is the angular solve's cost once,
-not once per OM.
-:::
-
 ## Status and scope {.smaller}
 
 ::: {.compact}
-- Point source, one wavelength, infinite homogeneous medium, $g=0.9$
-- Six source–detector geometries from one shared solve; no persisted cache
-- Efficiency 1; no finite OM, no acceptance, no shadowing
-- No shower source yet
-- No license or copyright assignment yet; not published
-:::
-
-::: {.question}
-What is the next small, checkable step once this front is inspected
-locally?
+- Point source (isotropic or directed), one wavelength band, infinite
+  homogeneous medium, Henyey–Greenstein phase function
+- Arbitrary angular OM acceptance for an **isotropic** source: implemented,
+  no extra transport solve, same cached multipole moments as $K$
+- Directed source read by a directional OM needs the $m\ne0$ blocks — not
+  yet implemented
+- Point detector: no finite OM size, no shadowing; no track or shower
+  source yet
 :::
 
 ## Sources {.smaller}
 
 ::: {.compact}
-- Resolvent math checked against `baikal-rte/src/baikal_rte/spectral.py`, `frequency.py`
-- RTE derivation adapted from the author's `rte-book` lecture notes
-- Detector-functional and window-kernel construction from `01-spectral-detector.qmd`, `02-isotropic-derivation.qmd`
-- Worked matrix example cross-checked against `angular.py`'s `solve_tail_system` to $10^{-10}$
+- Adjoint/reciprocity derivation, multipole caching and the isotropic
+  acceptance machinery implemented in `src/lighthit`
+  (`angular.py`, `green.py`, `cache.py`, `single.py`, `readout.py`)
+- JUNO-like medium parameters used here are illustrative test values, not
+  a measured or calibrated optical model
 - Special functions: [NIST DLMF §14](https://dlmf.nist.gov/14), [§18.9](https://dlmf.nist.gov/18.9)
 :::

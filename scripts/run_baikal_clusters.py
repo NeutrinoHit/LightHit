@@ -112,7 +112,7 @@ t0 = time.perf_counter()
 for index in sample:
     band = next(b for b in cache.bands
                 if b.radius_range_m[0] <= radii[index] <= b.radius_range_m[1])
-    PointGreenSolver(medium, band.settings).solve(
+    PointGreenSolver(medium, band.settings, angular_backend="numba").solve(
         [0.0], displacement[index], direction=None)
 direct_s = (time.perf_counter() - t0) / len(sample)
 cached_per_module_s = timings["hemispherical (1+x)/2"] / inside.sum()

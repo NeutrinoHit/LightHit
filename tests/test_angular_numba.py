@@ -87,7 +87,9 @@ def test_spectra_readout_and_metadata_match(direction, tmp_path):
                                    rtol=2e-9, atol=2e-15)
     got.save(tmp_path / "spectrum.npz")
     with np.load(tmp_path / "spectrum.npz") as f:
-        assert json.loads(str(f["metadata"]))["angular_backend"] == "numba"
+        metadata = json.loads(str(f["metadata"]))
+        assert metadata["angular_backend"] == "numba"
+        assert metadata["single_backend"] in ("numpy", "numba")
 
 
 @pytest.mark.parametrize("L,J", [(0, 0), (8, 0), (3, 18)])

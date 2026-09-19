@@ -41,3 +41,25 @@ else:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     subprocess.run([sys.executable, "-c", code], env=env, check=True, capture_output=True, text=True)
+
+
+def test_single_auto_falls_back_without_numba():
+    code = '''
+import sys
+sys.modules["numba"] = None
+from lighthit import synthetic_medium
+from lighthit.single import single_quadrature_backend, single_spectrum
+assert single_quadrature_backend("auto") == "numpy"
+value, error = single_spectrum([0.0], 20.0, None, synthetic_medium())
+assert value[0].real > 0 and error >= 0
+try:
+    single_quadrature_backend("numba")
+except ImportError as exc:
+    assert "accelerate" in str(exc)
+else:
+    raise AssertionError("explicit missing Numba must be reported")
+'''
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    subprocess.run([sys.executable, "-c", code], env=env, check=True,
+                   capture_output=True, text=True)
