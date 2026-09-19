@@ -1,0 +1,313 @@
+# A shower is a needle {#sec-axial-source}
+
+@sec-event-moments compressed the *kernel* over a block and summed the source
+exactly. This chapter does the opposite: it compresses the *source* and leaves
+the kernel alone. The two are duals, and which one to spend on is a question
+about the event, not about the method — so the chapter opens with what the
+stored showers actually look like, and only then chooses.
+
+The answer is that an electron shower is a needle with a nearly uniform
+azimuth, and that both facts can be used without any fitting, any training and
+any generated photon.
+
+## What the stored showers look like {#sec-axial-shape}
+
+`scripts/probe_shower_axis.py` takes the source contract of
+@sec-source-contract, builds the photon-weighted principal axis of the emission
+points, and reports the event in that frame. Six events of the stored
+$100\,\mathrm{GeV}$ sample, with the spread of the six in the right column:
+
+| quantity | event 5 | across events 0–5 |
+|---|---:|---|
+| longitudinal RMS | $1.23\,\mathrm m$ | $1.06$–$1.38$ |
+| transverse RMS | $0.065\,\mathrm m$ | $0.062$–$0.072$ |
+| aspect ratio | $19{:}1$ | $15$–$22$ |
+| $\rho$, 99th percentile | $0.37\,\mathrm m$ | $0.37$–$0.42$ |
+| the same as an angle at $25.7\,\mathrm m$ | $14\,\mathrm{mrad}$ | $14$–$16$ |
+| residual emission time $\tau$, 99th percentile | $0.26\,\mathrm{ns}$ | $0.25$–$0.34$ |
+| azimuthal anisotropy about the axis | $0.027$ | $0.017$–$0.068$ |
+
+Three things in that table are worth reading carefully, because two of them
+invite a simplification that the numbers do not support.
+
+**The needle is real.** Nineteen to one, and the transverse spread is
+$14\,\mathrm{mrad}$ seen from the nearest module. Whatever else is true, the
+transverse coordinates are not where the information is.
+
+**The emission time is not just $z/c_0$.** The median residual is $0.9\,$ps,
+which invites dropping $\tau$ altogether. But the tail runs to $6.5\,\mathrm{ns}$
+and a thousandth of the light is more than $0.9\,\mathrm{ns}$ late. The point
+is moot in the end, because $\tau$ is free: it enters the projection as a
+factor $e^{i\omega\tau}$ and adds no dimension to any table. A variable that
+costs nothing should not be approximated.
+
+**The emission direction is not narrow.** $\langle\mathbf u\cdot\hat{\mathbf a}
+\rangle=0.87$ looks collimated until the tail is read: one per cent of the
+light goes *backwards*, at $\cos<-0.41$. The angular variable needs real
+resolution. It is the cone cosine that is nearly free, at $0.749\pm0.025$.
+
+The correlations are stable from shower to shower to $\pm0.02$:
+$\mathrm{corr}(z,\cos\theta)=-0.07$, $\mathrm{corr}(z,\tau)=+0.14$, and
+$\mathrm{corr}(\cos\theta,\tau)=-0.33$. The last is the strongest thing in the
+event — late light leaves sideways — and it is exactly what a source described
+by separate profiles in $z$, in angle and in time would destroy.
+
+## The reduction is an identity, not a fit {#sec-axial-identity}
+
+Put the axis along $z$ and write the kernel's angular factor with the addition
+theorem *in that frame*:
+
+$$
+P_\ell(\widehat{\mathbf r}\cdot\mathbf u)=\frac{4\pi}{2\ell+1}
+\sum_m Y^{\mathrm R}_{\ell m}(\widehat{\mathbf r})\,Y^{\mathrm R}_{\ell m}(\mathbf u).
+$$ {#eq-axis-addition}
+
+Everything belonging to the source then separates from everything belonging to
+the receiver, and the response of a source cut into cells is
+
+$$
+\boxed{
+N(\omega)=\sum_\ell\frac{4\pi}{2\ell+1}\sum_m\sum_{\rm cells}
+A_{\ell m}(\text{cell},\omega)\,M_\ell(r,\omega)\,
+Y^{\mathrm R}_{\ell m}(\widehat{\mathbf r}),}
+$$ {#eq-axial-response}
+
+$$
+A_{\ell m}(\text{cell},\omega)=\sum_{i\in\text{cell}}Q_i\,P_\ell(\mu_{C,i})\,
+Y^{\mathrm R}_{\ell m}(\mathbf u_i)\,e^{i\omega t_i}.
+$$ {#eq-axial-channels}
+
+No approximation has been made yet. The compression is entirely in where the
+two sums are cut, and the frame is what makes the cut cheap: keeping only
+$m=0$ **is** the average over the azimuth of the emission direction about the
+axis, which reduces the source to $L_q+1$ channels instead of $(L_q+1)^2$.
+Keeping $|m|\le M$ restores the leading azimuthal correlation at
+
+$$
+N_{\rm ch}=(L_q+1)(2M+1)-M(M+1)
+$$ {#eq-axial-channel-count}
+
+channels: $33$ at $M=0$, $277$ at $M=4$ and $1089$ in full, for $L_q=32$. A
+shower is azimuthally symmetric in distribution but not in any one
+realisation, so $M$ is measured rather than assumed.
+
+::: {.callout-important title="The emission time must not be rebuilt from the cell"}
+An element moved to a cell centre changes its *propagation*. It must not change
+when it radiated. The first version of this code stored the residual time
+$\tau_i=t_i-t_0-z_i/c_0$ against its own $z_i$ while the response supplied the
+front phase $e^{i\omega z_j/c_0}$ of the cell — which silently shifts the
+emission by $(z_j-z_i)/c_0$, two radians per metre at
+$\omega=0.6\,\mathrm{ns^{-1}}$. On two elements a metre apart the reconstructed
+phase was wrong by $\pm2.0$ rad and the answer by a factor of three.
+
+The cure is to store the absolute phase $e^{i\omega(t_i-t_{\rm ref})}$ from the
+element's own time and drop the front factor entirely, so that the only thing
+the move approximates is the propagation. Equivalently one may keep the front
+factor and use $\tau_{ij}=t_i-t_0-z_j/c_0$ against the *cell's* $z_j$. A test
+pins the identity down, because this is the kind of error that shows up as a
+plausible few per cent rather than as a crash.
+:::
+
+## Where the light goes on the grid {#sec-axial-deposit}
+
+Elements are spread over the surrounding cell centres with trilinear weights,
+which satisfy
+
+$$
+\sum_j W_j(\mathbf x_i)=1,\qquad
+\sum_j W_j(\mathbf x_i)\,\mathbf X_j=\mathbf x_i,
+$$ {#eq-cic}
+
+so both the photon count and its first spatial moment survive the move. Both
+hold to machine precision on the stored event; nearest-cell assignment holds
+the first and misplaces the second by about a tenth of a cell.
+
+That is worth a factor of ten in practice. Against the element sum, refining
+the cell:
+
+| cell | $\omega=0$ | $\omega=0.3$ | $\omega=0.6$ |
+|---:|---|---|---|
+| $0.24\,\mathrm m$ | $1.11\times10^{-4}$ | $9.36\times10^{-3}$ | $3.84\times10^{-2}$ |
+| $0.12\,\mathrm m$ | $2.58\times10^{-5}$ $(+2.10)$ | $2.33\times10^{-3}$ $(+2.01)$ | $9.31\times10^{-3}$ $(+2.05)$ |
+| $0.06\,\mathrm m$ | $5.93\times10^{-6}$ $(+2.12)$ | $5.65\times10^{-4}$ $(+2.04)$ | $2.38\times10^{-3}$ $(+1.97)$ |
+
+The bracketed numbers are $\log_2$ of the ratio to the row above: second order,
+at every frequency, not only at $\omega=0$ where smoothness is easiest. The
+nearest-cell rule is first order and stalls near $10^{-2}$.
+
+::: {.callout-note collapse="true" title="Two errors that hid behind each other"}
+That clean second order only appeared after two separate mistakes were removed,
+and both are worth recording because each looked like the other.
+
+The first was a transverse grid sized to the 99th percentile of $\rho$, with
+everything beyond it clipped into the outermost cells. The tail of $\rho$
+reaches $2.3\,\mathrm m$, so one per cent of the light was being moved by
+$1.8\,\mathrm m$ — five radians at the top frequency. The error sat at
+$1.2\times10^{-2}$ and refused to converge in anything. Cells of a fixed
+physical size with sparse storage cure it: empty cells cost nothing, so there
+is never a reason to clip a source tail.
+
+The second was subtler. The element sum integrates each G4 step along its
+chord with a Gauss rule and interpolates the emission time along it; the
+projection was placing the step at its midpoint with its *start* time. On a
+half-millimetre step that is nothing at $\omega=0$ — $4.9\times10^{-8}$ — and
+$7.7\times10^{-3}$ at $\omega=0.6$, which is precisely where the convergence
+was stalling. It was never the grid. When two routes are compared, a
+difference in how they treat one element wears the costume of a method error.
+:::
+
+## The run {#sec-axial-run}
+
+One stored event, the whole array, the whole frequency window: $L_q=32$,
+$M=4$, cells of $0.12\,\mathrm m$, $41$ frequencies to
+$\omega=0.5\,\mathrm{ns^{-1}}$, $576$ modules at $25.7$–$317.3\,\mathrm m$.
+The compact source is $4\,935$ cells $\times$ $277$ channels $\times$ $41$
+frequencies.
+
+The reference is the same kernel summed element by element, at six control
+modules. **What follows is therefore a median over six modules, not the
+accuracy of all $576$**: the approximate answer is computed everywhere, the
+exact one is not.
+
+| | median | worst of the six | on the summed signal |
+|---|---|---|---|
+| charge, order $1$ | $2.4\times10^{-3}$ | $6.9\times10^{-3}$ | $6.9\times10^{-3}$ |
+| charge, order $\ge2$ | $4.3\times10^{-4}$ | $1.8\times10^{-3}$ | $1.8\times10^{-3}$ |
+| spectrum at $\omega=0.25$, $\ge2$ | $4.5\times10^{-3}$ | $1.4\times10^{-2}$ | — |
+| spectrum at $\omega=0.50$, $\ge2$ | $1.7\times10^{-2}$ | $1.8\times10^{-1}$ | — |
+
+Charge is comfortably inside a per cent. The spectrum degrades with frequency,
+and the refinement below says exactly which knob it answers to.
+
+### Which knob the error answers to {#sec-axial-refine}
+
+One setting changed at a time, everything else held, $\ge2$ component, median
+over the same six modules:
+
+| change | cells | channels | $\omega=0$ | $\omega=0.25$ | $\omega=0.5$ |
+|---|---:|---:|---|---|---|
+| baseline: $M=4$, cell $0.12$ | $4\,935$ | $277$ | $4.3\times10^{-4}$ | $4.5\times10^{-3}$ | $1.7\times10^{-2}$ |
+| $M=2$ | $4\,935$ | $159$ | $1.6\times10^{-3}$ | $1.1\times10^{-2}$ | $4.3\times10^{-2}$ |
+| $M=8$ | $4\,935$ | $489$ | $1.5\times10^{-4}$ | $1.5\times10^{-3}$ | $7.3\times10^{-3}$ |
+| cell $0.03\,\mathrm m$ | $32\,861$ | $277$ | $4.2\times10^{-4}$ | $3.9\times10^{-3}$ | $1.6\times10^{-2}$ |
+| transverse cell $0.03\,\mathrm m$ | $18\,231$ | $277$ | $4.3\times10^{-4}$ | $4.3\times10^{-3}$ | $1.7\times10^{-2}$ |
+| four chord nodes instead of two | $4\,936$ | $277$ | $4.3\times10^{-4}$ | $4.5\times10^{-3}$ | $1.7\times10^{-2}$ |
+| nearest-cell deposit | $1\,706$ | $277$ | $5.6\times10^{-4}$ | $1.1\times10^{-2}$ | $1.7\times10^{-2}$ |
+
+The reading is unambiguous. **Only $M$ moves the answer.** Six-fold finer cells
+change nothing; finer transverse cells change nothing; doubling the chord
+quadrature changes nothing. At these settings the spatial grid is converged and
+the azimuthal truncation is the whole of the remaining error, so the way to a
+better answer is more $m$ channels, not a finer mesh — which is the opposite of
+what the frequency behaviour alone would suggest, and is why the refinement is
+run one knob at a time.
+
+### Time bins {#sec-axial-bins}
+
+A spectrum that agrees at four frequencies can still misplace an edge, so the
+bins are produced and compared as bins. Two things had to be right first, and
+the first attempt got one of them wrong.
+
+A frequency grid of spacing $\Delta\omega$ reconstructs times only out to about
+$\pi/\Delta\omega$. Light reaches the control modules at $116$ to
+$1439\,\mathrm{ns}$, so binning from $t=0$ on a $300\,\mathrm{ns}$ window put
+the far modules entirely outside it and then reported the ringing in an empty
+window as an error. Each module's bins are now measured from its own geometric
+arrival $r/v$ — an exact multiplication of the spectrum by $e^{i\omega r/v}$,
+nothing resampled — and the grid is $81$ frequencies, a horizon of
+$503\,\mathrm{ns}$ against a window of $480$.
+
+Per control module, $10\,\mathrm{ns}$ bins, no detector smearing:
+
+| module distance, m | $25.7$ | $99.3$ | $144.3$ | $185.7$ | $233.6$ | $317.3$ |
+|---|---|---|---|---|---|---|
+| $\ge2$: largest bin error / peak | $5.8\text{e-}3$ | $1.4\text{e-}3$ | $1.7\text{e-}3$ | $9.4\text{e-}3$ | $1.1\text{e-}3$ | $1.9\text{e-}3$ |
+| $\ge2$: integral over the window | $1.8\text{e-}3$ | $8.8\text{e-}5$ | $5.5\text{e-}4$ | $2.8\text{e-}3$ | $5.3\text{e-}5$ | $4.5\text{e-}3$ |
+| $\ge2$: first $50\,\mathrm{ns}$ | $2.4\text{e-}1$ | $1.3\text{e-}5$ | $2.7\text{e-}2$ | $3.0\text{e-}4$ | $7.5\text{e-}5$ | $9.9\text{e-}5$ |
+| $\ge2$: share of the signal in that window | $1.2\text{e-}5$ | $0.71$ | $1.8\text{e-}6$ | $0.78$ | $-3.7\text{e-}4$ | $2.9\text{e-}2$ |
+| order $1$: largest bin error / peak | $1.2\text{e-}2$ | $2.2\text{e-}2$ | $5.9\text{e-}3$ | $1.8\text{e-}2$ | $5.6\text{e-}3$ | $1.7\text{e-}3$ |
+
+The last two rows have to be read together, which is why the share is in the
+table. Where the early window carries most of the signal — $0.71$ and $0.78$ —
+it is reproduced to $1.3\times10^{-5}$ and $3.0\times10^{-4}$. Where the early
+error looks alarming, at $24\%$, the window holds a hundred-thousandth of the
+light: there is nothing there to get right. An early-window error quoted
+without its share is not a measurement.
+
+Negative bins are kept as computed, and they are the same in both answers —
+$1.0\%$ of the mass for order $1$ and $0.2\%$ for $\ge2$, in the element sum
+and in the compact source alike. The ringing is the finite frequency window,
+not the representation.
+
+## What it costs {#sec-axial-cost}
+
+Per event, after the cache, for all $576$ modules at $41$ frequencies:
+
+| stage | seconds |
+|---|---:|
+| read the file and apply the source contract | $0.2$ |
+| compile the compact source | $190.6$ |
+| apply, order $1$ | $993.8$ |
+| apply, order $\ge2$ | $1012.1$ |
+| unscattered order, closed form, all modules | $6.7$ |
+| readout to time bins | $0.04$ |
+| **total** | $2203$ |
+
+The element sum costs $36.3\,\mathrm s$ per module per scattered order at the
+same settings, so the same answer at $576$ modules and two orders would be
+about $11.6$ hours: the compact source is **19 times faster on the whole
+event**. Measured on the narrower control set at $81$ frequencies the apply
+alone is $3.2\,\mathrm s$ per module against $69$, a factor of $22$.
+
+Two numbers rather than one, and they are not interchangeable. The compile does
+not shrink when the array grows, so the ratio that matters for a bigger
+detector is the apply; the ratio that matters for this detector is the total.
+The cache is outside both: $6.6\,\mathrm{MB}$, built once per medium.
+
+::: {.callout-note collapse="true" title="Why the cache is small"}
+The universal rule $J\sim k_{\max}r$ sizes the output degree of a directed
+point source, and at $k_{\max}=8\,\mathrm m^{-1}$ and $341\,\mathrm m$ it would
+demand degree $2700$ and a Bessel table that does not fit. This route never
+asks for a degree above $L_q$. Building to $J=L_q=32$ instead reproduces the
+retained moments to $3.3\times10^{-15}$ and builds $60$ times faster, with the
+scattering degree $L$ and the $k$ grid untouched. That one observation is what
+makes a frequency run at array scale possible at all.
+:::
+
+Peak resident memory for the whole run was $5.3\,\mathrm{GB}$, and the compact
+source itself is $855\,\mathrm{MB}$ at these settings — the largest single
+object in the calculation, and linear in $M$ and in the number of frequencies.
+
+## A new pose, and an event the settings never saw {#sec-axial-transfer}
+
+The transport cache does not know where the event is. A pose chosen *after* the
+tables were built — rotated by $0.9$ rad, translated $60\,\mathrm m$, delayed
+$25\,\mathrm{ns}$, with control modules now at $26$–$343\,\mathrm m$ — is
+answered by the same cache, compiled in $178\,\mathrm s$, with charge errors of
+$9.5\times10^{-4}$ (median) and $2.5\times10^{-3}$ (worst) for $\ge2$ and
+$4.3\times10^{-3}$ / $1.2\times10^{-2}$ for order $1$.
+
+Event $6$, read with every setting frozen from event $5$, gives
+$3.5\times10^{-4}$ and $2.8\times10^{-3}$ for $\ge2$ — no worse than the event
+the settings were chosen on, which is the only evidence that they were not
+tuned to it.
+
+## What this does not settle {#sec-axial-limits}
+
+The reference throughout is the same kernel summed element by element. That
+isolates the error of the source representation, which is what this chapter is
+about, and it is not physics: the independent physical control of the $\ge2$
+component that @sec-segment-limits asked for is still owed, and stacking a
+measured representation on an unmeasured component would be a poor trade.
+
+Nothing here establishes a *minimum* number of coefficients. @eq-axis-addition
+gives the exact harmonic content of one cone; it says nothing about how few
+numbers could describe a family of showers. Whether the
+$(\text{cell},\ell m)$ array compresses further — and against which norm, since
+a mode that is small in the source can be large in the response — is a
+measurement that has not been made.
+
+The receiver is still an isotropic point, one wavelength band, one medium. And
+the frequency behaviour above is the behaviour of *this* representation: the
+phase across a cell is a real scale, but it bounds a spatial projection, not
+every conceivable scheme.

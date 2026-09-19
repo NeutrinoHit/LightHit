@@ -19,6 +19,7 @@ book:
     - chapters/06-modules-and-cache.qmd
     - chapters/07-cone-segments.qmd
     - chapters/08-event-moments.qmd
+    - chapters/09-axial-source.qmd
   appendices:
     - appendices/notation.qmd
     - VALIDATION.md
