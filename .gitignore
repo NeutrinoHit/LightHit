@@ -2,6 +2,7 @@
 /.local-inputs/
 /.build/
 /private/
+/g4_data/
 /cache/
 .env
 .env.*

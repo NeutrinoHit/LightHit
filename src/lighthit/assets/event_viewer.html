@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LightHit · просмотр событий</title>
+  <style>__VIEWER_CSS__</style>
+  <script>__PLOTLY_JS__</script>
+</head>
+<body>
+  <header><div><span class="dot"></span><strong>LIGHTHIT</strong><span class="tag">RTE EVENT VIEWER</span></div><label class="file">Открыть JSON<input id="file" type="file" accept=".json,application/json"></label></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">ПЕРЕНОС СВЕТА · 0 / 1 / ≥2</p><h1>События в детекторном массиве</h1><p id="description"></p></div><div id="status">Чтение результата…</div></section>
+    <section class="metrics"><div><span>Оптических модулей</span><strong id="modules">—</strong></div><div><span>Интегральный заряд массива</span><strong id="charge">—</strong></div><div><span>Заряд в окне</span><strong id="window-charge">—</strong></div><div><span>Расчёт события</span><strong id="elapsed">—</strong></div></section>
+    <section class="controls">
+      <label>Событие<select id="event"></select></label><label>Кластер<select id="cluster"></select></label>
+      <label>Компонента<select id="part"><option value="all">Сумма</option><option value="0">Без рассеяния</option><option value="1">Одно рассеяние</option><option value="2">Два и более</option></select></label>
+      <label>Режим времени<select id="time-mode"><option value="frame">Текущий бин</option><option value="cumulative">Накопленный</option><option value="integrated">Весь сигнал</option></select></label>
+      <label>Масштаб ОМ<input id="gain" type="range" min="0.4" max="3" step="0.1" value="1"></label>
+    </section>
+    <section class="workspace">
+      <article class="panel geometry-panel"><div class="panel-title"><h2>Геометрия и эволюция сигнала</h2><span>Нажмите на ОМ</span></div><div id="geometry"></div><div class="time-control"><button id="play">▶ Запустить</button><input id="time" type="range" min="0" value="0"><output id="time-label"></output><button id="all-time">Весь сигнал</button></div><p class="caption">Размер — модуль знакового сигнала; цвет — sign·log₁₀. Отрицательные Fourier-бины не обрезаются.</p></article>
+      <article class="panel waveform-panel"><div class="panel-title"><h2>Выбранный ОМ</h2><label><input id="absolute" type="checkbox"> Абсолютное время</label></div><label>Оптический модуль<select id="module"></select></label><div id="waveform"></div><dl id="details"></dl></article>
+    </section>
+    <section class="panel heatmap-panel"><div class="panel-title"><h2>Временные гистограммы всех ОМ</h2><span>Нажмите на строку</span></div><div id="heatmap"></div></section>
+    <section id="diagnostics" class="diagnostics"></section>
+    <footer>Локальный автономный файл · исходные знаки и интегральные заряды сохранены</footer>
+  </main>
+  <script id="result" type="application/json">__RESULT_JSON__</script>
+  <script>__VIEWER_JS__</script>
+</body>
+</html>
