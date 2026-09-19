@@ -39,6 +39,13 @@ from lighthit.experimental.event_moments import (BlockPartition, KernelChannels,
                                                  monomial_powers)
 from lighthit.experimental.g4_source import SourceContract, load_event
 
+try:
+    from lighthit.experimental.spline_fast import PreparedMultipoles
+    SPLINE_BACKEND = "numba (spline_fast.PreparedMultipoles)"
+except ImportError:
+    PreparedMultipoles = None
+    SPLINE_BACKEND = "scipy (ResponseCache.moments_at)"
+
 ORDERS = {"first": 0, "two_or_more": 1}
 
 
@@ -61,7 +68,13 @@ def array_positions(clusters=2, strings=8, modules=36, radius_m=60.0,
 
 
 def vectorised_ballistic(elements, receivers, medium, cone_cosine):
-    """The same unscattered sum, written once over all elements at a time."""
+    """The same unscattered sum, written once over all elements at a time.
+
+    Kept as plain numpy on purpose: this is the numerical reference other
+    modules and tests import by name (``ballistic_fast`` is checked against
+    it, not the other way round). The fast path this script actually runs
+    the "ballistic" report section with is ``_fast_ballistic`` below.
+    """
     total = np.zeros(len(receivers))
     sine = np.sqrt(np.maximum(1 - cone_cosine ** 2, 0.0))
     for index, receiver in enumerate(receivers):
@@ -77,6 +90,14 @@ def vectorised_ballistic(elements, receivers, medium, cone_cosine):
                           / (2 * np.pi * impact * sine), 0.0)
         total[index] = weight.sum()
     return total
+
+
+try:
+    from lighthit.experimental.ballistic_fast import vectorised_ballistic_fast as _fast_ballistic
+    BALLISTIC_BACKEND = "numba (ballistic_fast.vectorised_ballistic_fast)"
+except ImportError:
+    _fast_ballistic = vectorised_ballistic
+    BALLISTIC_BACKEND = "numpy (vectorised_ballistic)"
 
 
 def serial(value):
@@ -173,6 +194,14 @@ def main():
     report["cache"]["frequencies"] = cache.grid.omega_per_ns.tolist()
     arguments.frequencies = cache.grid.omega_per_ns.tolist()
 
+    # cache_fast wraps the same cache with a compiled Horner spline instead
+    # of scipy's -- everything that only reads moments through KernelChannels
+    # (angular convergence, the direct reference, the moment route) uses it;
+    # cache.save/.moments/.timings_s/.grid below still go through the real
+    # ResponseCache, which PreparedMultipoles wraps rather than replaces.
+    cache_fast = PreparedMultipoles.of(cache) if PreparedMultipoles is not None else cache
+    report["cache"]["spline_backend"] = SPLINE_BACKEND
+
     # -- how many angular channels the summed response needs ----------------
     convergence = {}
     for name, index in ORDERS.items():
@@ -180,7 +209,7 @@ def main():
         for degree in (8, 16, 32, arguments.angular_degree, arguments.reference_degree):
             if degree > cache.degree:
                 continue
-            kernel = KernelChannels.of(cache, index, degree,
+            kernel = KernelChannels.of(cache_fast, index, degree,
                                        frequencies=arguments.frequencies)
             began = perf_counter()
             values[degree] = {"value": direct_response(kernel, elements, control)[0].real,
@@ -198,7 +227,7 @@ def main():
     report["angular_convergence"] = convergence
 
     # -- the moment route against the element-by-element sum -----------------
-    kernels = {name: KernelChannels.of(cache, index, arguments.angular_degree,
+    kernels = {name: KernelChannels.of(cache_fast, index, arguments.angular_degree,
                                        frequencies=arguments.frequencies)
                for name, index in ORDERS.items()}
     direct = {}
@@ -252,20 +281,24 @@ def main():
     # -- the order no expansion touches --------------------------------------
     if not arguments.skip_ballistic:
         began = perf_counter()
-        ballistic_control = vectorised_ballistic(elements, control, medium,
-                                                 elements.cone_cosine)
+        ballistic_control = _fast_ballistic(elements, control, medium,
+                                            elements.cone_cosine)
         control_seconds = perf_counter() - began
         began = perf_counter()
-        ballistic_all = vectorised_ballistic(elements, receivers, medium,
-                                             elements.cone_cosine)
+        ballistic_all = _fast_ballistic(elements, receivers, medium,
+                                        elements.cone_cosine)
         all_seconds = perf_counter() - began
         report["ballistic"] = {"control_seconds": control_seconds,
                                "all_receivers_seconds": all_seconds,
                                "control_value": ballistic_control.tolist(),
                                "all_receivers_total": float(ballistic_all.sum()),
+                               "backend": BALLISTIC_BACKEND,
                                "note": "Closed cone formula per element; no cache, "
-                                       "no expansion, and no moment route helps it."}
-        print(f"ballistic: {all_seconds:.1f} s for {len(receivers)} receivers", flush=True)
+                                       "no expansion, and no moment route helps it. "
+                                       "It is the main contribution and the fastest "
+                                       "method by construction -- see 'backend'."}
+        print(f"ballistic ({BALLISTIC_BACKEND}): {all_seconds:.1f} s for "
+              f"{len(receivers)} receivers", flush=True)
 
     report["peak_megabytes"] = peak_megabytes()
     (out / "shower-moments.json").write_text(

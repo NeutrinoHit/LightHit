@@ -50,6 +50,20 @@ from lighthit.experimental.g4_source import SourceContract, load_event
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_shower_moments import array_positions, serial, vectorised_ballistic  # noqa: E402
 
+try:
+    from lighthit.experimental.spline_fast import PreparedMultipoles
+    SPLINE_BACKEND = "numba (spline_fast.PreparedMultipoles)"
+except ImportError:
+    PreparedMultipoles = None
+    SPLINE_BACKEND = "scipy (ResponseCache.moments_at)"
+
+try:
+    from lighthit.experimental.ballistic_fast import vectorised_ballistic_fast as _fast_ballistic
+    BALLISTIC_BACKEND = "numba (ballistic_fast.vectorised_ballistic_fast)"
+except ImportError:
+    _fast_ballistic = vectorised_ballistic
+    BALLISTIC_BACKEND = "numpy (vectorised_ballistic)"
+
 ORDERS = {"first": 0, "two_or_more": 1}
 
 
@@ -176,8 +190,10 @@ def main():
                             "frequencies": len(cache.grid.omega_per_ns),
                             "megabytes": cache.moments.nbytes / 2 ** 20,
                             "radius_range_m": list(cache.radius_range_m)})
+    report["cache"]["spline_backend"] = SPLINE_BACKEND
     omega = cache.grid.omega_per_ns
-    kernels = {name: KernelChannels.of(cache, index, arguments.angular_degree)
+    cache_fast = PreparedMultipoles.of(cache) if PreparedMultipoles is not None else cache
+    kernels = {name: KernelChannels.of(cache_fast, index, arguments.angular_degree)
                for name, index in ORDERS.items()}
 
     frame = AxisFrame.of(elements)
@@ -229,10 +245,11 @@ def main():
 
     # -- the order no representation touches ---------------------------------
     began = perf_counter()
-    ballistic = vectorised_ballistic(elements, receivers, medium, elements.cone_cosine)
+    ballistic = _fast_ballistic(elements, receivers, medium, elements.cone_cosine)
     ballistic_seconds = perf_counter() - began
     report["ballistic"] = {
         "seconds": ballistic_seconds, "total": float(ballistic.sum()),
+        "backend": BALLISTIC_BACKEND,
         "note": "Closed cone formula per element; exact, and no compression applies."}
 
     # -- time bins, from the whole window ------------------------------------
@@ -344,7 +361,7 @@ def main():
         # a hundred times cheaper.
         sample = sorted({0, len(omega) // 4, len(omega) // 2, len(omega) - 1})
         few = omega[sample]
-        few_kernels = {name: KernelChannels.of(cache, index, arguments.angular_degree,
+        few_kernels = {name: KernelChannels.of(cache_fast, index, arguments.angular_degree,
                                                frequencies=few)
                        for name, index in ORDERS.items()}
         few_reference = {name: direct_response(kernel, elements, control)

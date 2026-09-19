@@ -156,7 +156,7 @@ def invariance_checks(cache, segments, receivers, spectrum):
     the largest component anywhere. The faint receivers set ``per_receiver``,
     which is why the two differ by orders of magnitude.
     """
-    omega = cache.bands[0].grid.omega_per_ns
+    omega = cache.grid.omega_per_ns
     scale = np.max(np.abs(spectrum), axis=(0, 2))
     results = {}
 
@@ -298,11 +298,25 @@ def main():
     cache = BandedResponseCache([ResponseCache.build(MEDIUM, settings, grid)])
     build_seconds = perf_counter() - start
 
+    # cache_fast wraps the single band with a compiled Horner spline instead
+    # of scipy's; event_spectrum -> segment_spectrum -> _scatter takes a bare
+    # band exactly like a one-band BandedResponseCache (same code path), so
+    # this changes nothing about what gets computed, only how fast the
+    # radial moments are evaluated. time_profile keeps the original `cache`
+    # since it only reads bookkeeping (grid.omega_per_ns), not moments.
+    try:
+        from lighthit.experimental.spline_fast import PreparedMultipoles
+        cache_fast = PreparedMultipoles.of(cache.bands[0])
+        spline_backend = "numba (spline_fast.PreparedMultipoles)"
+    except ImportError:
+        cache_fast = cache.bands[0]
+        spline_backend = "scipy (ResponseCache.moments_at)"
+
     edges = np.arange(0.0, 620.0, 5.0)
     spectra, charges, profiles, timings = [], [], [], []
     for segments_here in events:
         began = perf_counter()
-        spectrum = event_spectrum(cache, segments_here, receivers,
+        spectrum = event_spectrum(cache_fast, segments_here, receivers,
                                   longitudinal_order=arguments.longitudinal_order)
         seconds = perf_counter() - began
         spectra.append(spectrum)
@@ -310,7 +324,7 @@ def main():
         profiles.append(time_profile(cache, spectrum, segments_here, receivers, edges))
         timings.append(seconds)
 
-    checks = invariance_checks(cache, segments, receivers, spectra[0])
+    checks = invariance_checks(cache_fast, segments, receivers, spectra[0])
     figures(out, events, labels, receivers, charges, profiles, edges)
 
     np.savez_compressed(
@@ -334,6 +348,7 @@ def main():
         "cache": {"radius_range_m": [low * 0.97, high * 1.03], "radii": 44,
                   "frequencies": arguments.frequencies,
                   "omega_max_per_ns": arguments.omega_max,
+                  "spline_backend": spline_backend,
                   "settings": {"scattering_degree": settings.scattering_degree,
                                "spatial_degree": settings.spatial_degree,
                                "k_max_per_m": settings.k_max_per_m,
