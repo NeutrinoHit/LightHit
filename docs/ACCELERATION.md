@@ -1,8 +1,11 @@
-# Explicit NumPy and Numba backends
+# NumPy and Numba backends
 
-The default remains `numpy`. Installing Numba does not silently change a
-calculation. Only the free-moment/ratio evaluation is accelerated in this patch;
-spatial inversion, both tridiagonal solves, first order, and readout are unchanged.
+The angular backend remains explicit and defaults to `numpy`.  The exact
+single-scattering quadrature has a separate `auto` backend: it compiles the
+scalar full-HG rate with Numba when the optional dependency is installed and
+falls back to the same NumPy/SciPy path when it is not.  The adaptive SciPy
+quadrature, its tolerances, and the 48-node isotropic ellipsoid rule are
+unchanged.
 
 Install from the repository root:
 
@@ -15,19 +18,24 @@ Use the optional backend:
 
 ```bash
 python -m lighthit --config examples/point-green.toml \
-  --angular-backend numba --output .build/point-green-numba
+  --angular-backend numba --single-backend auto \
+  --output .build/point-green-numba
 ```
 
 Or in a notebook:
 
 ```python
-solver = PointGreenSolver(medium, settings, angular_backend="numba")
+solver = PointGreenSolver(
+    medium, settings, angular_backend="numba", single_backend="auto"
+)
 result = solver.solve(omega, displacement_m, direction=direction)
 ```
 
 Selecting `numba` without the dependency raises an installation hint. The default
-backend never imports Numba. The selected backend is recorded in `report.json`
-and the NPZ metadata. No API positional argument has changed.
+angular backend never imports Numba.  For strict implementation comparisons,
+pass `single_backend="numpy"` or `"numba"`; `auto` records the implementation it
+resolved to. Both selected backends are recorded in `report.json` and the NPZ
+metadata. No API positional argument has changed.
 
 ## What changes internally
 
@@ -72,3 +80,16 @@ it does not substitute the function's different defaults.
 `chapters/05-numerical-scheme.qmd` derives the actual finite matrices and both
 right-hand sides, spells out the first rows, explains the normalization of b and
 the tail ratio, and maps each formula to the implementing function.
+
+## Exact first scattering
+
+`single.py` retains the public vectorized density and SciPy's adaptive
+integrators.  At the thousands of scalar nodes requested by those integrators,
+`single_fast.py` fuses the HG evaluation and the isotropic 48-node ellipsoidal
+average into one compiled loop.  For a spectrum it also writes the complex
+frequency phases in that same call.  This avoids constructing several tiny
+NumPy arrays per adaptive node; it does not truncate the HG kernel or replace
+the quadrature.  The isotropic density remains `+inf` exactly on the light
+front, while the integrator assigns that single endpoint a finite neutral value
+so the integrable logarithmic singularity cannot contaminate a spectrum with
+`NaN`.

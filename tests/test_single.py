@@ -3,7 +3,8 @@ import pytest
 from dataclasses import replace
 from scipy.integrate import quad
 from lighthit import synthetic_medium
-from lighthit.single import single_scattering_rate, single_spectrum, single_bins, hg_phase
+from lighthit.single import (single_scattering_rate, single_spectrum, single_bins,
+                             single_quadrature_backend, hg_phase)
 
 
 def test_hg_normalization():
@@ -47,3 +48,24 @@ def test_zero_scattering():
     m=replace(synthetic_medium(),scattering_per_m=0)
     assert single_scattering_rate(100,20,.5,m)==0
     np.testing.assert_array_equal(single_spectrum([0,.1],20,.5,m)[0],0)
+
+
+def test_isotropic_spectrum_is_finite_at_the_integrable_front():
+    m = synthetic_medium()
+    spectrum, error = single_spectrum(np.linspace(0.0, 0.4, 9), 20.0, None, m)
+    assert np.isfinite(spectrum).all()
+    assert np.isfinite(error)
+    assert spectrum[0].real > 0
+
+
+@pytest.mark.parametrize("function,args", [
+    (single_spectrum, ([0.0], 20.0, None, synthetic_medium())),
+    (single_bins, ([0.0, 100.0], 20.0, None, synthetic_medium())),
+])
+def test_single_backend_name_is_validated(function, args):
+    with pytest.raises(ValueError, match="single_backend"):
+        function(*args, backend="typo")
+
+
+def test_auto_backend_resolves_to_an_available_implementation():
+    assert single_quadrature_backend() in ("numpy", "numba")

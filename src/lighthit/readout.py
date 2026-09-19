@@ -71,7 +71,8 @@ def time_bins(result, edges_ns, sigma_ns=0.0):
         cosine = None if result.cosines is None else float(result.cosines[d])
         if result.photons:
             parts[d, :, 1] = result.photons * single_bins(
-                edges - result.emission_time_ns, radius, cosine, result.medium, sigma_ns)
+                edges - result.emission_time_ns, radius, cosine, result.medium, sigma_ns,
+                backend=result.single_backend)
         if result.direction is None:
             q0 = (result.photons * np.exp(-result.medium.extinction_per_m * radius)
                   / (4 * np.pi * radius * radius))

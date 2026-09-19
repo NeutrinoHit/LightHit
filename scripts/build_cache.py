@@ -15,7 +15,8 @@ bands=[]; t_all=time.perf_counter()
 for (lo,hi,kmax,J,nr) in BANDS:
     s = SolverSettings(L, J, kmax, kmax/240.0, 8, True)
     t0=time.perf_counter()
-    band = ResponseCache.build(m, s, CacheGrid.geometric(lo,hi,nr,[0.0]))
+    band = ResponseCache.build(m, s, CacheGrid.geometric(lo,hi,nr,[0.0]),
+                               angular_backend="numba")
     say(f"band [{lo},{hi}] kmax={kmax} J={J} R={nr}: {time.perf_counter()-t0:.1f}s "
         f"{json.dumps({k:(round(v,2) if isinstance(v,float) else v) for k,v in band.timings_s.items()})}")
     bands.append(band)

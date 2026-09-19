@@ -205,41 +205,63 @@ run one knob at a time.
 ### Time bins {#sec-axial-bins}
 
 A spectrum that agrees at four frequencies can still misplace an edge, so the
-bins are produced and compared as bins. Two things had to be right first, and
-the first attempt got one of them wrong.
+bins are produced and compared as bins. Getting them right took two corrections,
+and the second was an outright error.
 
 A frequency grid of spacing $\Delta\omega$ reconstructs times only out to about
 $\pi/\Delta\omega$. Light reaches the control modules at $116$ to
 $1439\,\mathrm{ns}$, so binning from $t=0$ on a $300\,\mathrm{ns}$ window put
-the far modules entirely outside it and then reported the ringing in an empty
-window as an error. Each module's bins are now measured from its own geometric
-arrival $r/v$ — an exact multiplication of the spectrum by $e^{i\omega r/v}$,
-nothing resampled — and the grid is $81$ frequencies, a horizon of
+the far modules entirely outside it. Each module's bins are now measured from
+its own geometric arrival $r/v$, and the grid is $81$ frequencies — a horizon of
 $503\,\mathrm{ns}$ against a window of $480$.
 
-Per control module, $10\,\mathrm{ns}$ bins, no detector smearing:
+::: {.callout-important title="A sign that both sides of a comparison hid"}
+This repository transforms with $e^{+i\omega t}$, so moving the time origin to
+$t_d$ requires multiplying the spectrum by $e^{-i\omega t_d}$. The first version
+used $e^{+i\omega t_d}$, which does not bring the pulse back to zero — it pushes
+it one arrival time further out. A unit pulse at $135\,\mathrm{ns}$ with the
+origin at $120$ lands at $255\,\mathrm{ns}$ instead of $15$.
+
+The comparison did not notice, because the compact route and the element sum
+were multiplied by the same wrong factor and agreed with each other to a few
+parts in a thousand in a window that contained almost nothing but ringing. The
+agreement was real and meaningless. What gave it away was not the error
+statistic but the *share of the signal* in the early window: a hundredth of a
+per cent, where physics says most of the light arrives in the first tens of
+nanoseconds.
+
+The lesson is narrower than "check your signs". A quantity applied identically
+to both sides of a comparison is invisible to that comparison, however careful
+it is, and only an absolute statement about the answer — here, where the light
+should be — can catch it.
+:::
+
+With the sign corrected, per control module, $10\,\mathrm{ns}$ bins, no
+detector smearing:
 
 | module distance, m | $25.7$ | $99.3$ | $144.3$ | $185.7$ | $233.6$ | $317.3$ |
 |---|---|---|---|---|---|---|
-| $\ge2$: largest bin error / peak | $5.8\text{e-}3$ | $1.4\text{e-}3$ | $1.7\text{e-}3$ | $9.4\text{e-}3$ | $1.1\text{e-}3$ | $1.9\text{e-}3$ |
-| $\ge2$: integral over the window | $1.8\text{e-}3$ | $8.8\text{e-}5$ | $5.5\text{e-}4$ | $2.8\text{e-}3$ | $5.3\text{e-}5$ | $4.5\text{e-}3$ |
-| $\ge2$: first $50\,\mathrm{ns}$ | $2.4\text{e-}1$ | $1.3\text{e-}5$ | $2.7\text{e-}2$ | $3.0\text{e-}4$ | $7.5\text{e-}5$ | $9.9\text{e-}5$ |
-| $\ge2$: share of the signal in that window | $1.2\text{e-}5$ | $0.71$ | $1.8\text{e-}6$ | $0.78$ | $-3.7\text{e-}4$ | $2.9\text{e-}2$ |
-| order $1$: largest bin error / peak | $1.2\text{e-}2$ | $2.2\text{e-}2$ | $5.9\text{e-}3$ | $1.8\text{e-}2$ | $5.6\text{e-}3$ | $1.7\text{e-}3$ |
+| peak bin, ns after arrival | $15$ | $15$ | $15$ | $25$ | $25$ | $25$ |
+| $\ge2$: largest bin error / peak | $4.0\text{e-}3$ | $1.5\text{e-}3$ | $1.7\text{e-}3$ | $6.7\text{e-}4$ | $1.2\text{e-}3$ | $6.0\text{e-}4$ |
+| $\ge2$: integral over the window | $1.8\text{e-}3$ | $1.6\text{e-}3$ | $5.7\text{e-}4$ | $9.5\text{e-}5$ | $1.2\text{e-}4$ | $2.2\text{e-}4$ |
+| $\ge2$: first $50\,\mathrm{ns}$ | $2.1\text{e-}3$ | $1.8\text{e-}3$ | $6.7\text{e-}4$ | $1.2\text{e-}4$ | $2.6\text{e-}4$ | $4.0\text{e-}4$ |
+| $\ge2$: share of the signal there | $0.87$ | $0.88$ | $0.87$ | $0.78$ | $0.59$ | $0.65$ |
+| order $1$: largest bin error / peak | $8.8\text{e-}3$ | $5.0\text{e-}3$ | $4.7\text{e-}3$ | $3.8\text{e-}3$ | $6.6\text{e-}3$ | $1.3\text{e-}3$ |
+| order $1$: first $50\,\mathrm{ns}$ | $6.4\text{e-}3$ | $6.2\text{e-}3$ | $3.4\text{e-}3$ | $9.1\text{e-}4$ | $2.4\text{e-}3$ | $1.1\text{e-}2$ |
 
-The last two rows have to be read together, which is why the share is in the
-table. Where the early window carries most of the signal — $0.71$ and $0.78$ —
-it is reproduced to $1.3\times10^{-5}$ and $3.0\times10^{-4}$. Where the early
-error looks alarming, at $24\%$, the window holds a hundred-thousandth of the
-light: there is nothing there to get right. An early-window error quoted
-without its share is not a measurement.
+Every peak sits $15$–$25\,\mathrm{ns}$ after the geometric arrival, the early
+window now carries $59$–$88\%$ of the $\ge2$ signal, and it is reproduced to
+between $10^{-4}$ and $2\times10^{-3}$. The one entry that looks poor — order
+$1$ at $317\,\mathrm m$, $1.1\times10^{-2}$ — is a module whose early share is
+$-0.04$: there is no unscattered-adjacent light there at all and the window
+holds ringing.
 
-Negative bins are kept as computed, and they are the same in both answers —
-$1.0\%$ of the mass for order $1$ and $0.2\%$ for $\ge2$, in the element sum
-and in the compact source alike. The ringing is the finite frequency window,
-not the representation.
+Negative bins are kept as computed and are the same on both sides: $0.4\%$ of
+the mass for order $1$ and below $0.1\%$ for $\ge2$, in the element sum and in
+the compact source alike. That is the finite frequency window, not the
+representation.
 
-## What it costs {#sec-axial-cost}
+## What it costs, and why that is the wrong number {#sec-axial-cost}
 
 Per event, after the cache, for all $576$ modules at $41$ frequencies:
 
@@ -253,30 +275,63 @@ Per event, after the cache, for all $576$ modules at $41$ frequencies:
 | readout to time bins | $0.04$ |
 | **total** | $2203$ |
 
-The element sum costs $36.3\,\mathrm s$ per module per scattered order at the
-same settings, so the same answer at $576$ modules and two orders would be
-about $11.6$ hours: the compact source is **19 times faster on the whole
-event**. Measured on the narrower control set at $81$ frequencies the apply
-alone is $3.2\,\mathrm s$ per module against $69$, a factor of $22$.
+That is $37$ minutes for one shower, against $11.6$ hours for the element sum
+at the same settings — a factor of $19$, and useless. Nineteen times a number
+that is far too large is still far too large, and the interesting question is
+not the ratio but why both numbers are what they are.
 
-Two numbers rather than one, and they are not interchangeable. The compile does
-not shrink when the array grows, so the ratio that matters for a bigger
-detector is the apply; the ratio that matters for this detector is the total.
-The cache is outside both: $6.6\,\mathrm{MB}$, built once per medium.
+The apply is $576\times4935\times277\times41=3.2\times10^{10}$ complex terms,
+and it runs at $16$ million a second on hardware that does $10^9$. Profiling it
+finds, in order: the spherical harmonics, the final contraction, a **pure
+gather that expands $33$ radial moments into $277$ channels by duplication**,
+and the spline. The gather is the clearest waste — the cached moment $M_\ell$
+has no $m$ index and never needed one — and the two scattered orders repeat
+every distance, direction and harmonic because they are computed in separate
+passes.
 
-::: {.callout-note collapse="true" title="Why the cache is small"}
-The universal rule $J\sim k_{\max}r$ sizes the output degree of a directed
-point source, and at $k_{\max}=8\,\mathrm m^{-1}$ and $341\,\mathrm m$ it would
-demand degree $2700$ and a Bessel table that does not fit. This route never
-asks for a degree above $L_q$. Building to $J=L_q=32$ instead reproduces the
-retained moments to $3.3\times10^{-15}$ and builds $60$ times faster, with the
-scattering degree $L$ and the $k$ grid untouched. That one observation is what
-makes a frequency run at array scale possible at all.
+Neither is a property of the method. Both are properties of how the sum was
+written.
+
+::: {.callout-important title="Reordering is not enough; not materialising is"}
+The obvious repair is to contract the azimuthal channels first, so the degree
+axis stays $33$ long, and to take both orders from one pass. Written that way
+in numpy — `experimental/axial_blocked.py` — it agrees with the original to
+$4\times10^{-15}$ and is **not faster**: $3.4\,\mathrm s$ per module against
+$3.0$, measured on the stored event at full size.
+
+The reason is worth stating, because it decides what to build. Removing the
+gather does not remove the array: numpy still has to *materialise* something
+indexed by (receiver, cell, degree, order, frequency) in order to contract it.
+A fused loop does not. The whole of the available speed is in never forming the
+intermediate at all, and that cannot be expressed in array operations.
+
+So the reordering is necessary and worthless on its own. It pays only inside a
+compiled kernel, where the $(r,b,\ell,o,w)$ quantity lives in registers and the
+source array is read once per block of receivers instead of once per receiver.
 :::
 
-Peak resident memory for the whole run was $5.3\,\mathrm{GB}$, and the compact
-source itself is $855\,\mathrm{MB}$ at these settings — the largest single
-object in the calculation, and linear in $M$ and in the number of frequencies.
+The same holds for the source compile. Of its $191\,\mathrm s$, the harmonics
+are $7$ and the emission phases are under $1$; about $30$ go into building the
+element $\times$ channel $\times$ frequency outer product and the rest into
+moving it through a sparse product. The product never needs to exist: the
+accumulation into one cell is a small matrix multiply of that cell's own
+elements.
+
+A compiled backend along these lines is in `experimental/axial_fast.py`, which
+requires the optional `accelerate` extra. Its arithmetic is verified against
+the route above — source coefficients to $6\times10^{-16}$, both scattered
+orders to $4\times10^{-15}$, a rigid pose change to $6\times10^{-16}$ — and its
+speed is not measured here, because this machine has no compiler for it. The
+timings in this section are therefore the honest cost of the *unoptimised*
+route, and the table above should be read as the thing to be replaced rather
+than as the cost of the physics.
+
+Peak resident memory for the run was $5.3\,\mathrm{GB}$, and the compact source
+is $855\,\mathrm{MB}$ — $4935\times277\times41$ complex numbers. That is the
+number to keep in mind when the word "compact" is used: the *cells* are sparse,
+the channels and frequencies at each cell are not. The transport cache, by
+contrast, is $6.6\,\mathrm{MB}$ and is built once per medium; a small cache
+does not make a large source cheap to apply.
 
 ## A new pose, and an event the settings never saw {#sec-axial-transfer}
 

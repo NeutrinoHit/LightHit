@@ -42,7 +42,8 @@ def worker(args):
         raise ValueError("source.kind must be 'directed' or 'isotropic'")
     kwargs = dict(direction=source.get("direction", [0, 0, 1]) if mode == "directed" else None,
                   photons=source.get("photons", 1.), emission_time_ns=source.get("time_ns", 0.))
-    solver = PointGreenSolver(medium, settings, angular_backend=args.backend)
+    solver = PointGreenSolver(medium, settings, angular_backend=args.backend,
+                              single_backend=args.backend)
     init = perf_counter() - began
     first = solver.solve(omega, obs, **kwargs)
     first_timing = first.timings_s.copy()
@@ -62,7 +63,9 @@ def worker(args):
         charge = solver.solve([0.], obs, **kwargs)
         charge_times.append(charge.timings_s.copy())
     from dataclasses import asdict
-    report = dict(backend=args.backend, config=config, medium=asdict(medium),
+    report = dict(backend=args.backend, angular_backend=result.angular_backend,
+                  single_backend=result.single_backend,
+                  config=config, medium=asdict(medium),
                   settings=asdict(settings), initialization_s=init,
                   first_use_solve=first_timing, warm_solves=runs,
                   median_warm_solve_s=float(np.median([t["total"] for t in runs])),
