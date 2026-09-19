@@ -182,11 +182,22 @@ every frequency, because the design matrix depends only on the stencil
 geometry; only the right-hand side changes. Nothing is differentiated, and
 the spline is asked only for values.
 
-One rule had to be learned by breaking it. The stencil must carry at least as
-many points as the fit has monomials, with margin: a fixed $3\times3\times3$
-stencil has $27$ points against the $20$ monomials of $p=3$, which is enough
-to be solvable and not enough to be stable, and convergence in $p$ broke
-there. The stencil order is now $p+2$ nodes per axis.
+One rule had to be learned by breaking it, and the reason is sharper than
+"not enough points with margin". On the nodes $\{-1,0,1\}$ the identities
+$x^3=x$, $y^3=y$, $z^3=z$ hold exactly, so three of the twenty cubic monomials
+are linear combinations of the others *on that stencil*. A $3\times3\times3$
+grid therefore carries $27$ samples and **rank $17$**, not $20$: the fit is
+rank deficient, not merely tight, and the pseudo-inverse silently returns the
+minimum-norm answer to an underdetermined problem. Four nodes per axis restore
+full rank at a condition number of $10$; the stencil order is now $p+2$ nodes
+per axis and the rank is checked rather than assumed.
+
+Two related habits follow. The design matrix is built on dimensionless
+offsets, because a block whose half-sizes span orders of magnitude — a thin
+needle is exactly that — loses rank to the scaling alone: at
+$(10^{-6},1,1)\,\mathrm m$ the cubic design drops to rank $19$. And the
+coefficients are not called Taylor derivatives: they are a local least-squares
+fit, which has the same content only where the fit is well posed.
 
 ::: {.callout-note collapse="true" title="A suspicion that measurement did not support"}
 Because the fit is a fit *across* the block, a radial table too coarse
@@ -267,8 +278,10 @@ that $s$ stays below about five at the closest receiver.
 The experiment is the stored event at its own $221\,393$ elements, the array
 of $576$ modules at $25.7$–$317.3\,\mathrm m$ from the shower centroid,
 $L_q=32$, $\omega=0$, and a reference that is the *same kernel* summed element
-by element. Median relative error over six modules spanning the whole distance
-range:
+by element. The reference is evaluated at six control modules only, so what
+follows is a **median over those six**, not the accuracy of all $576$; the
+approximate answer is computed everywhere, the exact one is not. The per-module
+errors are in the JSON beside the run.
 
 | blocks | $h$, m | $p$ | monomials | coefficients | MB | compile, s | apply $576$, s | order $1$ | order $\ge2$ |
 |---:|---:|---:|---:|---:|---:|---:|---:|---|---|
@@ -284,12 +297,23 @@ range:
 
 Five things in that table are worth naming.
 
-**Degree one buys nothing.** The moments are taken about the block centre, and
-the centre is the photon-weighted centroid, so the first-order moments very
-nearly vanish by construction. Adding them changes the least-squares fit of
-the constant and nothing else. The useful ladder is $p=0,2,3$; the $p=1$ row
-is kept in the table precisely because the obvious reading of a convergence
-study — each order helps a little — is wrong here.
+**Degree one buys almost nothing here — but not for the reason it first
+appears to.** It is tempting to say that the moments are taken about the
+photon-weighted centroid, so the first-order moments vanish by construction.
+That is false, and the distinction matters because the joint moments are the
+whole point of the scheme. The centroid condition is
+$\sum_i Q_i(\mathbf x_i-\mathbf x_B)=0$, while @eq-joint-moment carries the
+extra factor $P_\ell(\mu_{C,i})Y^{\mathrm R}_{\ell m}(\mathbf u_i)
+e^{i\omega t_i}$, which depends on the element. Two equal sources at
+$x=\pm1\,\mathrm m$ radiating in opposite directions have a vanishing ordinary
+dipole and a mixed $x$-dipole in the $\ell=1,m=1$ channel of
+$2\mu_C\sqrt{3/4\pi}$; at nonzero frequency even the spatial dipole of the
+angular monopole survives, because the two elements radiate at different
+times. What the table shows is therefore a property of this event — its
+position–direction correlation is weak, $\mathrm{corr}=-0.07$ — and not an
+identity. The useful ladder on a shower is $p=0,2,3$; on a source with a
+strong correlation between where light is made and which way it goes, $p=1$
+would earn its place.
 
 **Blocks are worth more than degree.** At $p=2$, going from one block to four
 improves the $\ge2$ component by a factor of forty, while going from $p=2$ to
@@ -306,16 +330,20 @@ expansion across a block cannot follow, and it keeps its own per-segment route.
 $2.7\,\mathrm{MB}$, and the peak resident set of the whole run — event,
 cache, moments and stencils together — was $723\,\mathrm{MB}$.
 
-**The cost structure is the point.** Compiling the moments took $48$–$50\,$s
+**The cost structure is the point, and the compile is part of it.** Compiling
+the moments took $48$–$50\,$s
 whatever the block count or degree, because it is a pass over elements and
 never sees a receiver. Applying them cost $2$–$75\,$s for all $576$ modules.
 The reference cost $10.8\,\mathrm s$ for six modules, that is $1.80\,$s per
 module, so the same $576$ would take about $17$ minutes per scattered order.
 At the accuracy of the $2$-block, $p=2$ row the moment route needs
 $50+10=60\,$s for the same answer, and the compile is shared between the two
-scattered orders. Per module the apply is $17\,\mathrm{ms}$ against
-$1.8\,\mathrm s$, a factor of a hundred, and that is the number that decides
-what happens when the array grows.
+scattered orders. Two different ratios follow and they must not be confused:
+per module the *apply* is $17\,\mathrm{ms}$ against $1.8\,\mathrm s$, a factor
+of a hundred, which is what decides the behaviour as the array grows; but the
+whole event, compile included, is $60\,\mathrm s$ against about $17$ minutes,
+a factor of seventeen. The compile does not shrink with the array, so no
+improvement to the apply can remove it.
 
 The unscattered order is in the same budget and is not helped by any of this:
 the closed cone formula of @eq-ballistic-fluence over all $221\,393$ elements

@@ -96,6 +96,11 @@ class LightElements:
     def midpoints_m(self):
         return self.start_m + 0.5 * self.length_m[:, None] * self.direction
 
+    def midpoint_time_ns(self):
+        """Emission time at the middle of each chord, the companion of
+        :attr:`midpoints_m`."""
+        return 0.5 * (np.asarray(self.start_ns, float) + np.asarray(self.end_ns, float))
+
     @property
     def centroid_m(self):
         weight = self.photons / self.photons.sum()

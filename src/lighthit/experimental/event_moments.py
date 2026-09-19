@@ -52,30 +52,37 @@ __all__ = ["real_spherical_harmonics", "monomial_powers", "BlockPartition",
            "direct_response"]
 
 
-def real_spherical_harmonics(degree, vectors):
+def real_spherical_harmonics(degree, vectors, azimuthal_degree=None):
     """Real orthonormal harmonics up to ``degree``, shape (points, (L+1)**2).
 
     The channel order is ``l = 0, 1, ...`` and, inside each ``l``,
     ``m = -l ... +l``.
+
+    ``azimuthal_degree`` restricts the orders actually computed to
+    ``|m| <= M``. The returned array then has one column per kept ``(l, m)``,
+    in the same relative order, and :func:`channel_index` says which flat
+    positions those are. Nothing is computed and discarded, which matters: at
+    ``L = 32`` the full set is 1089 columns against 159 for ``M = 2``.
     """
     unit = np.asarray(vectors, float)
     unit = unit / np.linalg.norm(unit, axis=-1, keepdims=True)
     theta = np.arccos(np.clip(unit[..., 2], -1.0, 1.0))
     phi = np.arctan2(unit[..., 1], unit[..., 0])
-    # One call gives every (l, m); looping over them costs seconds per chunk.
-    table = sph_harm_y_all(degree, degree, theta, phi)
-    out = np.empty(unit.shape[:-1] + ((degree + 1) ** 2,), float)
-    index = 0
-    for l in range(degree + 1):
-        for m in range(-l, l + 1):
-            value = table[l, abs(m)]
-            if m == 0:
-                out[..., index] = value.real
-            elif m > 0:
-                out[..., index] = np.sqrt(2) * (-1) ** m * value.real
-            else:
-                out[..., index] = np.sqrt(2) * (-1) ** m * value.imag
-            index += 1
+    limit = degree if azimuthal_degree is None else min(int(azimuthal_degree), degree)
+    # One call gives every order up to the limit; looping over them costs
+    # seconds per chunk.
+    table = sph_harm_y_all(degree, limit, theta, phi)
+    orders = [(l, m) for l in range(degree + 1)
+              for m in range(-min(l, limit), min(l, limit) + 1)]
+    out = np.empty(unit.shape[:-1] + (len(orders),), float)
+    for index, (l, m) in enumerate(orders):
+        value = table[l, abs(m)]
+        if m == 0:
+            out[..., index] = value.real
+        elif m > 0:
+            out[..., index] = np.sqrt(2) * (-1) ** m * value.real
+        else:
+            out[..., index] = np.sqrt(2) * (-1) ** m * value.imag
     return out
 
 
@@ -102,13 +109,26 @@ class BlockPartition:
     def count(self):
         return len(self.centres_m)
 
+    @staticmethod
+    def _reach(elements, inside, centre):
+        """Half-sizes that contain the whole chord of every element in a block.
+
+        Blocks are chosen from midpoints, but what is integrated is the chord,
+        whose nodes lie up to half a length away from its midpoint. Bounding by
+        the midpoints alone lets the fit be evaluated outside the box it was
+        fitted on -- invisible for a 0.5 mm shower step and not at all invisible
+        for a metre-long track segment.
+        """
+        start = elements.start_m[inside]
+        finish = start + elements.length_m[inside][:, None] * elements.direction[inside]
+        span = np.maximum(np.abs(start - centre), np.abs(finish - centre))
+        return np.maximum(np.max(span, axis=0), 1e-6)
+
     @classmethod
     def single(cls, elements):
-        points = elements.midpoints_m
         centre = elements.centroid_m
-        half = np.max(np.abs(points - centre), axis=0)
-        return cls(np.zeros(len(points), np.int64), centre[None, :],
-                   np.maximum(half, 1e-6)[None, :])
+        half = cls._reach(elements, np.ones(len(elements), bool), centre)
+        return cls(np.zeros(len(elements), np.int64), centre[None, :], half[None, :])
 
     @classmethod
     def split(cls, elements, blocks=1, strategy="extent"):
@@ -178,7 +198,7 @@ class BlockPartition:
             weight = weights[inside] / weights[inside].sum()
             centre = (weight[:, None] * points[inside]).sum(axis=0)
             centres.append(centre)
-            halves.append(np.maximum(np.max(np.abs(points[inside] - centre), axis=0), 1e-6))
+            halves.append(cls._reach(elements, inside, centre))
         return cls(labels, np.array(centres), np.array(halves))
 
     def summary(self):
@@ -201,11 +221,17 @@ class KernelChannels:
         band = cache.bands[0] if isinstance(cache, BandedResponseCache) else cache
         if degree > band.degree:
             raise ValueError("The cache does not store that many output degrees")
+        if isinstance(cache, BandedResponseCache) and len(cache.bands) > 1:
+            # Picking band 0 quietly would answer a query about the other bands'
+            # radii with the wrong table. Refuse instead.
+            raise ValueError("a multi-band cache is not dispatched here; pass one band")
         index = None
         if frequencies is not None:
             axis = band.grid.omega_per_ns
             index = np.array([int(np.argmin(np.abs(axis - value))) for value in frequencies])
-            if not np.allclose(axis[index], frequencies, atol=1e-12):
+            # rtol=0: a frequency near a cached one is not the cached one, and
+            # the default relative tolerance would accept 0.600001 as 0.6.
+            if not np.allclose(axis[index], frequencies, rtol=0.0, atol=1e-12):
                 raise ValueError("Requested frequencies are not on the cached axis")
         return cls(band, order, degree, index)
 
@@ -214,12 +240,30 @@ class KernelChannels:
         axis = self.cache.grid.omega_per_ns
         return axis if self.frequency_index is None else axis[self.frequency_index]
 
-    def multipoles(self, radii):
-        """``M_l(r, omega)`` for the retained degrees, shape (points, L+1, freq)."""
-        block = self.cache.moments_at(np.asarray(radii, float),
-                                      degrees=self.degree + 1)[..., self.order]
-        if self.frequency_index is not None:
-            block = block[self.frequency_index]
+    def multipoles(self, radii, frequency_slice=None):
+        """``M_l(r, omega)`` for the retained degrees, shape (points, L+1, freq).
+
+        ``frequency_slice`` narrows the frequency axis before anything large is
+        built, which is what makes a full array affordable: the interpolation
+        is per frequency anyway, and the caller rarely wants all of them at
+        once.
+        """
+        index = self.frequency_index
+        if index is None:
+            index = np.arange(len(self.cache.grid.omega_per_ns))
+        if frequency_slice is not None:
+            index = index[frequency_slice]
+        radii = np.asarray(radii, float)
+        if frequency_slice is None and len(index) == len(self.cache.grid.omega_per_ns):
+            block = self.cache.moments_at(radii, degrees=self.degree + 1)[..., self.order]
+        else:
+            # One frequency at a time: the interpolation is per frequency in any
+            # case, and asking for all of them builds an array that a full array
+            # of modules cannot hold.
+            block = np.concatenate(
+                [self.cache.moments_at(radii, degrees=self.degree + 1,
+                                       frequency_index=int(one))[..., self.order]
+                 for one in index], axis=0)
         return np.transpose(block, (1, 2, 0))
 
     def channels(self, displacements):
@@ -248,7 +292,8 @@ def compile_joint_moments(elements, partition, kernel_degree, spatial_degree,
     """
     powers = monomial_powers(spatial_degree)
     omega = np.atleast_1d(np.asarray(omega_per_ns, float))
-    nodes, weights = np.polynomial.legendre.leggauss(max(2, int(element_order)))
+    # order 1 really is the midpoint rule; it used to be silently promoted to 2.
+    nodes, weights = np.polynomial.legendre.leggauss(max(1, int(element_order)))
     nodes, weights = (nodes + 1) / 2, weights / 2
     channels = (kernel_degree + 1) ** 2
     # Built as (block, monomial, frequency, channel) so that one matrix product
@@ -318,16 +363,32 @@ def evaluate_moments(kernel, moments, powers, partition, receivers_m, *,
     grid = np.linspace(-1.0, 1.0, int(stencil_order))
     offsets = np.array(list(product(grid, grid, grid)))
     channels = (kernel.degree + 1) ** 2
+    # The design matrix is built on the dimensionless offsets, never on metres.
+    # A block with half-sizes spanning orders of magnitude -- a thin needle is
+    # exactly that -- otherwise loses rank to the scaling alone: at (1e-6, 1, 1)
+    # metres the cubic design drops from rank 20 to 19.
+    design = _monomials(offsets, powers)
+    rank = np.linalg.matrix_rank(design)
+    if rank < len(powers):
+        # {-1, 0, 1} is the standard trap: x**3 == x there, so 27 samples carry
+        # rank 17 against the 20 cubic monomials, not 20.
+        raise ValueError(
+            f"a {stencil_order}-node stencil supports only {rank} of the "
+            f"{len(powers)} monomials of degree {int(powers.sum(axis=1).max())}; "
+            "raise stencil_order")
+    inverse = np.linalg.pinv(design)
     if receiver_chunk is None:
         per_receiver = max(len(offsets) * channels * frequencies * 16, 1)
         receiver_chunk = max(1, int(budget_bytes // per_receiver))
     for label in range(partition.count):
         half = margin * partition.half_sizes_m[label]
         local = offsets * half[None, :]
-        design = _monomials(local, powers)
-        inverse = np.linalg.pinv(design)
+        # Coefficients come out in the dimensionless basis, so the physical
+        # moments are scaled to match rather than the matrix being unscaled.
+        scale = np.prod(half[None, :] ** powers, axis=1)
         # (stencil, channels, frequency): the whole receiver-independent part.
-        weights = np.einsum("as,acw->scw", inverse, moments[label], optimize=True)
+        weights = np.einsum("as,acw->scw", inverse,
+                            moments[label] / scale[:, None, None], optimize=True)
         base = partition.centres_m[label][None, :] + local
         for lo in range(0, len(receivers), receiver_chunk):
             here = receivers[lo:lo + receiver_chunk]
@@ -339,16 +400,25 @@ def evaluate_moments(kernel, moments, powers, partition, receivers_m, *,
     return total
 
 
-def direct_response(kernel, elements, receivers_m, *, chunk=20000, element_order=2):
+def direct_response(kernel, elements, receivers_m, *, chunk=None, element_order=2,
+                    budget_bytes=96 * 2 ** 20):
     """The same kernel, summed element by element. Shape ``(freq, receivers)``.
 
-    This is the reference the moment route is measured against: identical
+    This is the reference the compact routes are measured against: identical
     medium, identical cache, identical angular truncation, no expansion.
+
+    ``chunk`` defaults to whatever keeps the multipoles of one chunk inside
+    ``budget_bytes``. A fixed chunk is what a wide frequency grid cannot
+    afford: 20000 elements at 33 degrees and 81 frequencies is 855 MB for that
+    one array.
     """
     receivers = np.atleast_2d(np.asarray(receivers_m, float))
     omega = kernel.omega_per_ns
+    if chunk is None:
+        per_element = max((kernel.degree + 1) * len(omega) * 16, 1)
+        chunk = int(np.clip(budget_bytes // per_element, 256, 20000))
     out = np.zeros((len(omega), len(receivers)), complex)
-    nodes, weights = np.polynomial.legendre.leggauss(max(2, int(element_order)))
+    nodes, weights = np.polynomial.legendre.leggauss(max(1, int(element_order)))
     nodes, weights = (nodes + 1) / 2, weights / 2
     degrees = np.arange(kernel.degree + 1)
     for index, receiver in enumerate(receivers):
