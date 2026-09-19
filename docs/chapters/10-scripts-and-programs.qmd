@@ -1,0 +1,205 @@
+# Scripts and programs {#sec-scripts-and-programs}
+
+Every number and figure in this book comes from a script under `scripts/`,
+run against real code, not pasted in by hand. This chapter is the index: what
+each script does, what it needs, and how to run it. It groups scripts by what
+they are for rather than by chapter, because several scripts serve more than
+one chapter and a few (the benchmarks, the course runners) serve none
+directly.
+
+Three conventions hold across all of them unless a script says otherwise:
+
+* output goes under `.build/review/<name>` or `.build/<name>` as JSON,
+  `.npz` arrays and PNG figures, never into the source tree;
+* `--input` for a script that reads a stored shower takes the path to a
+  private G4 HDF5 file (`sim_e_100GeV_10.h5`-style); no such file is shipped
+  in the repository, and scripts that need one are unusable without it;
+* every script is run from the repository root with `src/` on
+  `PYTHONPATH`, e.g. `PYTHONPATH=src python scripts/<name>.py --help`.
+
+## Production runs {#sec-scripts-production}
+
+These are the scripts that answer "how does the whole thing perform on a
+real event, over the real array" — the ones a result in the book traces back
+to.
+
+**`run_shower_moments.py`** — the moment route against an element-by-element
+reference, on one real stored shower. Reports how many angular channels the
+summed response needs before it stops moving, the moment route's error and
+cost against the direct sum at matched settings (block count and polynomial
+degree scanned), and the closed-form ballistic term's own cost, so the floor
+of the total time is visible next to the part that is actually expanded.
+Since this turn, both the radial-moment lookup (`KernelChannels` →
+`ResponseCache.moments_at`) and the ballistic term go through the fast paths
+by default — `PreparedMultipoles` (`spline_fast.py`) and
+`vectorised_ballistic_fast` (`ballistic_fast.py`) — falling back to the
+plain scipy/numpy implementations only when numba is unavailable; the report
+records which backend actually ran under `cache.spline_backend` and
+`ballistic.backend`.
+
+```
+python scripts/run_shower_moments.py --input /path/sim_e_100GeV_10.h5 \
+    --event 5 --output .build/review/shower-moments
+```
+
+**`run_shower_axial.py`** — the production run of the sparse axial
+("needle") representation of @sec-axial-source: one G4 event, the full
+array, the full frequency window, charges and time bins, end to end and
+timed. Since this turn it also goes through the fast paths by default,
+same as `run_shower_moments.py`: `PreparedMultipoles` for every
+`KernelChannels` lookup (the main run and the refinement scan alike) and
+`vectorised_ballistic_fast` for the ballistic term, with the backend that
+actually ran recorded under `cache.spline_backend` and `ballistic.backend`.
+
+**`run_shower_axial_bins.py`** — time bins of a stored shower on a window
+chosen to actually contain the light, rather than the default frequency
+grid's reconstructible range; needed because the spectrum of a module tens
+of metres away carries arrival times well past what a coarse frequency
+spacing can invert cleanly. Also wrapped with `PreparedMultipoles` by
+default since this turn; the report's `cache_spline_backend` says which
+backend ran.
+
+**`run_shower_frequency.py`** — the moment route at nonzero frequency, where
+the criterion for how large a block may be changes from a purely geometric
+one (`extent / distance`) to one that also has to track how fast the kernel
+oscillates in `omega`.
+
+**`run_segment_event.py`** — a small, hand-built multi-segment event (eight
+straight Cherenkov segments: a kinked primary plus five delayed branches),
+computed in three rigid poses (original, translated, rotated) from one
+cache, with the invariance checks of @sec-cone-segment (joint
+rotation+translation, time shift, yield linearity, segment splitting) run
+against it every time. Since this turn the single-band cache is wrapped with
+`PreparedMultipoles` before any `segment_spectrum` call; the report's
+`cache.spline_backend` says whether that wrapping actually happened.
+
+```
+python scripts/run_segment_event.py --output .build/review/event
+```
+
+**`run_effective_segments.py`** — method 7
+(`lighthit.experimental.effective_segments`, not yet its own book chapter)
+on a real stored shower: reduce it to a chosen number `K` of straight
+segments and report,
+for every `K` in `--segments`, how many pieces were built, how far orders 1
+and `>=2` are from the same element-by-element reference
+`run_shower_moments.py` uses (this should shrink monotonically as `K`
+grows), that the ballistic order is bit-for-bit independent of `K` (it is
+never taken from the segment fit — always the closed form), and the
+wall-clock cost of fitting and applying the method at every `K`, at both a
+handful of control receivers and the full array.
+
+```
+python scripts/run_effective_segments.py --input /path/sim_e_100GeV_10.h5 \
+    --event 5 --segments 1 2 4 8 16 32 64 \
+    --output .build/review/effective-segments
+```
+
+**`run_method_survey.py`** — every method that produces light transport, on
+one real event and the full array, side by side: ballistic (shared,
+computed once), the moment route (`evaluate_moments`), the axial route
+(`axial_response`) and method 7 (`full_response`). `direct_response` — the
+slowest, most honest method — is deliberately excluded from the routine
+comparison and used only at a handful of control modules to score the
+other three, never run over the full array. Each method's report block
+carries its per-order error against that reference, its apply time over
+the full array, and the scattered (order `>=1`) charge total, so the three
+routes and the shared ballistic term can be read off one file instead of
+three separate script runs.
+
+```
+python scripts/run_method_survey.py --input /path/sim_e_100GeV_10.h5 \
+    --event 5 --output .build/review/method-survey
+```
+
+**`run_baikal_clusters.py`** — a laser flash as seen by three Baikal-GVD-like
+clusters, through the cache, using published Baikal-GVD geometry and laser
+parameters against the repository's synthetic water.
+
+**`build_cache.py`** — builds the three-band cache actually shipped for the
+Baikal-like geometry (`10–20 m`, `20–60 m`, `60–400 m`, with band-specific
+`k_max`/degree/radii), saves it to `docs/cache-baikal/cache.npz`, and runs
+the off-grid interpolation and finite-`L` consistency checks against it. Not
+parametrised by `argparse`; edit `BANDS` in the script to change the bands.
+
+## Benchmarks {#sec-scripts-benchmarks}
+
+Benchmarks measure cost, not correctness; they are not part of the
+validation suite and can be skipped in a plain read-through of the physics.
+
+**`benchmark_backends.py`** — numpy against numba on the same complete
+public point-Green problem, after `pip install .[accelerate]`.
+
+**`benchmark_route.py`** — the cost of the whole route: build, save, load,
+apply, reuse, read out.
+
+**`benchmark_moment_route.py`** — the moment route against the element sum
+*at matched accuracy*, because an error table alone says which settings are
+accurate but not whether the route is actually worth using at that accuracy.
+
+**`benchmark_axial_fast.py`** — compares the exact-representation
+accelerators (the axial/needle fast paths) against local G4 data; nothing
+here is published, it is a local-only speed comparison. Supports
+`--compare-compilers` to contrast numba source-compile time against numpy.
+
+## Verification and independent controls {#sec-scripts-verification}
+
+Each of these is an independent check of one physical claim, deliberately
+built without reusing the machinery it is checking.
+
+**`verify_absorption.py`** — open, independent collimation checks; no
+private optics, nothing that could not be published as-is.
+
+**`verify_directionality.py`** — independent controls for the
+arrival-direction claims.
+
+**`verify_segment.py`** — independent controls for the finite Cherenkov
+segment of @sec-cone-segment.
+
+**`check_shell_resolution.py`** — refines shell width, flight quadrature and
+maximum path in the Monte-Carlo cross-check, being careful that changing the
+maximum path also changes random-number consumption between photons, which
+by itself can look like a cutoff bias if not controlled for.
+
+**`probe_shower_axis.py`** — is a stored shower actually one-dimensional,
+and in which of its variables? Builds the photon-weighted principal axis and
+reports the event in that frame; this is the script behind the numbers in
+@sec-axial-shape.
+
+**`probe_block_channels.py`** — why a higher polynomial block degree stops
+helping: the block still has to resolve the spherical harmonics of the
+kernel channel, and that is a separate limit from the polynomial one.
+
+## Course and notebooks {#sec-scripts-course}
+
+**`run_course.py`** — executes the course notebooks as separate kernels,
+using this script's own Python, writing outputs and machine-readable
+evidence to `.build/course`; needs `nbformat`, `nbclient`, `nbconvert` and
+`jupyter_client`. Source notebooks are left untouched.
+
+**`run_course_plain.py`** — the same course, one fresh interpreter per
+notebook, without Jupyter; the fallback when the `nbclient`/`nbconvert`
+stack is not available.
+
+**`strip_notebook_outputs.py`** — removes notebook outputs and execution
+counts before a public git commit, so a diff shows the source change and
+not a wall of regenerated cell output.
+
+## Utilities {#sec-scripts-utilities}
+
+**`compare_runs.py`** — compares two CLI runs on identical observations,
+bins and source normalisation; useful for checking that a code change left
+a result numerically where it was.
+
+## Tests, as distinct from scripts {#sec-scripts-tests}
+
+`tests/` is not covered above because it is not run by hand for a result —
+it is the correctness suite, run with `pytest` (or, in an environment
+without real `pytest`/`numba`, the local shim under
+`scratch/shim/run_tests.py`, which is not part of the repository and exists
+only to verify correctness without those packages installed). Test files
+worth knowing about because they anchor the fast paths this chapter
+describes: `test_ballistic_fast.py`, `test_spline_fast.py`,
+`test_cache_build_vectorised.py` and `test_effective_segments.py` each
+check a fast path against the plain implementation it replaces or wraps,
+never against itself.

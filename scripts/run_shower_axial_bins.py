@@ -9,7 +9,10 @@ and are the point of this script:
 * each module's bins are measured from its own geometric arrival
   ``r / v``, so the signal sits at the start of the window instead of a
   microsecond into it. The shift is exact -- a multiplication of the spectrum
-  by ``exp(i omega r / v)`` -- and nothing is resampled;
+  by ``exp(-i omega r / v)``, with the sign that the ``+i omega t`` forward
+  transform of this repository requires -- and nothing is resampled. The
+  opposite sign pushes the pulse one arrival time further out instead of
+  bringing it back, which is silent when both sides of a comparison carry it;
 * the frequency grid is dense enough for the window that remains.
 
 Everything else matches ``run_shower_axial.py``: same contract, same cache
@@ -42,6 +45,13 @@ from lighthit.experimental.g4_source import SourceContract, load_event
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_shower_moments import array_positions, serial  # noqa: E402
+
+try:
+    from lighthit.experimental.spline_fast import PreparedMultipoles
+    SPLINE_BACKEND = "numba (spline_fast.PreparedMultipoles)"
+except ImportError:
+    PreparedMultipoles = None
+    SPLINE_BACKEND = "scipy (ResponseCache.moments_at)"
 
 ORDERS = {"first": 0, "two_or_more": 1}
 
@@ -110,7 +120,9 @@ def main():
         if arguments.cache:
             cache.save(arguments.cache)
     omega = cache.grid.omega_per_ns
-    kernels = {name: KernelChannels.of(cache, index, arguments.angular_degree)
+    report["cache_spline_backend"] = SPLINE_BACKEND
+    cache_fast = PreparedMultipoles.of(cache) if PreparedMultipoles is not None else cache
+    kernels = {name: KernelChannels.of(cache_fast, index, arguments.angular_degree)
                for name, index in ORDERS.items()}
 
     began = perf_counter()
@@ -123,7 +135,12 @@ def main():
           f"{report['compact_source']['seconds']:.0f} s", flush=True)
 
     edges = np.arange(arguments.bins + 1) * arguments.bin_ns
-    shift = np.exp(1j * omega[:, None] * arrival[None, :])
+    # The forward transform is integral f(t) exp(+i omega t) dt, so
+    # relabelling t_local = t_absolute - arrival needs the MINUS sign.
+    # With a plus the pulse is pushed one arrival time further out
+    # instead of being brought back to zero, which puts a far module's
+    # light outside the window entirely.
+    shift = np.exp(-1j * omega[:, None] * arrival[None, :])
     early = edges[:-1] < arguments.early_ns
     report["bins"] = {"edges_ns": edges.tolist(), "per_order": {}}
     for name, kernel in kernels.items():

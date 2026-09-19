@@ -236,10 +236,15 @@ class ResponseCache:
                 before = perf_counter()
                 for lo in range(0, len(radii), radius_chunk):
                     block = radii[lo:lo + radius_chunk]
-                    table = np.empty((len(block), len(k), J + 1), complex)
-                    for i, rad in enumerate(block):
-                        table[i] = (spherical_jn(ell[None, :], k[:, None] * rad)
-                                    * norm[None, :] * weight[:, None])
+                    # One broadcast call over the whole block instead of one
+                    # spherical_jn call per radius: scipy's spherical_jn is a
+                    # ufunc in (order, argument), so this is not an
+                    # approximation -- it agrees with the per-radius loop it
+                    # replaces to the last bit (checked in
+                    # tests/test_cache_build_vectorised.py).
+                    table = (spherical_jn(ell[None, None, :],
+                                          k[None, :, None] * block[:, None, None])
+                            * norm[None, None, :] * weight[None, :, None])
                     max_block_bytes = max(max_block_bytes, table.nbytes)
                     if len(radii) <= radius_chunk:
                         memory_table = table
