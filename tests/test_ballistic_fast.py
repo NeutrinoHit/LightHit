@@ -6,7 +6,8 @@ pytest.importorskip("numba")
 
 from lighthit.medium import Medium
 from lighthit.experimental.g4_source import LightElements
-from lighthit.experimental.ballistic_fast import vectorised_ballistic_fast
+from lighthit.experimental.ballistic_fast import (vectorised_ballistic_fast,
+                                                   vectorised_ballistic_bins_fast)
 
 
 def _reference_ballistic(elements, receivers, medium, cone_cosine):
@@ -80,3 +81,33 @@ def test_receiver_shape_is_validated(medium):
     elements = _elements(np.random.default_rng(1), 5)
     with pytest.raises(ValueError):
         vectorised_ballistic_fast(elements, np.zeros((3, 2)), medium, elements.cone_cosine)
+
+
+def test_time_bins_keep_exact_arrivals_and_total(medium):
+    rng = np.random.default_rng(41)
+    elements = _elements(rng, 600)
+    # Give every step a nontrivial, linearly varying emission time.
+    start_ns = rng.uniform(0.0, 8.0, len(elements))
+    end_ns = start_ns + rng.uniform(0.01, 0.2, len(elements))
+    from dataclasses import replace
+    elements = replace(elements, start_ns=start_ns, end_ns=end_ns)
+    receivers = rng.uniform(-20.0, 20.0, size=(7, 3))
+    origins = rng.uniform(0.0, 20.0, len(receivers))
+    edges = np.linspace(-100.0, 500.0, 121)
+    total, bins = vectorised_ballistic_bins_fast(
+        elements, receivers, medium, elements.cone_cosine, origins, edges)
+    np.testing.assert_allclose(total, vectorised_ballistic_fast(
+        elements, receivers, medium, elements.cone_cosine), rtol=2e-14, atol=0)
+    # The deliberately wide window contains every lit synthetic arrival.
+    np.testing.assert_allclose(bins.sum(axis=1), total, rtol=2e-14, atol=0)
+
+
+def test_time_bin_inputs_are_validated(medium):
+    elements = _elements(np.random.default_rng(2), 5)
+    receivers = np.zeros((2, 3))
+    with pytest.raises(ValueError):
+        vectorised_ballistic_bins_fast(elements, receivers, medium,
+                                       elements.cone_cosine, [0.0], [0.0, 1.0])
+    with pytest.raises(ValueError):
+        vectorised_ballistic_bins_fast(elements, receivers, medium,
+                                       elements.cone_cosine, [0.0, 0.0], [1.0, 0.0])

@@ -114,21 +114,34 @@ python scripts/run_method_survey.py --input /path/sim_e_100GeV_10.h5 \
 
 **`run_baikal_clusters.py`** — a laser flash as seen by three Baikal-GVD-like
 clusters, through the cache, using published Baikal-GVD geometry and laser
-parameters against the repository's synthetic water.
+parameters against the repository's synthetic water.  Its sampled uncached
+control solve explicitly uses the Numba angular backend.
 
 **`build_cache.py`** — builds the three-band cache actually shipped for the
 Baikal-like geometry (`10–20 m`, `20–60 m`, `60–400 m`, with band-specific
 `k_max`/degree/radii), saves it to `docs/cache-baikal/cache.npz`, and runs
 the off-grid interpolation and finite-`L` consistency checks against it. Not
 parametrised by `argparse`; edit `BANDS` in the script to change the bands.
+The production build explicitly selects the Numba angular backend and thus
+requires the `accelerate` extra.
+
+**`run_event_viewer.py`** — the local production viewer run. It reads every
+HDF5 file under `g4_data` (or explicit `--input` paths), evaluates event 5 by
+default with `compile_axial_source_fast` and `PreparedAxialKernel.apply`, adds
+the exact per-element ballistic arrivals, and appends an isotropic point-laser
+event. One shared Numba transport cache serves every event. Outputs stay under
+`.build/event-viewer`: per-event NPZ files, portable `viewer.json`, and one
+self-contained `viewer.html` with module charges, time histograms, a full-array
+heatmap and time animation.
 
 ## Benchmarks {#sec-scripts-benchmarks}
 
 Benchmarks measure cost, not correctness; they are not part of the
 validation suite and can be skipped in a plain read-through of the physics.
 
-**`benchmark_backends.py`** — numpy against numba on the same complete
-public point-Green problem, after `pip install .[accelerate]`.
+**`benchmark_backends.py`** — numpy against numba for both the angular tail
+and the exact-first-order scalar kernel on the same complete public
+point-Green problem, after `pip install .[accelerate]`.
 
 **`benchmark_route.py`** — the cost of the whole route: build, save, load,
 apply, reuse, read out.

@@ -51,6 +51,11 @@ python -m lighthit --config examples/point-green.toml \
   --output .build/point-green --plots
 ```
 
+With the optional acceleration dependency installed, exact first scattering
+uses its compiled scalar kernel automatically; select the compiled angular
+tail explicitly with `--angular-backend numba`.  Use `--single-backend numpy`
+to force the uncompiled reference path for a comparison.
+
 Output:
 
 - `.build/point-green/spectrum.npz`: frequencies and the 0, 1, ≥2 components;
@@ -114,6 +119,26 @@ python scripts/strip_notebook_outputs.py notebooks/01_point_green.ipynb
 
 `.gitignore` does not remove outputs already committed to a tracked
 notebook.
+
+## Interactive event viewer
+
+The general event viewer shows several G4 showers and point flashes in one
+standalone HTML file: 3-D detector geometry, integrated charge by scattering
+order, a selectable per-OM time histogram, a full-array time heatmap, and
+frame/cumulative animation. Signed Fourier-inversion bins are displayed with a
+signed-log colour scale and are never clipped or renormalized.
+
+With the local files under `g4_data`, run all four stored samples (event 5) and
+an isotropic laser through the shared fast Numba cache:
+
+```bash
+python -m pip install -e '.[accelerate,viewer]'
+python scripts/run_event_viewer.py --output .build/event-viewer --threads 4
+```
+
+Open `.build/event-viewer/viewer.html`. The same viewer can load another
+portable `viewer.json` through its file button. Input HDF5 files and generated
+event arrays remain local and are not package data.
 
 ## Python API
 
@@ -211,8 +236,10 @@ Geant4.
 | `src/lighthit/medium.py` | Parameters of one spectral node, m and ns |
 | `src/lighthit/angular.py` | Tridiagonal adjoint problem, exact free tail |
 | `src/lighthit/single.py` | Coordinate-space first order with the full HG function |
+| `src/lighthit/single_fast.py` | Optional compiled scalar kernel for the same exact first order |
 | `src/lighthit/green.py` | Radial inversion and the combined 0+1+≥2 spectrum |
 | `src/lighthit/readout.py` | Bins and instrument smearing, independent of transport |
+| `src/lighthit/viewer.py` | Standalone multi-event 3-D viewer, OM charges, time histograms and animation |
 | `src/lighthit/providers.py` | Local private-water provider |
 | `tests/` | Independent matrix, analytic, and geometric checks |
 
