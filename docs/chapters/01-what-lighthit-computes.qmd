@@ -1,0 +1,457 @@
+# What LightHit computes {#sec-overview}
+
+## The physical question {#sec-overview-question}
+
+A charged particle crosses a volume of water and emits Cherenkov light along
+its path. Some of that light reaches an optical module; most of it does not.
+Between emission and arrival a photon may be absorbed, or may change direction
+one or more times, so that it arrives later than a straight line would allow
+and from a direction the source never pointed in. The module converts a
+fraction of what arrives into photoelectrons, and the readout assigns them to
+time bins.
+
+The quantity this package computes is the **expected number of photoelectrons**
+in module $d$ and time bin $b$,
+$$
+N_{db}\;=\;\bigl\langle\,\text{photoelectrons registered by module }d
+\text{ in }[t_b,t_{b+1})\,\bigr\rangle ,
+$$ {#eq-overview-observable}
+together with the integrated charge
+$$
+Q_d=\int_{-\infty}^{+\infty}\!N_d(t)\,\mathrm dt=\tilde N_d(\omega=0),
+$$ {#eq-overview-charge}
+where $N_d(t)$ is the rate whose integral over a bin is
+@eq-overview-observable. The charge is evaluated directly at zero frequency and
+is **not** the sum of the finite set of bins. The two would agree only for a
+window that contains the whole signal and an exact inversion of it, and neither
+holds in general: @sec-overview-example reports a configuration in which they
+differ by $1.3\%$. Wherever this book quotes a charge it means
+@eq-overview-charge.
+
+The angle brackets are an ensemble average over photon histories, not one
+realisation of them. A Monte Carlo code estimates the same average by sampling
+histories; LightHit evaluates it by solving the transport equation that the
+average obeys, once per spectral node, and then contracting the solution with
+the source and with the module.
+
+The reason for solving rather than sampling is not that sampling is
+intrinsically expensive. A Monte Carlo pays per photon propagated: its cost is
+set by the light yield of the event and by the statistical error that is
+acceptable, not by the number of source--module pairs. What does scale with
+pairs is the *deterministic* alternative to a solve --- evaluating a response
+element by element and module by module. A simulated shower is delivered as
+$10^5$--$10^6$ emitting steps and an array such as Baikal-GVD has some
+$2\times10^3$ modules, so that route costs $10^8$--$10^9$ evaluations per
+event.
+
+Solving pays once for the medium instead, and it is worth being precise about
+what "once" buys. For a point isotropic source seen by a directional module,
+the answer in a homogeneous unbounded medium depends on the distance and on one
+angle. For a *directed* emitting element seen by a directional module it
+depends on the distance and on three independent angular invariants, since
+three unit vectors are involved --- the emission axis, the module axis, and the
+line joining the two --- and a rotation-invariant, parity-even medium leaves
+exactly three of their mutual cosines. Either way the answer is a function of a
+few variables, which is what makes it tabulable once and reusable for every
+element, every event and every module orientation (@sec-cache-and-memory).
+
+This chapter states what is computed, fixes the observable and the
+assumptions, and lays out the whole calculation as a sequence of steps. Each
+later chapter expands one of those steps.
+
+## Assumptions and definitions {#sec-overview-assumptions}
+
+**The medium.** Homogeneous, unbounded and isotropic. At wavelength $\lambda$
+it is described by an absorption coefficient $\mu_a(\lambda)$, a scattering
+coefficient $\mu_s(\lambda)$, a Henyey--Greenstein asymmetry $g$, a phase
+refractive index $n_{\rm ph}(\lambda)$ and a group refractive index
+$n_g(\lambda)$. Scattering is elastic: a photon changes direction but not
+wavelength, so the wavelengths decouple and each one is solved on its own.
+Polarisation, boundaries between water and anything else, and shadowing by the
+detector structure are outside the model.
+
+Two refractive indices appear because they answer two different questions. The
+Cherenkov emission angle and the spectral yield are set by the phase index; the
+speed at which a pulse travels between emission and arrival is
+$v_g=c_0/n_g$. Using one where the other belongs is a silent error of a few
+per cent in time, and @sec-spectral-rte keeps them apart by name.
+
+**What is transported.** The spectral angular intensity
+$I_\lambda(\mathbf x,\hat s,t)$ is defined so that
+$$
+\mathrm dN=\frac{I_\lambda}{v_g}\,
+\mathrm d^3x\,\mathrm d\Omega\,\mathrm d\lambda
+$$ {#eq-overview-intensity}
+is the expected number of photons in the spatial volume $\mathrm d^3x$ whose
+direction of travel lies in $\mathrm d\Omega$ about $\hat s$ and whose
+wavelength lies in $\mathrm d\lambda$ about $\lambda$. With metres,
+nanoseconds and nanometres,
+$[I_\lambda]=\text{photon}\,\mathrm m^{-2}\mathrm{ns}^{-1}\mathrm{sr}^{-1}
+\mathrm{nm}^{-1}$. @sec-spectral-rte derives the equation $I_\lambda$ obeys.
+
+**The module.** Module $d$ sits at $\mathbf x_d$, has geometrical area $A_d$,
+a spectral efficiency $\epsilon_d(\lambda)$ that collects quantum efficiency
+and the transmission of the glass and gel, and an angular acceptance that
+depends only on the angle between the arrival direction and the module axis.
+
+Two unit vectors describe that axis and they point opposite ways, so the
+convention is fixed once here and used without exception. The module stores
+$\hat o_d$, the direction from the module towards the hemisphere it accepts; a
+module aimed at the source has $\hat o_d$ pointing at the source. A photon
+arriving head-on therefore *travels* along
+$$
+\hat n_d=-\,\hat o_d,
+$$ {#eq-overview-orientation}
+and it is $\hat n_d$, not $\hat o_d$, that the acceptance is a function of:
+$A(\hat s\cdot\hat n_d)$ is $A(+1)$ for a head-on photon and $A(-1)$ for one
+arriving from directly behind the module. In the code $\hat o_d$ is
+`DetectorArray.orientations`, $\hat n_d$ is formed from it on one line of the
+transport routine, and @sec-optical-module shows that this is the only place
+the sign is applied.
+
+**The observable.** Collecting these,
+$$
+N_{db}=A_d\int_{t_b}^{t_{b+1}}\!\!\mathrm dt
+\int\!\mathrm d\lambda\;\epsilon_d(\lambda)
+\int_{S^2}\!\mathrm d\hat s\;A(\hat s\cdot\hat n_d)\,
+I_\lambda(\mathbf x_d,\hat s,t).
+$$ {#eq-overview-pe}
+The units cancel to a pure count: $\mathrm m^2$ from $A_d$, $\mathrm{ns}$ from
+$\mathrm dt$, $\mathrm{nm}$ from $\mathrm d\lambda$ and $\mathrm{sr}$ from
+$\mathrm d\hat s$ exhaust the units of $I_\lambda$, and $\epsilon_d$ and $A$
+are dimensionless. @eq-overview-pe is the definition of everything the package
+reports; every later chapter computes one factor of it.
+
+What is *not* in @eq-overview-pe is as important. There is no trigger, no
+single-photoelectron charge distribution, no transit-time spread beyond an
+optional Gaussian smearing, and no noise. The output is the expected
+photoelectron content of an event: the input to a readout simulation, not its
+output.
+
+## Derivation {#sec-overview-derivation}
+
+The transfer equation is linear in the source, and the medium is homogeneous
+and unbounded. Those two facts, and nothing else, are what make the
+calculation affordable; the whole scheme is their consequence.
+
+Linearity means that the intensity produced by a source $q_\lambda$ is
+$$
+I_\lambda(\mathbf x,\hat s,t)=\int\!\mathrm d^3x'\,\mathrm dt'\!\int_{S^2}\!
+\mathrm d\hat s'\;
+G_\lambda(\mathbf x-\mathbf x',\hat s,\hat s',t-t')\,
+q_\lambda(\mathbf x',\hat s',t'),
+$$ {#eq-overview-superposition}
+where the Green's function $G_\lambda$ depends on the *difference* of positions
+and times because the medium is homogeneous and does not change. An event with
+$10^5$ emitting elements is a sum of $10^5$ shifted and rotated copies of the
+same $G_\lambda$, so the event never enters the solve: it enters the
+contraction afterwards.
+
+Substituting @eq-overview-superposition into @eq-overview-pe leaves two
+angular integrals, one over the emission direction and one over the arrival
+direction. The second can be moved onto the Green's function before the source
+is known. Write the module functional as
+$$
+R_d[I]=\int_{S^2}\mathrm d\hat s\,A(\hat s\cdot\hat n_d)\,I(\mathbf x_d,\hat s),
+$$
+The adjoint formulation of @sec-fourier-adjoint expands $A$ in spherical
+harmonics and solves the small set of resolvent rows required by its measured
+bandwidth. Those rows depend on the medium, not on the event or the orientation
+of a particular module; source and module rotations enter in the later
+contraction. One medium solve can therefore serve every source position and
+module orientation.
+
+The remaining $\mathbf x$ and $t$ dependence is handled by transforming. In an
+unbounded homogeneous medium the streaming operator
+$v_g^{-1}\partial_t+\hat s\cdot\nabla$ becomes multiplication under
+$$
+\tilde f(\mathbf k,\omega)=\int f(\mathbf x,t)\,
+e^{-i\mathbf k\cdot\mathbf x+i\omega t}\,\mathrm d^3x\,\mathrm dt,
+$$ {#eq-overview-transform}
+and what is left at each $(\mathbf k,\omega)$ is an algebraic problem on the
+sphere of directions. Expanded in spherical harmonics it is tridiagonal, and
+@sec-angular-system solves it with an exact treatment of the infinite tail
+above the truncation degree rather than by discarding it.
+
+Three properties of the answer are used throughout and are worth naming here.
+First, the solution splits by **scattering order** --- light that arrived
+unscattered, light that scattered exactly once, and light that scattered twice
+or more --- and the three parts are computed by different means because they
+have different singularities, not by subtracting large numbers from each other
+(@sec-scattering-orders). Second, the unscattered and once-scattered parts are
+singular in physical time, so inverting them from a finite frequency grid is
+numerically hostile; how much of that is avoided depends on the route. The
+production route of this book --- a directed source and a module with a
+direction --- folds the finite bin analytically onto the **unscattered** part
+only, and inverts orders $1$ and $\ge2$ together from frequency. The
+point-source route with an isotropic receiver folds orders $0$ *and* $1$,
+using the closed form of the once-scattered arrival in physical time
+(@sec-time-and-bins). Where this book says "analytic binning" it names which of
+the two it means. Third, the transformed answer depends on the
+geometry only through $r=|\mathbf r|$ and a small number of angular indices,
+which is what makes a radial table --- the cache --- both possible and
+worthwhile (@sec-cache-and-memory).
+
+## The discrete algorithm {#sec-overview-algorithm}
+
+The production route runs the following steps in order. Each is expanded in the
+chapter named beside it.
+
+1. **Choose spectral nodes.** Replace $\int\mathrm d\lambda$ in
+   @eq-overview-pe by a Gauss--Legendre rule $\{\lambda_j,w_j\}$ over the band
+   where the medium and the module are both defined (@sec-rte-to-pe).
+2. **Sample the medium at each node.** Interpolate
+   $\mu_a,\mu_s,n_{\rm ph},n_g$ to $\lambda_j$; each node becomes an
+   independent monochromatic problem (@sec-spectral-rte).
+3. **Solve the angular system.** For each $(\mathbf k,\omega)$ solve the
+   tridiagonal $m$ blocks with the exact free tail for the harmonic rows required
+   by the module-acceptance bandwidth (@sec-fourier-adjoint,
+   @sec-angular-system).
+4. **Separate the scattering orders** into $0$, $1$ and $\ge2$ at the level of
+   the angular solution (@sec-scattering-orders).
+5. **Invert in $\mathbf k$ and cache.** Contract against spherical Bessel
+   functions to obtain radial multipoles on a radial grid, and store them
+   (@sec-scattering-orders, @sec-cache-and-memory).
+6. **Compile the source.** Turn the event into emitting elements carrying two
+   spectral fields, and deposit them onto a grid in the frame of the event's
+   own axis (@sec-cherenkov-source, @sec-track-and-shower).
+7. **Contract source with module.** Combine the compiled source, the cached
+   radial multipoles and the module acceptance through the exact azimuthal
+   blocks, computing the unscattered term separately from the exact arrival
+   direction of each element (@sec-directional-om).
+8. **Sum over wavelength.** Weight by $w_j$, $\epsilon_d(\lambda_j)$ and $A_d$
+   and sum over nodes, which is where @eq-overview-pe is finally assembled
+   (@sec-rte-to-pe).
+9. **Return to time.** Fold the finite bins analytically onto the unscattered
+   order and invert the scattered orders from frequency; on the point-source
+   route order $1$ is folded analytically as well (@sec-time-and-bins).
+
+One step sits outside this list because it is an optimisation rather than a
+stage of the physics: before step 7 is run at every frequency, the charge of
+every module is evaluated at $\omega=0$ alone and modules below a threshold are
+carried as charge without time bins (@sec-weak-module-threshold).
+
+## Correspondence with the code {#sec-overview-code}
+
+| Quantity | Where it appears | Symbol | Route |
+|:--|:--|:--|:--|
+| $\{\lambda_j,w_j\}$ | step 1 | `lighthit.model.WavelengthQuadrature.gauss_legendre` | both |
+| $\mu_a(\lambda),\mu_s(\lambda),n_{\rm ph}(\lambda),n_g(\lambda)$ | step 2 | `lighthit.model.SpectralMedium.sample`, `.band` | both |
+| $A_d$, $\epsilon_d(\lambda)$, $A(\cdot)$, $\hat o_d$ | @eq-overview-pe | `lighthit.model.DetectorArray` | both |
+| Measured acceptance bandwidth $L_A$ | step 3 | `lighthit.directional.acceptance_bandwidth` | both |
+| Acceptance multipoles $\alpha_\lambda$ | steps 3, 7 | `lighthit.cache.acceptance_coefficients` | both |
+| Event as emitting elements | step 6 | `lighthit.sources.SpectralLightElements` | both |
+| Angular solve, azimuthal blocks with exact free tail | step 3 | `lighthit.angular.resolvent_rows` | production |
+| Radial tables of those blocks | step 5 | `lighthit.directional.DirectionalCache.build` | production |
+| Unscattered term, exact per element | steps 7, 9 | `lighthit.ballistic.ballistic_directional` | production |
+| Angular solve split into orders $0,1,\ge2$ | steps 3--4 | `lighthit.angular.angular_components` | $m=0$ |
+| Radial multipoles $M_l(r,\omega)$ | step 5 | `lighthit.cache.ResponseCache.build` | $m=0$ |
+| Once-scattered term folded in physical time | step 9 | `lighthit.single.single_bins` | $m=0$ |
+| Frequency-to-bin inversion of the scattered orders | step 9 | `lighthit.readout.inverse_bins` | both |
+| Steps 1--9 as one call | all | `lighthit.transport.TransportKernel.transport` | both |
+| $N_{db}$, $Q_d$ and the run metadata | output | `lighthit.transport.TransportResponse` | both |
+
+Two routes are distinguished in the last column and the distinction matters
+for every chapter that follows. **Production** is the route this book follows
+end to end: a directed source read by a module that looks in a definite
+direction, which needs the azimuthal blocks of @sec-directional-om and their
+own radial tables. **$m=0$** is the route for a point isotropic source, where
+the module acceptance enters as a single multipole contraction and one
+azimuthal block suffices; it is derived first because it is simpler, it remains
+the route for a calibration flash, and it is the reference against which the
+production route is checked. Citing one where the other is meant is therefore a
+category error, not a harmless change of notation.
+
+Numerical settings that appear in the steps above --- the truncation degrees,
+the frequency and radial grids, the threshold --- are all fields of
+`lighthit.transport.KernelConfig`, and their effect on the answer is the
+subject of @sec-validation.
+
+## A worked number {#sec-overview-example}
+
+The example uses public parameters only: no measured optical table and no
+stored event file is read. A synthetic spectral medium is defined over
+400--550 nm with $g=0.9$, absorption between $0.021$ and $0.090\,\mathrm
+m^{-1}$ and scattering between $0.013$ and $0.030\,\mathrm m^{-1}$. The source
+is a straight $\beta=1$ track of length 20 m, rising along $+z$ from
+$(0,0,-10)\,\mathrm m$, which the compiler turns into 80 emitting elements with
+none dropped at the Cherenkov threshold. Five modules of radius
+$0.2159\,\mathrm m$ and flat efficiency $0.25$ carry the quadratic acceptance
+$A(x)=0.40+0.48x+0.12x^2$, which is positive on the whole interval and
+therefore band-limited exactly at Legendre degree 2.
+
+The numerical settings have production size: 41 frequencies from 0 to
+$0.15\,\mathrm{rad/ns}$, 40 bins of 20 ns spanning $-60$ to $740\,\mathrm{ns}$
+relative to the first possible arrival, scattering degree 24, source degree 32,
+azimuthal degree 4, radial range 3--300 m on 220 nodes, nine spectral nodes,
+and a threshold of $0.01$ photoelectrons. The cache's angular solve is forced to
+the NumPy reference backend for this example; the event contraction still uses
+the fused Numba implementation when Numba is installed. Reproduce with
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
+  python scripts/run_overview_example.py --output .build/overview --repeats 2
+```
+
+The listed BLAS, OpenMP and Numba thread controls are fixed to one; the exact backend
+used by each stage and all relevant package versions are recorded in
+`docs/overview-example/overview.json`. There is no warm-up, and two repetitions
+in one process must agree exactly. The route uses no random numbers, so the
+spread within one host is zero by construction; the last one or two digits may
+still differ under a different compiler or linear-algebra library. Timings are
+deliberately not quoted here: the benchmark protocol for those is
+@sec-benchmark-protocol.
+
+Integrated charge, split by scattering order:
+
+| OM | position, m | $r$, m | $Q_d$, p.e. | order 0 | order 1 | order $\ge2$ | active |
+|--:|:--|--:|--:|--:|--:|--:|:--|
+| 1 | $(25,0,-20)$ | 32.02 | $4.134\times10^{-4}$ | 0 | $6.59\times10^{-5}$ | $3.47\times10^{-4}$ | no |
+| 2 | $(25,0,0)$ | 25.00 | $7.200\times10^{-3}$ | 0 | $3.169\times10^{-3}$ | $4.031\times10^{-3}$ | no |
+| 3 | $(25,0,20)$ | 32.02 | $9.324\times10^{-1}$ | $5.205\times10^{-1}$ | $2.870\times10^{-1}$ | $1.249\times10^{-1}$ | yes |
+| 4 | $(60,0,0)$ | 60.00 | $1.264\times10^{-3}$ | 0 | $1.498\times10^{-4}$ | $1.114\times10^{-3}$ | no |
+| 5 | $(0,0,400)$ | 400.00 | --- | --- | --- | --- | no |
+
+Three features of this table are the point of the example.
+
+The unscattered term is zero for every module except one. Modules 1, 2 and 4 do
+not lie on the Cherenkov cone of this track, so no straight line carries light
+from the track to them; everything they see has been scattered at least once,
+and for modules 1 and 4 the multiply-scattered part dominates the
+once-scattered part. Module 3 lies on the cone and sees $0.52$ photoelectrons
+of direct light, which is $56\%$ of its charge. A calculation that treated
+scattered light as a correction would be wrong by orders of magnitude for three
+of the four modules that see anything.
+
+Module 5 is not computed at all. It lies 400 m away, outside the validated
+radial range of the cache, and the code does not extrapolate the radial splines
+silently. Instead it forms a deliberately pessimistic estimate of what the
+module could possibly see --- the entire light of the event emitted
+isotropically from the nearest point of the source, attenuated by absorption
+alone at the smallest absorption coefficient in the band, accepted at the peak
+of the angular response and at the peak of the spectral efficiency, and then
+multiplied by ten --- finds it below the threshold, and records
+`omitted_outside_range = 1` in the response metadata. Had the estimate been
+above the threshold the run would have stopped with an error rather than
+returning a number.
+
+This is a guard with a wide margin and not a proved upper bound. It ignores
+scattering both as a loss and as a delivery mechanism, and the factor of ten is
+a safety margin rather than a theorem. What it buys is that the decision to
+skip a module is explicit, reported and refusable, instead of a silent
+extrapolation of a spline beyond the range on which it was built.
+
+Modules 1, 2 and 4 are computed but marked inactive. Their charge is below the
+$0.01$ photoelectron threshold, so their charge is kept and their time bins are
+left at zero; the metadata reports `active_modules = 1` and
+`threshold_pe = 0.01`. The charge column is therefore complete for the four
+in-range modules while their time-bin content is not; it makes no completeness
+claim for the omitted out-of-range module. @sec-weak-module-threshold states
+exactly what that guarantee is and is not.
+
+For the one active module the time distribution peaks in the bin
+$[0,20)\,\mathrm{ns}$ after the first possible arrival, with $0.7868$
+photoelectrons in it.
+
+## Checks {#sec-overview-checks}
+
+**Reproducibility.** The transport was run twice in the same process and
+compared field by field; the two summaries are identical, which is what the
+`--repeats` argument of the script asserts. The route contains no random
+numbers, so a difference would mean a genuine defect and not noise.
+
+**Band limit of the acceptance.** The measured Legendre coefficients of
+$A(x)$ are $\alpha_0=5.52920$, $\alpha_1=2.01062$, $\alpha_2=0.20106$, with a
+residual of $3.7\times10^{-13}$ above degree 2 --- consistent with the exact
+values $2\pi\cdot0.88$, $2\pi\cdot0.32$ and $2\pi\cdot0.032$ obtained by hand
+from a quadratic. The bandwidth is measured by the code and reported as
+`detector_acceptance_degree = 2`, not assumed (@sec-directional-om).
+
+**Charge against the time window.** For module 3 the bins sum to $0.9447$
+photoelectrons against an integrated charge @eq-overview-charge of $0.9324$,
+evaluated independently at $\omega=0$; the finite window therefore holds
+$101.3\%$ of the charge. The excess is not a leak in the other direction:
+19 of the 40 bins are negative, with a total negative mass of $0.1230$
+photoelectrons, or $13\%$ of the charge. This is the ringing of a finite
+frequency grid, it is neither clipped nor renormalised, and it is a real defect
+of the present time-bin settings rather than a rounding artefact.
+@sec-time-and-bins explains where it comes from and @sec-validation treats the
+frequency grid as one line of the error budget. An integrated charge is
+therefore the reliable output of this configuration and a bin-by-bin shape is
+not, at this frequency resolution.
+
+**Spectral bookkeeping.** No source element was dropped at the Cherenkov
+threshold in this band (`source_elements_dropped_at_spectral_threshold = 0`,
+`source_coefficient_fraction_dropped = 0`). That is a statement about
+bookkeeping, not about accuracy. It says that no element of this source had to
+be discarded because $\beta n_{\rm ph}\le1$ somewhere inside the band, so
+nothing was thrown away unrecorded. It does **not** say that two spectral
+fields represent this source exactly: they reproduce the amplitude of the
+Frank--Tamm spectrum exactly, but the emission angle is held at a single
+reference phase index --- `reference_phase_index = 1.35` in this run's metadata
+--- so the dispersion of the Cherenkov angle across 400--550 nm is not
+represented at all. The size of that omission is not measured in this chapter.
+@sec-cherenkov-source states what the two-field model does and does not carry,
+and @sec-validation is where its contribution to the error budget belongs.
+
+This chapter's numbers are compared against the package's own route only. An
+independent check of the multiply-scattered order against a different method is
+the business of @sec-reference-solutions, and no claim of external validation
+is made here.
+
+## Range of validity {#sec-overview-validity}
+
+The medium must be homogeneous and unbounded. Nothing in this book applies near
+a boundary, in layered water, or where the detector structure shadows a module.
+
+An exactly computed module must lie inside the radial range of the built cache,
+with a margin equal to the spatial extent of the source. The run never
+extrapolates a radial spline. An out-of-range module is either rejected because
+its screening estimate exceeds the threshold, or omitted and reported because
+the estimate lies below it, as module 5 shows. Extending the exact range means
+rebuilding and re-validating the table.
+
+The module acceptance must be band-limited, or its truncation must be chosen
+deliberately. A polynomial acceptance terminates at a finite Legendre degree. A
+response that is clipped to zero inside the interval does not terminate,
+because clipping puts a kink in the function and the coefficients of a function
+with a discontinuous derivative fall off algebraically rather than stopping.
+The code measures the decay instead of assuming it and refuses to choose the
+truncation itself: it asks for one explicitly and reports the residual that the
+chosen truncation leaves.
+
+The source must lie above the Cherenkov threshold throughout the chosen band,
+or the elements that cross the threshold inside it must be a negligible
+fraction of the light; they cannot be represented by the two spectral fields of
+@sec-cherenkov-source, and the fraction that was dropped is reported.
+
+Finally, the observable is an expectation. It carries no fluctuation, so
+anything that depends on the variance of the photoelectron count --- a trigger
+efficiency, a likelihood built on single-photon statistics --- needs a
+distribution that this package does not provide, only its mean.
+
+## Exercises {#sec-overview-exercises}
+
+1. Verify the unit cancellation in @eq-overview-pe symbol by symbol, starting
+   from @eq-overview-intensity, and state what changes if the intensity is
+   defined without the factor $v_g$.
+2. Compute $\alpha_0$, $\alpha_1$ and $\alpha_2$ by hand for
+   $A(x)=0.40+0.48x+0.12x^2$, confirm them against @sec-overview-checks, and
+   show that every higher coefficient vanishes identically. Then replace $A$ by
+   $\max(0,\,0.36+0.52x+0.12x^2)$, which is clipped just inside $x=-1$, and
+   show numerically that its coefficients no longer terminate. Estimate the
+   power of the degree at which they fall off, and relate it to the order of
+   the derivative that the clipping makes discontinuous.
+3. Rerun the worked example with the far module moved from 400 m to 150 m and
+   predict, before running, whether it will be computed, and whether it will be
+   active.
+4. Halve the frequency step by doubling the number of frequencies at fixed
+   maximum, rerun, and report how the negative bin mass of module 3 changes.
+   State whether the integrated charge changes as well, and explain why it
+   should or should not.
+5. For module 1, estimate the ratio of the once-scattered to the
+   multiply-scattered charge from the scattering length alone, and compare with
+   the table. Explain the direction of the discrepancy.
+
+This chapter's companion is the script named in @sec-overview-example rather
+than a notebook; the notebook sequence begins with @sec-spectral-rte.

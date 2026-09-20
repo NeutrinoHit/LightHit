@@ -1,0 +1,31 @@
+# From the transfer equation to photoelectrons {#sec-rte-to-pe}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- One sequential end-to-end algorithm.
+- Nine spectral nodes.
+- The two source fields.
+- Module acceptance.
+- Integrated charge and time bins.
+- The formula-to-symbol map.
+:::
+
+## The physical question {#sec-rte-to-pe-question}
+
+## Assumptions and definitions {#sec-rte-to-pe-assumptions}
+
+## Derivation {#sec-rte-to-pe-derivation}
+
+## The discrete algorithm {#sec-rte-to-pe-algorithm}
+
+## Correspondence with the code {#sec-rte-to-pe-code}
+
+## A worked number {#sec-rte-to-pe-example}
+
+## Checks {#sec-rte-to-pe-checks}
+
+## Range of validity {#sec-rte-to-pe-validity}
+
+## Exercises {#sec-rte-to-pe-exercises}

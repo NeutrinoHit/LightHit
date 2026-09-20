@@ -1,0 +1,31 @@
+# The weak-module threshold {#sec-weak-module-threshold}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- The cheap estimate.
+- The exact $\omega=0$ guard.
+- What is guaranteed and what is not.
+- The fraction of signal that is dropped.
+- The `threshold_pe` setting.
+- Scaling with the number of modules.
+:::
+
+## The physical question {#sec-weak-module-threshold-question}
+
+## Assumptions and definitions {#sec-weak-module-threshold-assumptions}
+
+## Derivation {#sec-weak-module-threshold-derivation}
+
+## The discrete algorithm {#sec-weak-module-threshold-algorithm}
+
+## Correspondence with the code {#sec-weak-module-threshold-code}
+
+## A worked number {#sec-weak-module-threshold-example}
+
+## Checks {#sec-weak-module-threshold-checks}
+
+## Range of validity {#sec-weak-module-threshold-validity}
+
+## Exercises {#sec-weak-module-threshold-exercises}

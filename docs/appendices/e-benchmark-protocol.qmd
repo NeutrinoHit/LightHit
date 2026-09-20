@@ -1,0 +1,9 @@
+# Benchmark protocol and reproducibility {#sec-benchmark-protocol}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- What a reported number must carry: configuration, algorithm version, thread count, warm-up, repetitions, median and spread.
+- The script that reproduces each figure and each table.
+:::

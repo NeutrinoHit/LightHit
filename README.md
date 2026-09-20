@@ -1,273 +1,204 @@
 # LightHit
 
-Time-dependent light transport and detector response.
+LightHit computes the expected optical-module response to light propagating in
+a homogeneous scattering medium. It solves the time-dependent radiative
+transfer equation (RTE), including unscattered, once-scattered and
+multiply-scattered light, and returns expected photoelectrons per module and
+per time bin.
 
-First delivery: the Green's function of an instantaneous, monochromatic
-point flash and a point isotropic receiver. A **directed single photon**
-and an **isotropic single photon** are both supported. The medium is
-homogeneous and unbounded; the phase function is Henyey–Greenstein (HG).
+The medium, detector and source are ordinary Python objects. There is no global
+initialisation state, so several configurations can safely coexist in one
+program.
 
-## What the calculation returns
+LightHit is currently an alpha release. Validate numerical settings for your
+medium and geometry before using its results in an analysis.
 
-`PointGreenSolver.solve` computes the complex response spectrum per unit
-effective area, m⁻². The zero-frequency component gives the integrated
-signal ("charge"). `result.readout` gives bin integrals, m⁻²; dividing by
-the bin width gives the mean registration rate, m⁻²·ns⁻¹.
-
-Detection efficiency is 1, and sensitivity is the same in every direction.
-Area is never silently replaced by a bare number: multiplying by a small
-effective area gives the expected photon count. There is no OM surface, no
-first-entry condition, and no shadowing in this model.
-
-A directed delta flash observed exactly on its own forward ray gives a
-singular response; that request is rejected. The API treats
-$\cos\theta\ge1-10^{-12}$ as singular. Geometries that close would need a
-finite aperture or a finite angular source distribution instead. In the
-shipped demonstration the angle is 60°, so the direct light is zero and the
-whole signal is scattered. For an isotropic flash the direct light is a
-delta function in time with a finite integral; bin integrals across it are
-exact.
-
-## Install into a clean checkout
-
-Python 3.11 or newer is required. Commands below run from
-`~/Projects/LightHit`:
+## Installation
 
 ```bash
-python3 --version
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[notebook,dev]'
-python -m pytest -q
+python -m pip install lighthit
 ```
 
-None of these commands creates a Git commit or publishes anything.
-
-## A first calculation without Jupyter
+Numba acceleration is strongly recommended for tracks, showers and large
+detector arrays:
 
 ```bash
-python -m lighthit --config examples/point-green.toml \
-  --output .build/point-green --plots
+python -m pip install 'lighthit[accelerate]'
 ```
 
-With the optional acceleration dependency installed, exact first scattering
-uses its compiled scalar kernel automatically; select the compiled angular
-tail explicitly with `--angular-backend numba`.  Use `--single-backend numpy`
-to force the uncompiled reference path for a comparison.
+Python 3.11 or newer is required.
 
-Output:
+## Quick start
 
-- `.build/point-green/spectrum.npz`: frequencies and the 0, 1, ≥2 components;
-- `.build/point-green/profiles.npz`: unsmeared bins and bins with the given readout;
-- `.build/point-green/report.json`: parameters, charge, timings, diagnostics;
-- `.build/point-green/figures/`: separate profile and spectrum plots.
-
-Charge without building a time spectrum:
-
-```bash
-python -m lighthit --charge-only --repeat 3 --output .build/charge
-```
-
-A quick pass and a stricter numerical setting:
-
-```bash
-python -m lighthit --preset quick --output .build/quick --plots
-python -m lighthit --preset refined --output .build/refined --plots
-python scripts/compare_runs.py .build/point-green .build/refined
-```
-
-Numerical library threads can be pinned for comparable timings:
-
-```bash
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
-  python -m lighthit --repeat 3 --output .build/benchmark
-```
-
-`--repeat` repeats the calculation itself, not loading a saved result. All
-timings are kept in the report. This first release has no on-disk transport
-cache. Within one `solve` call, the angular solution is shared across every
-observation point.
-
-## Notebook
-
-```bash
-python -m jupyter lab notebooks/01_point_green.ipynb
-```
-
-Jupyter menu: **Run → Run All Cells**. The notebook calls the same package
-as the CLI. It shows normalization, geometry, the phase function, the
-spectral equations, charge, time profiles, error diagnostics, and timings.
-
-Non-interactive execution and HTML:
-
-```bash
-mkdir -p .build/notebook
-python -m jupyter nbconvert --to notebook --execute \
-  notebooks/01_point_green.ipynb --output 01_point_green.executed \
-  --output-dir .build/notebook --ExecutePreprocessor.timeout=600
-python -m jupyter nbconvert --to html \
-  .build/notebook/01_point_green.executed.ipynb
-```
-
-The source notebook is kept in Git without outputs. After running it,
-especially against private water, strip outputs before `git add`:
-
-```bash
-python scripts/strip_notebook_outputs.py notebooks/01_point_green.ipynb
-```
-
-`.gitignore` does not remove outputs already committed to a tracked
-notebook.
-
-## Interactive event viewer
-
-The general event viewer shows several G4 showers and point flashes in one
-standalone HTML file: 3-D detector geometry, integrated charge by scattering
-order, a selectable per-OM time histogram, a full-array time heatmap, and
-frame/cumulative animation. Signed Fourier-inversion bins are displayed with a
-signed-log colour scale and are never clipped or renormalized.
-
-With the local files under `g4_data`, run all four stored samples (event 5) and
-an isotropic laser through the shared fast Numba cache:
-
-```bash
-python -m pip install -e '.[accelerate,viewer]'
-python scripts/run_event_viewer.py --output .build/event-viewer --threads 4
-```
-
-Open `.build/event-viewer/viewer.html`. The same viewer can load another
-portable `viewer.json` through its file button. Input HDF5 files and generated
-event arrays remain local and are not package data.
-
-## Python API
+The example below defines a spectral medium, two optical modules and a
+monochromatic isotropic flash.
 
 ```python
 import numpy as np
-from lighthit import PointGreenSolver, SolverSettings, synthetic_medium
+import lighthit as lh
 
-medium = synthetic_medium()  # test values close to Baikal water, not a calibration
-solver = PointGreenSolver(medium, SolverSettings())
-omega = np.linspace(0.0, 1.2, 241)  # rad/ns; include 0 for the charge
-result = solver.solve(
-    omega,
-    displacement_m=[17.32050807568877, 0.0, 10.0],  # detector minus source, m
-    direction=[0.0, 0.0, 1.0],
+# Optical properties tabulated versus wavelength.
+medium = lh.SpectralMedium(
+    wavelength_nm=[400.0, 450.0, 500.0],
+    absorption_per_m=[0.030, 0.020, 0.040],
+    scattering_per_m=[0.030, 0.022, 0.017],
+    phase_index=[1.344, 1.339, 1.336],
+    group_index=[1.386, 1.374, 1.367],
+    g=0.9,
 )
-print(result.charge_per_m2)
-print(result.timings_s)
-front = result.front_time_ns[0]
-edges = np.arange(front - 30, front + 651, 2.0)
-raw = result.readout(edges, sigma_ns=0.0)
-measured = result.readout(edges, sigma_ns=3.0)
+
+# Response functions receive NumPy arrays and return arrays of the same shape.
+def angular_acceptance(head_on_cosine):
+    return np.ones_like(np.asarray(head_on_cosine, dtype=float))
+
+def spectral_efficiency(wavelength_nm):
+    return np.full_like(np.asarray(wavelength_nm, dtype=float), 0.20)
+
+detector = lh.DetectorArray(
+    positions_m=[[20.0, 0.0, 0.0], [35.0, 0.0, 0.0]],
+    orientations=[[-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]],
+    effective_area_m2=0.05,
+    angular_acceptance=angular_acceptance,
+    spectral_efficiency=spectral_efficiency,
+)
+
+source = lh.IsotropicFlash.monochromatic(
+    position_m=[0.0, 0.0, 0.0],
+    photons=1.0e8,
+    wavelength_nm=450.0,
+)
+
+# build() returns a reusable kernel and prepares only the tables this source
+# needs. The same kernel can then transport more compatible events.
+kernel = lh.build(medium, detector, source)
+response = kernel.transport(source)
+
+print(response.charge_pe)   # integrated expected photoelectrons, one per OM
+print(response.bins_pe)     # expected photoelectrons, shape (OM, time bin)
 ```
 
-For an isotropic flash, pass `direction=None`. For several detectors, pass
-`displacement_m` of shape `(D,3)`. Emission time is set by
-`emission_time_ns`; the number of emitted photons by `photons`. A point
-isotropic detector needs no normal vector.
+The first build may take noticeably longer than later event calculations.
+Set `KernelConfig(cache_directory=...)` to reuse transport tables across
+processes.
 
-## Private water
+## Sources
 
-The distribution contains **no** private optical tables, OM coefficients,
-event files, private output spectra, and no dependency on the older
-`baikal-rte` checkout. The adapter reads the interface known from that
-earlier project, `BaikalWater.py`; it does not import `OpticalModule.py`,
-so efficiency here stays 1.
+The high-level dispatcher accepts:
 
 ```python
-from lighthit.providers import load_bgvd_water
+flash = lh.IsotropicFlash.monochromatic(
+    position_m=[0, 0, 0], photons=1e8, wavelength_nm=450
+)
 
-medium = load_bgvd_water(
-    "/full/local/path/to/bgvd-model",
-    wavelength_nm=450.0,
-    g=0.9,  # an explicit HG choice, not read from the water coefficients
+track = lh.CherenkovTrack(
+    start_m=[0, 0, -20],
+    direction=[0.2, 0.1, 0.97],
+    length_m=40,
+    beta=1.0,
+)
+
+shower = lh.G4Shower.from_hdf5("event.h5", event=0)
+```
+
+For tracks and showers, `kernel.transport(source)` automatically selects the
+source engine and uses the detector's angular response. Research methods are
+never selected unless explicitly enabled.
+
+## Configuring the calculation
+
+Numerical settings are collected in `KernelConfig`:
+
+```python
+config = lh.KernelConfig(
+    wavelength_nodes=9,
+    threshold_pe=0.01,
+    cache_directory="lighthit-cache",
+)
+
+kernel = lh.build(medium, detector, track, config=config)
+response = kernel.transport(track)
+```
+
+Important inputs are explicit:
+
+- `SpectralMedium` contains absorption and scattering coefficients in m⁻¹,
+  phase and group refractive indices, and the Henyey–Greenstein parameter `g`.
+- `DetectorArray` contains OM positions, orientations, effective areas,
+  angular acceptance and wavelength-dependent detection efficiency.
+- A detector orientation points from the OM toward a head-on source;
+  `angular_acceptance(+1)` is the head-on response.
+- `spectral_efficiency` should include all wavelength-dependent detection
+  factors required by the application, such as quantum efficiency and optical
+  transmission.
+
+## Reading the response
+
+`kernel.transport(...)` returns a `TransportResponse`.
+
+| Attribute | Meaning |
+|---|---|
+| `charge_pe` | Integrated expected photoelectrons, shape `(OM,)` |
+| `bins_pe` | Expected photoelectrons per relative time bin, shape `(OM, bin)` |
+| `charge_components_pe` | Integrated contributions `[ballistic, one, two-or-more]` |
+| `components_pe` | The same three components per time bin |
+| `active` | OMs for which the full time spectrum was evaluated |
+| `relative_time_edges_ns` | Bin edges relative to each OM's time origin |
+| `time_origin_ns` | One absolute time origin per OM |
+| `metadata` | Method, backend and numerical diagnostics |
+
+Absolute bin edges for every module are
+
+```python
+absolute_edges_ns = (
+    response.time_origin_ns[:, None]
+    + response.relative_time_edges_ns[None, :]
 )
 ```
 
-The path may point at a checkout or at its `bgvd_model` directory. If the
-private package is installed, the path argument can be omitted.
+The integrated charge is evaluated independently at zero frequency. A finite
+time window and a finite frequency grid mean that `bins_pe.sum(axis=1)` need
+not equal `charge_pe` exactly. Signed ringing is reported rather than silently
+clipped or renormalised.
 
-For the CLI, copy a configuration to `.local-inputs/private-green.toml` and
-replace only the medium section:
+Responses can be stored as compressed NumPy files:
 
-```toml
-[medium]
-kind = "bgvd_water"
-path = "/full/local/path/to/bgvd-model"
-wavelength_nm = 450.0
-g = 0.9
+```python
+response.save("response.npz")
 ```
 
-Run it with `--config .local-inputs/private-green.toml`. Keep all results
-under `.build/`. `report.json` and the NPZ files record the coefficients
-actually used; those output files for a private medium must not be
-published. The adapter has been checked against a synthetic double of the
-interface; it has not been run against the real private package in this
-delivery.
+## Interactive viewer
 
-A run at $g=0.9$ needs its own scan of settings: numbers validated for the
-synthetic $g=0.7$ examples are not a validation of $g=0.9$ real water, and
-the (scattering degree, spatial degree, $k_{\max}$) triple that converges at
-one radius does not automatically converge at another.
-`docs/chapters/04-bgvd-water.qmd` works through this in detail: the
-constraint that actually governs convergence is the spatial multipole
-degree tracking $k_{\max}\cdot r$, not $g$ as such.
+Install the optional viewer dependency:
 
-## What exactly is solved, and where the formulas are
+```bash
+python -m pip install 'lighthit[viewer]'
+```
 
-The math is written up as a short Quarto book in `docs/`:
+Turn a response into a standalone interactive HTML file:
 
-| Chapter | Content |
-|---|---|
-| `docs/chapters/01-rte.qmd` | The radiative transfer equation, from a photon balance |
-| `docs/chapters/02-point-source.qmd` | Point source, point detector: the adjoint system, the exact free tail, spatial inversion |
-| `docs/chapters/03-histogram-binning.qmd` | Why orders 0 and 1 are binned in physical time instead of Fourier-inverted |
-| `docs/chapters/04-bgvd-water.qmd` | The solver run against measured Baikal water at 450 nm |
-| `docs/appendices/notation.qmd` | Symbol table |
-| `docs/VALIDATION.md` | Numbers from the checks that were actually run |
+```python
+payload = lh.viewer_payload(
+    response,
+    source=source,
+    event_id="flash-450nm",
+    label="450 nm calibration flash",
+)
 
-Render it with Quarto (`cd docs && quarto preview`, or `quarto render` for
-a static copy in `docs/_book/`); nothing in the book needs private data or
-Geant4.
+viewer_path = lh.write_event_viewer(payload, "lighthit-viewer.html")
+print(viewer_path)
+```
 
-| File | Contents |
-|---|---|
-| `src/lighthit/medium.py` | Parameters of one spectral node, m and ns |
-| `src/lighthit/angular.py` | Tridiagonal adjoint problem, exact free tail |
-| `src/lighthit/single.py` | Coordinate-space first order with the full HG function |
-| `src/lighthit/single_fast.py` | Optional compiled scalar kernel for the same exact first order |
-| `src/lighthit/green.py` | Radial inversion and the combined 0+1+≥2 spectrum |
-| `src/lighthit/readout.py` | Bins and instrument smearing, independent of transport |
-| `src/lighthit/viewer.py` | Standalone multi-event 3-D viewer, OM charges, time histograms and animation |
-| `src/lighthit/providers.py` | Local private-water provider |
-| `tests/` | Independent matrix, analytic, and geometric checks |
+Open `lighthit-viewer.html` in a web browser. It contains the detector geometry,
+integrated charge by scattering order, a selectable per-OM time histogram and a
+time animation. A portable `lighthit-viewer.json` companion is written beside
+the HTML file.
 
-Every collision order is included. **Orders $\ge2$ use HG coefficients only
-up to $L$**, while the exact first order uses the full HG function — an
-explicit, stated composite approximation of the full HG response, whose
-difference from the full HG answer vanishes as $L\to\infty$. Free angular
-transport is not truncated at $L$: its infinite tail is removed
-analytically. The spatial angular inversion has its own, independent degree
-$J$.
+## Scope
 
-The $k$ range and quadrature, the frequency band, and the frequency step
-are all finite as well. `quick`, `balanced`, `refined` change several
-spatial/angular settings at once; they do not fix a mathematical error
-bound. Unsmeared bins can oscillate right at the light front. The code
-keeps negative values and mass before the front; nothing is clipped or
-renormalized. Orders 0 and 1 are integrated directly in time, so their
-fronts do not depend on the chosen frequency cutoff; the inverse Fourier
-transform is applied only to the $\ge2$ part (`docs/chapters/03-histogram-binning.qmd`
-explains why).
+The current model assumes a homogeneous, unbounded medium with elastic
+Henyey–Greenstein scattering. It does not include boundaries, layered media,
+structural shadowing, polarisation, detector electronics, trigger or noise.
 
-## What is not in the first module
+## License
 
-A finite OM sphere, real acceptance and a PDE for it, cones and track
-segments, showers, spectral convolution, a general spatial cache,
-SVD/NUFFT, GPU execution, boundary surfaces, and an inhomogeneous medium.
-Measurements on the test medium do not confirm accuracy on private optics.
-
-Sources for the mathematical construction and the license status are in
-[PROVENANCE.md](PROVENANCE.md). Copyright holders and a license must be
-agreed before any publication; this delivery assigns neither.
+LightHit is distributed under the BSD 3-Clause License.

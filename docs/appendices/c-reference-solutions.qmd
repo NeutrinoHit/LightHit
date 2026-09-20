@@ -1,0 +1,10 @@
+# Independent reference solutions {#sec-reference-solutions}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Dense inverse of the finite-rank angular system.
+- Coordinate-space first scattering.
+- Angular quadratures.
+:::

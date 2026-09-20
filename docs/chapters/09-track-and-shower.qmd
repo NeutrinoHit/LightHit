@@ -1,0 +1,32 @@
+# Track and shower {#sec-track-and-shower}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- The input Geant4 contract.
+- Chords and times.
+- The event's own axis.
+- The axial grid.
+- Harmonic channels.
+- $L_s$, $M$, and the cell size.
+- Code: `lighthit.sources`, `lighthit.experimental.g4_source`, `lighthit.experimental.axial_source`.
+:::
+
+## The physical question {#sec-track-and-shower-question}
+
+## Assumptions and definitions {#sec-track-and-shower-assumptions}
+
+## Derivation {#sec-track-and-shower-derivation}
+
+## The discrete algorithm {#sec-track-and-shower-algorithm}
+
+## Correspondence with the code {#sec-track-and-shower-code}
+
+## A worked number {#sec-track-and-shower-example}
+
+## Checks {#sec-track-and-shower-checks}
+
+## Range of validity {#sec-track-and-shower-validity}
+
+## Exercises {#sec-track-and-shower-exercises}

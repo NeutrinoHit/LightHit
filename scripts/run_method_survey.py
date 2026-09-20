@@ -3,21 +3,21 @@ side -- except ``direct_response``, kept out because it is the slowest,
 most honest method and the whole point of this script is to compare the
 methods people actually run.
 
-Four things are computed on the same event, the same array, the same
+Four route families are computed on the same event, the same array, the same
 cache, and the same frequency grid:
 
 * the ballistic (order-0, unscattered) term, exact and closed-form,
   identical for every method below because none of them touch it;
 * the moment route (@sec-event-moments): block-and-fit, applied with
   ``evaluate_moments``;
-* the axial/needle route (@sec-axial-source): a compact source along the
-  shower axis, applied with ``axial_response``;
+* the axial/needle route (@sec-axial-source): both its conservative sparse
+  3-D lattice and a pure 1-D harmonic source along the shower axis;
 * method 7, the effective-segments reduction
   (``lighthit.experimental.effective_segments``): the event refit to a
   chosen number of straight pieces, applied with ``full_response``.
 
 ``direct_response`` -- the element-by-element sum -- is still used, but only
-at a handful of control modules, to score the three routes above; it is
+at a handful of control modules, to score the compact routes above; it is
 never run over the full array, which is the expense the other three exist
 to avoid. Fast paths (``spline_fast.PreparedMultipoles``,
 ``ballistic_fast.vectorised_ballistic_fast``) are used wherever available,
@@ -62,12 +62,29 @@ except ImportError:
     _fast_ballistic = vectorised_ballistic
     BALLISTIC_BACKEND = "numpy (vectorised_ballistic)"
 
+try:
+    from lighthit.experimental.axial_fast import (PreparedAxialKernel,
+                                                   compile_axial_source_fast)
+    AXIAL_BACKEND = "numba (axial_fast; both orders in one pass)"
+except ImportError:
+    PreparedAxialKernel = None
+    compile_axial_source_fast = None
+    AXIAL_BACKEND = "numpy (AxialSource.of + axial_response)"
+
 ORDERS = {"first": 0, "two_or_more": 1}
 
 
 def errors_against(value, reference):
-    error = np.abs(value - reference) / np.maximum(np.abs(reference), 1e-300)
-    return {"median": float(np.median(error)), "max": float(error.max())}
+    difference = value - reference
+    error = np.abs(difference) / np.maximum(np.abs(reference), 1e-300)
+    zero = np.abs(difference[0]) / np.maximum(np.abs(reference[0]), 1e-300)
+    return {"median": float(np.median(error)),
+            "p95": float(np.quantile(error, 0.95)),
+            "max": float(error.max()),
+            "relative_l2": float(np.linalg.norm(difference)
+                                 / max(np.linalg.norm(reference), 1e-300)),
+            "zero_frequency": {"median": float(np.median(zero)),
+                               "max": float(zero.max())}}
 
 
 def main():
@@ -86,9 +103,13 @@ def main():
     parser.add_argument("--spatial-degree", type=int, default=3,
                         help="moment route: block polynomial degree")
     parser.add_argument("--cell-m", type=float, default=0.08,
-                        help="axial route: needle cell size")
+                        help="3-D axial route: cell size")
+    parser.add_argument("--axial-1d-bins", type=int, default=64,
+                        help="pure 1-D harmonic route: longitudinal bins")
     parser.add_argument("--azimuthal-degree", type=int, default=4,
-                        help="axial route: M")
+                        help="3-D axial route: M")
+    parser.add_argument("--axial-1d-azimuthal-degree", type=int, default=8,
+                        help="pure 1-D harmonic route: M")
     parser.add_argument("--segments", type=int, default=16,
                         help="method 7: number of effective segments K")
     parser.add_argument("--cache", default=None)
@@ -201,31 +222,82 @@ def main():
           f"apply {row['first']['apply_all_seconds'] + row['two_or_more']['apply_all_seconds']:.1f} s",
           flush=True)
 
-    # -- axial route --------------------------------------------------------------
+    # -- harmonic/axial routes ----------------------------------------------------
+    # The 3-D sparse lattice is the conservative representation already used by
+    # the axial study.  The pure 1-D variant is the useful successor to method 7:
+    # it still collapses the shower onto its axis, but retains the true angular
+    # harmonics and emission phases instead of replacing every slab by one cone.
+    frame = AxisFrame.of(elements)
+    prepared_axial = (PreparedAxialKernel.from_cache(cache, degree=arguments.angular_degree)
+                      if PreparedAxialKernel is not None else None)
+    axial_factory = (compile_axial_source_fast
+                     if compile_axial_source_fast is not None else AxialSource.of)
+
+    def survey_axial(source, compile_seconds):
+        row = {"backend": AXIAL_BACKEND, "compile_seconds": compile_seconds,
+               "cells": source.summary["cells"],
+               "source_megabytes": source.channels.nbytes / 2 ** 20}
+        if prepared_axial is not None:
+            began = perf_counter()
+            control_both = prepared_axial.apply(
+                source, control, source_omega_per_ns=omega)
+            row["apply_control_seconds"] = perf_counter() - began
+            began = perf_counter()
+            all_both = prepared_axial.apply(
+                source, receivers, source_omega_per_ns=omega)
+            row["apply_all_seconds"] = perf_counter() - began
+            row["apply_note"] = "both scattered orders share this one pass"
+            values = {name: (control_both[:, :, index], all_both[:, :, index])
+                      for index, name in enumerate(kernels)}
+        else:
+            values = {}
+            control_seconds = all_seconds = 0.0
+            for name, kernel in kernels.items():
+                began = perf_counter()
+                value_control = axial_response(kernel, source, control)
+                control_seconds += perf_counter() - began
+                began = perf_counter()
+                value_all = axial_response(kernel, source, receivers)
+                all_seconds += perf_counter() - began
+                values[name] = (value_control, value_all)
+            row["apply_control_seconds"] = control_seconds
+            row["apply_all_seconds"] = all_seconds
+            row["apply_note"] = "sum of the two separate scattered-order passes"
+        scattered_total = 0.0
+        for name, (value_control, value_all) in values.items():
+            row[name] = {"error": errors_against(value_control, reference[name]),
+                         "all_receivers_total": float(value_all[0].real.sum())}
+            scattered_total += row[name]["all_receivers_total"]
+        row["scattered_all_receivers_total"] = scattered_total
+        return row
+
     began = perf_counter()
-    source = AxialSource.of(elements, arguments.angular_degree, omega,
-                            azimuthal_degree=arguments.azimuthal_degree,
-                            cell_m=arguments.cell_m, deposit="linear",
-                            element_order=2, frame=AxisFrame.of(elements))
-    row = {"compile_seconds": perf_counter() - began, "cells": source.summary["cells"]}
-    scattered_total = 0.0
-    for name, kernel in kernels.items():
-        began = perf_counter()
-        value_control = axial_response(kernel, source, control)
-        apply_control = perf_counter() - began
-        began = perf_counter()
-        value_all = axial_response(kernel, source, receivers)
-        apply_all = perf_counter() - began
-        row[name] = {"apply_control_seconds": apply_control, "apply_all_seconds": apply_all,
-                    "error": errors_against(value_control, reference[name]),
-                    "all_receivers_total": float(value_all[0].real.sum())}
-        scattered_total += row[name]["all_receivers_total"]
-    row["scattered_all_receivers_total"] = scattered_total
+    source = axial_factory(elements, arguments.angular_degree, omega,
+                           azimuthal_degree=arguments.azimuthal_degree,
+                           cell_m=arguments.cell_m, deposit="linear",
+                           element_order=2, frame=frame)
+    row = survey_axial(source, perf_counter() - began)
     methods["axial"] = row
-    print(f"axial: first {row['first']['error']['median']:.2e}, "
+    print(f"axial 3-D: first {row['first']['error']['median']:.2e}, "
           f">=2 {row['two_or_more']['error']['median']:.2e} median error, "
-          f"apply {row['first']['apply_all_seconds'] + row['two_or_more']['apply_all_seconds']:.1f} s",
-          flush=True)
+          f"apply {row['apply_all_seconds']:.2f} s ({AXIAL_BACKEND})", flush=True)
+    del source
+
+    began = perf_counter()
+    source = axial_factory(elements, arguments.angular_degree, omega,
+                           azimuthal_degree=arguments.axial_1d_azimuthal_degree,
+                           cell_m=None, bins=arguments.axial_1d_bins,
+                           transverse_m=None, deposit="linear",
+                           element_order=2, frame=frame)
+    row = survey_axial(source, perf_counter() - began)
+    row["longitudinal_bins_requested"] = arguments.axial_1d_bins
+    row["azimuthal_degree"] = arguments.axial_1d_azimuthal_degree
+    methods["axial_1d"] = row
+    print(f"axial 1-D ({arguments.axial_1d_bins} bins, "
+          f"M={arguments.axial_1d_azimuthal_degree}): first "
+          f"{row['first']['error']['median']:.2e}, >=2 "
+          f"{row['two_or_more']['error']['median']:.2e} median error, "
+          f"apply {row['apply_all_seconds']:.3f} s ({AXIAL_BACKEND})", flush=True)
     del source
 
     # -- method 7: effective segments ----------------------------------------------
@@ -262,12 +334,12 @@ def main():
     print(f"effective_segments (K={arguments.segments}): first "
           f"{row['first']['error']['median']:.2e}, >=2 "
           f"{row['two_or_more']['error']['median']:.2e} median error, ballistic "
-          f"deviation {ballistic_match:.1e}", flush=True)
+          f"deviation {ballistic_match:.1e}, apply {apply_all_seconds:.2f} s", flush=True)
 
     report["methods"] = methods
     report["excluded"] = {
         "direct_response": ("the element-by-element sum -- the most honest and "
-                            "slowest method. Used above only to score the three "
+                            "slowest method. Used above only to score the compact "
                             "methods at the control modules; deliberately not run "
                             "over the full array, which is the cost the methods "
                             "above exist to avoid.")}

@@ -1,0 +1,30 @@
+# The optical module and the observable {#sec-optical-module}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Geometrical area.
+- $\mathrm{efficiency}(\lambda)$ and $\mathrm{transmission}(\lambda)$.
+- Angular acceptance.
+- Module orientation and the sign conventions that go with it.
+- From flux to expected photoelectrons.
+:::
+
+## The physical question {#sec-optical-module-question}
+
+## Assumptions and definitions {#sec-optical-module-assumptions}
+
+## Derivation {#sec-optical-module-derivation}
+
+## The discrete algorithm {#sec-optical-module-algorithm}
+
+## Correspondence with the code {#sec-optical-module-code}
+
+## A worked number {#sec-optical-module-example}
+
+## Checks {#sec-optical-module-checks}
+
+## Range of validity {#sec-optical-module-validity}
+
+## Exercises {#sec-optical-module-exercises}

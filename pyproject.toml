@@ -4,11 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lighthit"
-version = "0.1.0.dev1"
-description = "Time-dependent light transport and detector response"
+version = "0.2.0a5"
+description = "Spectral radiative-transfer response for neutrino-telescope optical modules"
 readme = "README.md"
+license = {text = "BSD-3-Clause"}
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26", "scipy>=1.11"]
+authors = [{name = "Dmitry Naumov"}]
+keywords = ["radiative transfer", "neutrino telescope", "Cherenkov", "Baikal-GVD"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: BSD License",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Physics",
+]
 
 [project.optional-dependencies]
 accelerate = ["numba>=0.61"]
@@ -19,8 +31,12 @@ dev = ["pytest>=8", "build>=1"]
 [project.scripts]
 lighthit = "lighthit.cli:main"
 
+[project.urls]
+Repository = "https://github.com/NeutrinoHit/LightHit"
+
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["lighthit*"]
 
 [tool.setuptools.package-data]
 lighthit = ["py.typed", "assets/*.html", "assets/*.js", "assets/*.css"]

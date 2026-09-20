@@ -1,0 +1,32 @@
+include README.md
+include LICENSE
+include setup.py
+include packaging_filter.py
+include pyproject.toml
+include examples/production_laser.py
+include examples/production_track.py
+include examples/production_shower.py
+recursive-include src/lighthit *.py py.typed *.html *.js *.css
+# The sdist carries what the wheel carries: an allowlist, so that a new
+# experimental module is out by default rather than in until someone
+# remembers to exclude it. Keep this set equal to
+# packaging_filter.REQUIRED_EXPERIMENTAL; tests/test_packaging.py checks that
+# the two agree.
+prune src/lighthit/experimental
+include src/lighthit/experimental/__init__.py
+include src/lighthit/experimental/axial_fast.py
+include src/lighthit/experimental/axial_source.py
+include src/lighthit/experimental/ballistic_fast.py
+include src/lighthit/experimental/event_moments.py
+include src/lighthit/experimental/g4_source.py
+include src/lighthit/experimental/hdf5_minimal.py
+prune docs
+prune notebooks
+prune slides
+prune scripts
+prune tests
+prune g4_data
+prune .build
+prune results
+prune preview
+global-exclude *.py[cod] __pycache__ .DS_Store

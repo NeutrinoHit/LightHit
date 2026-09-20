@@ -1,0 +1,10 @@
+# Catalogue of scripts, tests and file formats {#sec-catalogue}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Scripts and what each one produces.
+- Tests and what each one pins down.
+- On-disk formats of caches and stored responses.
+:::

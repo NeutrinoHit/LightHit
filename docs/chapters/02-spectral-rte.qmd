@@ -1,0 +1,30 @@
+# The spectral transfer equation {#sec-spectral-rte}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- The photon balance in a small volume.
+- Absorption, scattering and the source term.
+- Henyey-Greenstein scattering with an explicit $g$.
+- Phase and group refractive index, and which one enters where.
+- Normalisations and units, fixed once for the whole book.
+:::
+
+## The physical question {#sec-spectral-rte-question}
+
+## Assumptions and definitions {#sec-spectral-rte-assumptions}
+
+## Derivation {#sec-spectral-rte-derivation}
+
+## The discrete algorithm {#sec-spectral-rte-algorithm}
+
+## Correspondence with the code {#sec-spectral-rte-code}
+
+## A worked number {#sec-spectral-rte-example}
+
+## Checks {#sec-spectral-rte-checks}
+
+## Range of validity {#sec-spectral-rte-validity}
+
+## Exercises {#sec-spectral-rte-exercises}

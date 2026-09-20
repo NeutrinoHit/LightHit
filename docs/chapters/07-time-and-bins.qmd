@@ -1,0 +1,31 @@
+# Time, bins and oscillations {#sec-time-and-bins}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- The inverse transform.
+- The singular orders 0 and 1.
+- Exact physical binning.
+- The role of the frequency range and step.
+- Ringing and negative bins.
+- Choosing the grid in practice.
+:::
+
+## The physical question {#sec-time-and-bins-question}
+
+## Assumptions and definitions {#sec-time-and-bins-assumptions}
+
+## Derivation {#sec-time-and-bins-derivation}
+
+## The discrete algorithm {#sec-time-and-bins-algorithm}
+
+## Correspondence with the code {#sec-time-and-bins-code}
+
+## A worked number {#sec-time-and-bins-example}
+
+## Checks {#sec-time-and-bins-checks}
+
+## Range of validity {#sec-time-and-bins-validity}
+
+## Exercises {#sec-time-and-bins-exercises}

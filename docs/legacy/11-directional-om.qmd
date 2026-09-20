@@ -1,0 +1,417 @@
+# A module that looks somewhere {#sec-directional-om}
+
+@sec-axial-source compressed the source and left the kernel alone. It left one
+thing alone that it should not have: the module. Every scattered photon in that
+chapter was accepted as if it had arrived along the line from the source
+centroid,
+
+```python
+angular = self.detector.angular_weight(elements.centroid_m)   # one scalar per OM
+scale_area = self.detector.effective_area_m2 * angular
+```
+
+and the metadata said so plainly --- *"source-centroid direction for all axial
+components; exact arbitrary directional-OM axial transport is not yet
+implemented"*. This chapter implements it.
+
+The reason it was left is worth stating before the fix, because it is the whole
+difficulty. A problem with **one** preferred direction separates: a directed
+flash read by an isotropic detector, or an isotropic flash read by a directed
+detector, are both a single sum over multipoles $M_l(r)$, and they are the
+*same* $M_l$. A real event is directed and a real module looks somewhere, so
+there are two preferred directions at once, and the integral over the direction
+of $\mathbf k$ no longer collapses by Gegenbauer's theorem. What replaces it is
+an exact factorisation, not an expansion in anything small.
+
+Nothing here changes the medium ($g=0.9$ Henyey--Greenstein), the Fourier
+convention $e^{+i\omega t}$, the two-field spectral source, or the existing
+normalisations. The isotropic path is bit-for-bit what it was.
+
+## What the module actually sees {#sec-directional-what}
+
+A module with acceptance $A$ and axis $\hat n$ measures
+
+$$R(\mathbf r)=\int d\hat s\;A(\hat s\cdot\hat n)\,I(\mathbf r,\hat s),$$
+
+an integral over the *arrival* direction. The centroid approximation replaces
+$A(\hat s\cdot\hat n)$ by its value at one $\hat s$. For unscattered light that
+is nearly right, because the arrival direction really is nearly the line to the
+emitting element --- and even there it is not exactly right, since a Cherenkov
+cone photon leaves from a point along the chord and not from the centroid. For
+scattered light it is not right at all: the arrival direction has a
+distribution, and that distribution depends on distance and on frequency.
+
+## Conventions {#sec-directional-conventions}
+
+Real orthonormal harmonics $\tilde Y_{lm}$ throughout the code, the ones
+`event_moments.real_spherical_harmonics` and its fused twin
+`axial_fast._harmonics_into` already build; complex $Y_{lm}$ with the
+Condon--Shortley phase in the derivation, converted once. Normalised Legendre
+$p_l=\sqrt{(2l+1)/2}\,P_l$ as in `angular.py`. Acceptance coefficients
+$\alpha_\lambda=2\pi\int A P_\lambda\,dx$, so an isotropic module of unit
+efficiency has $\alpha_0=4\pi$ and nothing else --- exactly
+`cache.acceptance_coefficients`.
+
+One sign is fixed once and never again. `DetectorArray.orientations` points
+*towards* the source, so a photon travelling along $\hat s$ arrives head-on
+when $\hat s=-\,$`orientation`. The derivation uses the *viewing* direction
+$\hat n=-\,$`orientation`, and the conversion happens on one line of
+`transport._transport_directional`.
+
+$L$ is the scattering truncation, $L_s$ the source degree, $M$ the source
+azimuthal degree, $L_A$ the **acceptance bandwidth** --- and $L_A$ is measured,
+not assumed (@sec-directional-bandwidth).
+
+## The azimuthal blocks {#sec-directional-blocks}
+
+In $k$-space, for each $\mathbf k$, put the polar axis along $\hat k$. Streaming
+is then multiplication by $\mu=\hat s\cdot\hat k$ and Henyey--Greenstein is
+diagonal in $(l,m)$, so both operators are diagonal in $m$ and the angular
+system splits:
+
+$$(d_0-\gamma_l)h_{lm}+ik\,a_{lm}h_{l-1,m}+ik\,a_{l+1,m}h_{l+1,m}=A_{lm},
+\qquad a_{lm}=\sqrt{\frac{l^2-m^2}{4l^2-1}},$$
+
+for $l\ge|m|$, with $\gamma_l=\sigma_s g^l$ up to $L$ and zero above. Three
+properties follow and all three are used.
+
+**The block begins at $l=|m|$.** The coupling downwards vanishes by itself,
+$a_{|m|,m}=0$, so the system has $L-|m|+1$ rows rather than $L+1$.
+
+**The matrix is complex symmetric**, $A_{l,l-1}=A_{l-1,l}=ik\,a_{lm}$. Its
+resolvent is therefore symmetric, $G^{(m)}_{\lambda l}=G^{(m)}_{l\lambda}$: one
+solve serves the source index and the detector index alike. This is the sense
+in which `angular.py` was always computing an *adjoint* Green coefficient ---
+today's $h_l$ is the zeroth column of the $m=0$ block, and equally its zeroth
+row.
+
+**$G^{(m)}=G^{(-m)}$**, because $a_{lm}$ depends on $m^2$. That is a derivation,
+not a convention, and it is what lets the sum over $\pm\nu$ fold in
+@sec-directional-inversion.
+
+Orders of scattering split as before: with $\Gamma=\operatorname{diag}\gamma_l$,
+$G_0$ the free resolvent and $G$ the full one,
+
+$$\text{first}=G_0\Gamma G_0,\qquad
+\text{$\ge 2$}=G\Gamma G_0\Gamma G_0=G-G_0-G_0\Gamma G_0,$$
+
+and the right-hand form shows the second operator is symmetric too, being a
+difference of symmetric ones.
+
+## The free tail, without dividing two underflows {#sec-directional-tail}
+
+Above $L$ the right-hand side vanishes and the recurrence is homogeneous. With
+$z=i d_0/k$,
+
+$$a_{l+1,m}y_{l+1}=z\,y_l-a_{lm}y_{l-1},$$
+
+which is the three-term recurrence of associated Legendre functions in degree.
+Its two solutions are the normalised $\hat P_{lm}(z)$, which grows, and
+$\hat Q_{lm}(z)$, which decays; the physical one is the minimal solution, and at
+$m=0$ it is exactly what `angular.py` already computes, since
+$\int_{-1}^{1}P_l(\mu)\,d\mu/(d_0+ik\mu)=-2Q_l(z)/(ik)$.
+
+The ratio $R^{(m)}_l=\hat Q_{l+1,m}/\hat Q_{lm}$ obeys the downward continued
+fraction
+
+$$R^{(m)}_{l-1}=\frac{a_{lm}}{z-a_{l+1,m}R^{(m)}_{l}},$$
+
+and here is why the branch needs no choosing. Asymptotically $a_{lm}\to 1/2$ and
+the recurrence degenerates to $y_{l+1}-2zy_l+y_{l-1}=0$ with roots
+$\rho^{\pm1}$, $|\rho|<1$. Iterated *downwards*, the map above has the minimal
+solution as its attracting fixed point (Pincherle), so any seed at depth $D$
+leaves an error of order $|\rho|^{2(D-l)}$ and the decaying solution is selected
+by the direction of the iteration. `tail_ratios_continued_fraction` does exactly
+this, with the depth taken from the measured $\eta=-\ln|\rho|$.
+
+That alone is enough but not fast enough: at large $k$, $\eta\approx\sigma_t/k$
+and the needed depth runs into thousands of steps per node. The existing $m=0$
+code avoids it by a forward recurrence from the closed form
+$m_0=2\arctan(k/d_0)/k$; for $m\ne0$ there is no closed form. Instead we raise
+$m$ exactly. The associated-Legendre relation
+
+$$X_l^{m+1}(z)=(z^2-1)^{-1/2}\bigl[(l-m)zX_l^m(z)-(l+m)X_{l-1}^m(z)\bigr]$$
+
+holds for both kinds, so it maps the minimal solution to the minimal solution.
+Written purely in ratios --- which is the point ---
+
+$$v^{(m)}_l=(l-m)z-(l+m)\,b_l\big/R^{(m)}_{l-1},\qquad
+b_l=\sqrt{\frac{(2l+1)(l-m)}{(2l-1)(l+m)}},$$
+
+$$R^{(m+1)}_l=\sqrt{\frac{(l-m)(l+m+1)}{(l+1-m)(l+m+2)}}\;
+\frac{v^{(m)}_{l+1}}{v^{(m)}_l}\;R^{(m)}_l .$$
+
+Ratios go in and ratios come out; nothing underflowing is ever divided by
+anything underflowing, and $(z^2-1)^{-1/2}$ cancels and is never formed, so no
+branch of a square root enters. A zero of $\hat Q_{l,m+1}$ would make $v$ small;
+`free_tail_ratios_m` measures $|v|$ against the larger of its two terms and
+falls back to the continued fraction on those nodes, reporting how many.
+
+**Measured.** Against a continued fraction run to depth $40\,000$, over
+$k\in[0.02,8]\,\mathrm m^{-1}$ (that is $|\rho|$ from $0.35$ to $0.994$) and
+$\omega\in\{0,0.15\}$: worst relative difference $1.5\times10^{-14}$ for
+$m=1,2,3$, with **zero** fallback nodes. The selection of the decaying branch
+is checked separately by closing the recurrence on the returned ratios: residual
+$10^{-12}$, and the solution decays.
+
+## The module fixes the output degree {#sec-directional-bandwidth}
+
+Expanding $A$ and using the addition theorem,
+
+$$\int d\hat s\,A(\hat s\cdot\hat n)\tilde I(\mathbf k,\hat s)
+=\sum_{\lambda\le L_A}\alpha_\lambda\sum_{\nu}
+ Y_{\lambda\nu}\bigl(\hat n^{(k)}\bigr)h_{\lambda\nu}(\mathbf k).$$
+
+Two consequences carry the whole cost argument. The **output** degree is bounded
+by the acceptance bandwidth, not by the source degree: only $L_A+1$ rows of the
+resolvent are needed. And only blocks with $|\nu|\le L_A$ appear, because
+$|\nu|\le\lambda$. For a cubic module that is four distinct blocks and ten pairs
+$(\lambda,|\nu|)$ instead of one.
+
+Whether a module response really is cubic is a question about the data, and
+`directional.acceptance_bandwidth` answers it by measurement: it returns the
+largest degree above tolerance and the largest coefficient above that degree.
+A response of the form $\max(\text{polynomial},0)$ whose polynomial dips below
+zero inside $[-1,1]$ is **not** band-limited --- the clip puts a kink in it and
+the coefficients decay only algebraically. In that case the measured bandwidth
+runs into the probe range, and `TransportKernel.acceptance` refuses rather than
+truncating silently; `KernelConfig.acceptance_degree` accepts a truncation
+explicitly and the reported residual says how big a one.
+
+## The integral over $\hat k$ {#sec-directional-inversion}
+
+This is the part that does not separate. The source moments and the module axis
+both have to be expressed in each $\hat k$ frame, so the integrand depends on
+$\hat k$ through two rotated objects.
+
+Write both rotations as Wigner $D$ matrices and use the Clebsch--Gordan series
+on the product; $D^J_{M0}(R_k)=\sqrt{4\pi/(2J+1)}\,Y^*_{JM}(\hat k)$ collapses
+the whole $\hat k$ dependence onto a **single** harmonic of degree
+$J\in[\,|l-\lambda|,\,l+\lambda\,]$, and the familiar
+$\int d\hat k\,e^{i\mathbf k\cdot\mathbf r}Y^*_{JM}(\hat k)
+=4\pi i^J j_J(kr)Y^*_{JM}(\hat r)$ finishes it.
+
+Two things then happen that decide the cost. The sum over the block index $\nu$
+**factorises out of the geometry**, because the Clebsch--Gordan coefficient
+carrying the magnetic indices does not depend on $\nu$:
+
+$$g_{\lambda lJ}(k,\omega)=\sum_\nu(-1)^\nu
+\langle\lambda\nu;l,-\nu|J0\rangle\,G^{(\nu)}_{\lambda l}(k,\omega),$$
+
+one scalar per *triple*, not per quadruple. And a **parity rule** appears: from
+$\langle\lambda,-\nu;l,\nu|J0\rangle=(-1)^{\lambda+l-J}
+\langle\lambda\nu;l,-\nu|J0\rangle$ together with $G^{(\nu)}=G^{(-\nu)}$, the
+folded sum vanishes unless $l+\lambda+J$ is even. Measured directly on the
+coefficients: the largest odd-parity value is $2.2\times10^{-16}$. It is a
+property of the algebra, not a filter imposed on it.
+
+Finally, take the polar axis along $\hat r$. Then $Y^*_{JM}(\hat r)\propto
+\delta_{M0}$, the double sum over magnetic indices collapses to one, and with
+
+$$t_{l\lambda\mu}(r,\omega)=\frac{1}{2\pi^2}\sum_J i^J
+(-1)^\mu\langle\lambda\mu;l,-\mu|J0\rangle
+\int k^2 j_J(kr)\,g_{\lambda lJ}(k,\omega)\,dk$$
+
+the response is
+
+$$\boxed{\;R(\mathbf r)=\sum_{l\le L_s}\sum_{\lambda\le L_A}
+\sum_{|\mu|\le\min(l,\lambda)}
+\alpha_\lambda\,t_{l\lambda|\mu|}(r,\omega)\,
+\tilde Y_{\lambda\mu}\bigl(\hat n^{(\hat r)}\bigr)\,
+\tilde S_{l\mu}^{(\hat r)}(\omega)\;}$$
+
+with every harmonic in the frame whose polar axis is $\hat r$. The azimuth of
+that frame is arbitrary: only the difference of the source and module azimuths
+enters, which is why $t$ depends on $|\mu|$ and the whole apply stays in real
+arithmetic apart from the frequency phase.
+
+### Where the old cache sits inside the new one {#sec-directional-containment}
+
+Set $\lambda=0$: then $\nu=0$ and $J=l$, and $t_{l00}=M_l/\sqrt{2l+1}$ --- the
+present cache for a directed source and an isotropic module. Set $l=0$: then
+$\mu=0$ and $J=\lambda$, and the same array reappears for an isotropic flash and
+a directed module. Today's code uses one array for both cases; that is not a
+coincidence but $G^{(0)}_{0l}=G^{(0)}_{l0}$. The new table contains the old one
+as its two boundary rows, and the test asserting it agrees to
+$2\times10^{-15}$ is the first thing that runs.
+
+## Two references, at two distances {#sec-directional-references}
+
+| | what it shares with production | what it replaces |
+|---|---|---|
+| `khat_quadrature_response` | the $m$-block solve | the Clebsch--Gordan contraction, the parity rule, the $\hat r$-frame collapse --- all replaced by an explicit numerical integral over $\hat k$ with the rotations done by hand at each node |
+| `dense_angular_reference` | nothing but the physics | the blocks as well: it builds $\langle Y_{lm}|\hat s|Y_{l'm'}\rangle$ by quadrature, assembles the full lab-frame matrix for every $(k,\hat k)$ and inverts it |
+| `axisymmetric_reference` | the $m$-block solve | the geometry: source axis, module axis and displacement on one line, so the azimuthal integral is exactly $2\pi$ |
+
+The third deserves a remark, because it is the one that is easy to get wrong.
+Even when the whole geometry is axisymmetric, the blocks $\nu\ne0$ still
+contribute --- the polar axis of each node frame is $\hat k$, not the symmetry
+axis. A reference that dropped them would agree with a production path that
+dropped them too, and the test would prove nothing.
+
+**Measured.** Production against the $\hat k$ quadrature:
+$5.9\times10^{-16}$ at $\omega=0$ and $1.5\times10^{-14}$ at $\omega=0.07$.
+The two references against each other, as the dense truncation degree rises:
+
+| dense degree | $\omega=0$ | $\omega=0.08$ |
+|---:|---|---|
+| 4 | $6.2\times10^{-4}$ | $1.3\times10^{-4}$ |
+| 8 | $1.4\times10^{-7}$ | $4.4\times10^{-9}$ |
+| 12 | $5.9\times10^{-11}$ | $3.5\times10^{-13}$ |
+
+The residual at degree 4 is the dense route's own hard truncation --- it has no
+tail closure --- and it converges away, which is the statement that the closure
+is right.
+
+## Every formula, and where it lives {#sec-directional-map}
+
+| formula | function or class |
+|---|---|
+| $a_{lm}$ | `angular.coupling_coefficients` |
+| the block system, Schur-closed | `angular.solve_tail_system_m` |
+| continued fraction (CF) | `angular.tail_ratios_continued_fraction` |
+| raising in $m$, with the guard | `angular.free_tail_ratios_m` |
+| $G^{(m)}_{\lambda l}$, orders 1 and $\ge2$ | `angular.resolvent_rows` |
+| dense block, no closure | `angular.dense_block_reference` |
+| $\alpha_\lambda$, and measuring $L_A$ | `cache.acceptance_coefficients`, `directional.acceptance_bandwidth` |
+| $\langle\cdot\rangle$, parity, $(\lambda,l,J)$ and $(\lambda,|\mu|)$ tables | `directional.CouplingTable` |
+| $g_{\lambda lJ}\to M_{\lambda lJ}\to t_{l\lambda\mu}$ | `directional.DirectionalCache.build` |
+| radial lookup, detrended and phase-corrected | `directional.DirectionalCache.coefficients_at` |
+| $d^l_{\mu\nu}(\theta)$ | `directional.wigner_small_d` |
+| $E^l_{\nu\mu}$, complex construction | `directional.real_rotation_rows` |
+| $E^l_{\nu\mu}$, the real arithmetic the kernel performs | `directional.rotation_rows_explicit` |
+| the boxed formula, numpy | `directional.directional_response` |
+| the boxed formula, fused | `_directional_numba.PreparedDirectionalKernel.apply` |
+| unscattered light, exact arrival direction | `ballistic.ballistic_directional`, `ballistic_fast.ballistic_directional_fast` |
+| production entry point | `transport.TransportKernel._transport_directional` |
+| references | `experimental.directional_reference` |
+
+## Complexity and memory {#sec-directional-cost}
+
+Counting at $L_s=32$, $M=4$, $L_A=3$, $L=24$:
+
+| object | $m=0$ route | directional route | factor |
+|---|---:|---:|---|
+| distinct angular blocks | 1 | 4 | 4 |
+| right-hand sides per block | 1 | $L_A+1-|m|$ | 10 in total |
+| cached numbers per degree | 1 | 10 | 10 |
+| $(\lambda,l,J)$ triples | 33 | 320 | 9.7 |
+| harmonics per (cell, receiver) | $\mathcal O(L_sM)$ | $+\;d^l_{\nu\mu}$, $(2L_A{+}1)(M{+}1)$ per $l$ | --- |
+
+The parity rule is what keeps the cache at ten numbers per degree rather than
+sixteen; it is applied when $M_{\lambda lJ}$ is folded into $t_{l\lambda\mu}$,
+so the stored array never carries the odd triples at all.
+
+At the production grid --- 220 radii, 41 frequencies, 2000 $k$ nodes --- the
+stored table is $(41,220,33,10,2)$ complex, $95.3$ MB per wavelength against
+$9.5$ MB for the $m=0$ cache. The prepared spline used by the fused kernel is
+four cubic coefficients per interval, about $4\times$ that again, so the
+production loop builds it one wavelength at a time and discards it rather than
+holding nine.
+
+## Measured {#sec-directional-measured}
+
+Machine: two cores, 7 GB, numpy 2.4.4, scipy 1.17.1, **no numba** (no route to
+PyPI from that machine), so the table below times the numpy path only. The
+fused kernels were compiled and measured separately, on the author's machine,
+and those numbers are in @sec-directional-numba-measured; the numpy path is
+what the fused kernel is asserted equal to in
+`tests/test_directional_numba.py`. `scripts/benchmark_directional.py` runs
+every stage on whichever backends are present and labels each pair with both.
+
+Settings: $L=24$, $L_s=32$, $M=4$, $L_A=3$, $k_{\max}=8\,\mathrm m^{-1}$ with
+2000 nodes, 220 radii from 3 to 300 m, 41 frequencies.
+
+| stage | $m=0$ route | directional | factor | target |
+|---|---:|---:|---:|---|
+| angular solve, 41 frequencies | $0.375\,\mathrm s$ | $2.949\,\mathrm s$ | $7.9\times$ | $\approx 8\times$ |
+| cache build, one wavelength | $7.45\,\mathrm s$ | $17.00\,\mathrm s$ | $2.3\times$ | --- |
+| cache size, one wavelength | $9.53\,\mathrm{MB}$ | $95.3\,\mathrm{MB}$ | $10.0\times$ | $\le 16\times$ |
+| apply, numpy, per module | $0.129\,\mathrm s$ | $0.836\,\mathrm s$ | $6.5\times$ | $\approx 10\times$ |
+
+Peak RSS: $538$ MiB for the cache build, $2.37$ GiB for the numpy apply on
+eight modules (the dominant term there is the prepared spline of the cache, not
+the kernel). The apply row is 372 source cells and 41 frequencies per module.
+
+### With numba, on the author's machine {#sec-directional-numba-measured}
+
+The numbers above are numpy against numpy. Compiled, and at production size:
+
+| quantity | measured |
+|---|---:|
+| directional apply, numba against numpy | $\approx 22\times$ faster |
+| directional apply against the $m=0$ apply, both numba | $\approx 9.8\times$ |
+| fused kernel against its numpy twin | $7.5\times10^{-15}$ relative |
+| full suite | 322 passed, including real G4 files |
+| $m$-block and fused-kernel tests | 46 passed |
+| BGVD module response | $L_A=3$, clip inactive, residual $3.4\times10^{-14}$ |
+| joint rotation, 2304 modules | $1.4\times10^{-14}$ |
+| turning the modules over, 2304 modules | signal changes by $\approx95\%$ |
+
+The second row is the one that matters and the one that is easy to get wrong.
+An early version of `scripts/benchmark_directional.py` timed the *fused*
+directional apply against the *numpy* $m=0$ route and so appeared to show the
+new method beating the old one, which it does not and cannot: it was measuring
+a compiler against an interpreter and calling the difference physics. The
+script now names both backends of every pair it reports and never mixes them.
+
+Source compilation is untouched --- the same compiler, the same lattice, the
+same channels --- and measured at $0.107\,\mathrm s$ for 372 cells and 277
+channels with the numpy compiler.
+
+One number is worth keeping, because it was the entire bottleneck at first.
+Built naively, with the Bessel table rebuilt inside the frequency loop, the
+directional cache took $147\,\mathrm s$ of which $133\,\mathrm s$ was
+`spherical_jn`: a $20\times$ factor that had nothing to do with the physics.
+Hoisting the table out --- the same thing `ResponseCache.build` already did ---
+left $17\,\mathrm s$, of which $11.2\,\mathrm s$ is the contraction and
+$2.9\,\mathrm s$ the angular solve. The lesson generalises: the new route adds
+indices to the contraction, so anything that was previously amortised over
+frequencies has to stay amortised.
+
+## What is still approximate {#sec-directional-remaining}
+
+* the source lattice: cells of `cell_m` along the axis and across it, and the
+  azimuthal truncation at $M$ --- unchanged from @sec-axial-source, and
+  unchanged by this chapter;
+* the acceptance is band-limited at $L_A$. For a genuinely cubic module this is
+  exact; for a clipped one it is a truncation, and the code refuses to make it
+  silently;
+* the two-field spectral source and the cone frozen at the reference phase
+  index --- unchanged;
+* the radial interpolation of the cache, now over ten numbers per degree rather
+  than one; the interpolation rule and grid are identical, so its error is the
+  same error;
+* the scattered orders stop at "first" and "two or more", as before.
+
+Not approximate any more: the module response for the scattered orders, and the
+arrival direction of unscattered light, which is now the exact direction from
+each element's cone root rather than the line to the centroid.
+
+## Running it {#sec-directional-running}
+
+```bash
+python scripts/probe_bipolar_identity.py --output .build/review/directional
+python scripts/benchmark_directional.py --output .build/review/directional
+python -m pytest -q tests/test_angular_m_blocks.py tests/test_directional.py \
+                   tests/test_directional_numba.py
+# private inputs stay on the machine that holds them
+python scripts/smoke_bgvd_directional.py --bgvd <path to bgvd-model> \
+       --output .build/review/bgvd-directional
+```
+
+A method name says how the **source** is handled --- `isotropic`, `track`,
+`axial` --- and the module model is a property of the module, resolved from its
+measured acceptance bandwidth. `kernel.transport(source)` therefore uses the
+exact kernel whenever the module is directional and the old engine when it is
+not, and the result says which: `metadata["detector_angular_model"]` is
+`exact_m_blocks` for the former. `method="directional"` forces the exact model
+even for an isotropic module, and the superseded source-centroid model survives
+as the experimental `axial_centroid` / `track_centroid` for regression only.
+
+`build()` makes the tables that choice will read and no others ---
+`kernel.cache_kinds(method)` says which, and `build(source=...)` resolves both
+the table and the wavelengths from the source rather than guessing. Building
+the multipole tables and then transporting through the directional kernel was
+doing the expensive half of the work twice; building the wavelength quadrature
+for a monochromatic flash, which reads one line, was doing it for nothing.

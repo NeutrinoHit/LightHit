@@ -1,0 +1,31 @@
+# The angular system and the exact free tail {#sec-angular-system}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Spherical harmonics.
+- The $m=0$ block.
+- The tridiagonal system.
+- The minimal solution.
+- Miller's algorithm and the continued fraction.
+- Why hard truncation is wrong.
+:::
+
+## The physical question {#sec-angular-system-question}
+
+## Assumptions and definitions {#sec-angular-system-assumptions}
+
+## Derivation {#sec-angular-system-derivation}
+
+## The discrete algorithm {#sec-angular-system-algorithm}
+
+## Correspondence with the code {#sec-angular-system-code}
+
+## A worked number {#sec-angular-system-example}
+
+## Checks {#sec-angular-system-checks}
+
+## Range of validity {#sec-angular-system-validity}
+
+## Exercises {#sec-angular-system-exercises}

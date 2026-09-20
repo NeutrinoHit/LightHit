@@ -79,12 +79,13 @@ python scripts/run_segment_event.py --output .build/review/event
 
 **`run_effective_segments.py`** — method 7
 (`lighthit.experimental.effective_segments`, not yet its own book chapter)
-on a real stored shower: reduce it to a chosen number `K` of straight
-segments and report,
+on a real stored shower: test the hypothesis that it can be reduced to a
+chosen number `K` of straight segments and report,
 for every `K` in `--segments`, how many pieces were built, how far orders 1
 and `>=2` are from the same element-by-element reference
-`run_shower_moments.py` uses (this should shrink monotonically as `K`
-grows), that the ballistic order is bit-for-bit independent of `K` (it is
+`run_shower_moments.py` uses (monotonic shrinkage is a result to test, not a
+property of the construction), that the ballistic order is bit-for-bit
+independent of `K` (it is
 never taken from the segment fit — always the closed form), and the
 wall-clock cost of fitting and applying the method at every `K`, at both a
 handful of control receivers and the full array.
@@ -97,13 +98,14 @@ python scripts/run_effective_segments.py --input /path/sim_e_100GeV_10.h5 \
 
 **`run_method_survey.py`** — every method that produces light transport, on
 one real event and the full array, side by side: ballistic (shared,
-computed once), the moment route (`evaluate_moments`), the axial route
-(`axial_response`) and method 7 (`full_response`). `direct_response` — the
+computed once), the moment route (`evaluate_moments`), the conservative 3-D
+and pure 1-D axial routes (using `axial_fast` when available), and method 7
+(`full_response`). `direct_response` — the
 slowest, most honest method — is deliberately excluded from the routine
 comparison and used only at a handful of control modules to score the
-other three, never run over the full array. Each method's report block
+other compact routes, never run over the full array. Each method's report block
 carries its per-order error against that reference, its apply time over
-the full array, and the scattered (order `>=1`) charge total, so the three
+the full array, and the scattered (order `>=1`) charge total, so the compact
 routes and the shared ballistic term can be read off one file instead of
 three separate script runs.
 
@@ -134,6 +136,12 @@ event. One shared Numba transport cache serves every event. Outputs stay under
 self-contained `viewer.html` with module charges, time histograms, a full-array
 heatmap and time animation.
 
+Before a full spectrum is applied, a 64-cell absorption-only axial proxy and
+exact ballistic charge make an initial threshold mask. Rejected OMs receive an
+exact axial $\omega=0$ guard; only those still below the configured photoelectron
+threshold omit their nonzero-frequency calculation. The local audit and
+speedups are in `research/signal-screening.md`.
+
 ## Benchmarks {#sec-scripts-benchmarks}
 
 Benchmarks measure cost, not correctness; they are not part of the
@@ -154,6 +162,13 @@ accurate but not whether the route is actually worth using at that accuracy.
 accelerators (the axial/needle fast paths) against local G4 data; nothing
 here is published, it is a local-only speed comparison. Supports
 `--compare-compilers` to contrast numba source-compile time against numpy.
+
+**`study_time_ringing.py`** — compares finite-frequency inversion of the exact
+full-HG first-order spectrum with independent physical-time bins while varying
+node count, cutoff and bin width separately. It demonstrates why more nodes at
+fixed cutoff do not cure a band-limited front, and why wider bins suppress
+visible ringing without recovering omitted high frequencies. Results and
+interpretation are in `research/time-ringing.md`.
 
 ## Verification and independent controls {#sec-scripts-verification}
 

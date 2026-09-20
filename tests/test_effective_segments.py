@@ -1,6 +1,11 @@
-"""Method 7: segment-fitting converges on the scattered orders, and never
-touches the ballistic order, which stays exact regardless of segment count.
+"""Method 7 on a narrow curved-track fixture, plus its exact ballistic splice.
+
+The fixture deliberately has a nearly single-valued direction at each axial
+position. Its convergence test must not be read as a claim that axial bins
+converge for a broad electromagnetic shower.
 """
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -64,7 +69,7 @@ def test_fit_reports_no_empty_bins_at_moderate_segment_counts(elements):
         assert np.all((beta > 0) & (beta <= 1.0))
 
 
-def test_error_shrinks_as_segments_grow(elements, cache):
+def test_narrow_track_error_shrinks_as_segments_grow(elements, cache):
     k1 = KernelChannels.of(cache, 0, 8)
     k2 = KernelChannels.of(cache, 1, 8)
     ref1 = direct_response(k1, elements, RECEIVERS)
@@ -117,3 +122,12 @@ def test_many_segments_report_empty_bins_instead_of_crashing(elements):
     effective = fit_effective_segments(elements, 5000)
     assert effective.empty_bins > 0
     assert len(effective) <= 5000
+
+
+def test_beta_one_boundary_survives_weighted_roundoff(elements):
+    at_boundary = replace(
+        elements,
+        cone_cosine=np.full(len(elements), 1.0 / elements.contract.phase_index),
+    )
+    effective = fit_effective_segments(at_boundary, 256)
+    assert np.all(np.array([piece.beta for piece in effective.segments]) <= 1.0)

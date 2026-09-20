@@ -108,7 +108,7 @@ class AxisFrame:
         return cls(centre, axis, first, np.cross(axis, first))
 
     def rotate(self, vectors):
-        """Components of ``vectors`` in the axis frame, with the axis as z."""
+        """Return ``(first, second, axis)`` components, with the axis as z."""
         vectors = np.asarray(vectors, float)
         return np.stack((vectors @ self.first, vectors @ self.second,
                          vectors @ self.axis), axis=-1)

@@ -1,0 +1,9 @@
+# Notation and conventions {#sec-notation}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Every symbol used in the main route, with its units.
+- Sign and normalisation conventions, collected in one place.
+:::

@@ -1,0 +1,31 @@
+# The public API and visualisation {#sec-api-and-viewer}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Laser, track, shower.
+- Source methods.
+- Automatic choice of the module model.
+- Saving a response.
+- The viewer: charge, time histogram, animation.
+- Minimal reproducible examples.
+:::
+
+## The physical question {#sec-api-and-viewer-question}
+
+## Assumptions and definitions {#sec-api-and-viewer-assumptions}
+
+## Derivation {#sec-api-and-viewer-derivation}
+
+## The discrete algorithm {#sec-api-and-viewer-algorithm}
+
+## Correspondence with the code {#sec-api-and-viewer-code}
+
+## A worked number {#sec-api-and-viewer-example}
+
+## Checks {#sec-api-and-viewer-checks}
+
+## Range of validity {#sec-api-and-viewer-validity}
+
+## Exercises {#sec-api-and-viewer-exercises}

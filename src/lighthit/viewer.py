@@ -16,6 +16,71 @@ import numpy as np
 SCHEMA = "lighthit/event-viewer/1"
 
 
+def _identifier(detector, *names, default):
+    for name in names:
+        if name in detector.identifiers:
+            return np.asarray(detector.identifiers[name]).tolist()
+    return np.asarray(default, int).tolist()
+
+
+def _display_source(source):
+    """Portable viewer description for public source objects we can show exactly."""
+    if source is None:
+        return []
+    from .sources import CherenkovTrack, IsotropicFlash
+    if isinstance(source, IsotropicFlash):
+        return [{"type": "point", "position_m": source.position_m.tolist(),
+                 "label": "isotropic flash"}]
+    if isinstance(source, CherenkovTrack):
+        direction = np.asarray(source.direction, float)
+        direction /= np.linalg.norm(direction)
+        return [{"type": "axis", "shape": "track",
+                 "position_m": np.asarray(source.start_m, float).tolist(),
+                 "direction": direction.tolist(), "extent_m": float(source.length_m),
+                 "label": "Cherenkov track"}]
+    return []
+
+
+def viewer_payload(response, *, source=None, event_id="event", label=None,
+                   detector_label="detector"):
+    """Convert one :class:`TransportResponse` into portable viewer data.
+
+    Unknown source types remain fully viewable as detector responses; only the
+    optional source marker is omitted. Additional events can be appended to the
+    returned ``events`` list before passing it to :func:`write_event_viewer`.
+    """
+    detector = response.detector
+    count = len(detector.positions_m)
+    payload = {
+        "schema": SCHEMA,
+        "units": {"position": "m", "time": "ns", "signal": "photoelectrons"},
+        "detector": {
+            "label": str(detector_label),
+            "positions_m": detector.positions_m.tolist(),
+            "cluster_id": _identifier(detector, "cluster_id", "cluster",
+                                      default=np.zeros(count, int)),
+            "string_id": _identifier(detector, "string_id", "string", "subcluster",
+                                     default=np.zeros(count, int)),
+            "module_id": _identifier(detector, "module_id", "module", "channel",
+                                     default=np.arange(count)),
+        },
+        "readout": {
+            "relative_time_edges_ns": response.relative_time_edges_ns.tolist(),
+        },
+        "events": [{
+            "event_id": str(event_id),
+            "label": str(label if label is not None else event_id),
+            "sources": _display_source(source),
+            "time_origin_ns": response.time_origin_ns.tolist(),
+            "active": response.active.tolist(),
+            "components": response.components_pe.tolist(),
+            "charge_components": response.charge_components_pe.tolist(),
+            "diagnostics": dict(response.metadata),
+        }],
+    }
+    return validate_event_viewer(payload)
+
+
 def validate_event_viewer(result):
     """Validate the portable JSON-compatible event-viewer payload."""
     if result.get("schema") != SCHEMA:
@@ -55,6 +120,9 @@ def validate_event_viewer(result):
             raise ValueError(f"event {identifier}: charge_components must have shape {(count, 3)}")
         if origin.shape != (count,) or not np.isfinite(origin).all():
             raise ValueError(f"event {identifier}: time_origin_ns must have shape {(count,)}")
+        active = np.asarray(event.get("active", np.ones(count, bool)))
+        if active.shape != (count,) or active.dtype.kind != "b":
+            raise ValueError(f"event {identifier}: active must contain one boolean per module")
         for source in event.get("sources", []):
             if source.get("type") not in ("axis", "point"):
                 raise ValueError(f"event {identifier}: unsupported source display type")
@@ -62,6 +130,8 @@ def validate_event_viewer(result):
             if position.shape != (3,) or not np.isfinite(position).all():
                 raise ValueError(f"event {identifier}: invalid source position")
             if source["type"] == "axis":
+                if source.get("shape", "line") not in ("line", "track", "spindle"):
+                    raise ValueError(f"event {identifier}: invalid source display shape")
                 direction = np.asarray(source.get("direction"), float)
                 if (direction.shape != (3,) or not np.isfinite(direction).all()
                         or not np.isclose(np.linalg.norm(direction), 1, atol=1e-10)):
@@ -113,5 +183,5 @@ def write_event_viewer(result, output_path, *, json_path=None):
     return output
 
 
-__all__ = ["SCHEMA", "validate_event_viewer", "save_event_result",
-           "load_event_result", "write_event_viewer"]
+__all__ = ["SCHEMA", "viewer_payload", "validate_event_viewer",
+           "save_event_result", "load_event_result", "write_event_viewer"]

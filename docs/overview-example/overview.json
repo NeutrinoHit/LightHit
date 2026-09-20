@@ -1,0 +1,105 @@
+{
+  "schema": "lighthit-overview-v1",
+  "environment": {
+    "python": "3.14.5",
+    "lighthit": "0.2.0a4",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "numba": "0.66.0",
+    "threads": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    }
+  },
+  "configuration": {
+    "omega_per_ns": [
+      0.0, 0.00375, 0.0075, 0.01125, 0.015, 0.01875, 0.0225,
+      0.02625, 0.03, 0.03375, 0.0375, 0.041249999999999995,
+      0.045, 0.04875, 0.0525, 0.056249999999999994, 0.06,
+      0.06375, 0.0675, 0.07125, 0.075, 0.07875,
+      0.08249999999999999, 0.08625, 0.09, 0.09375, 0.0975,
+      0.10124999999999999, 0.105, 0.10875, 0.11249999999999999,
+      0.11624999999999999, 0.12, 0.12375, 0.1275, 0.13125,
+      0.135, 0.13874999999999998, 0.1425, 0.14625, 0.15
+    ],
+    "relative_time_edges_ns": [
+      -60.0, -40.0, -20.0, 0.0, 20.0, 40.0, 60.0, 80.0, 100.0,
+      120.0, 140.0, 160.0, 180.0, 200.0, 220.0, 240.0, 260.0,
+      280.0, 300.0, 320.0, 340.0, 360.0, 380.0, 400.0, 420.0,
+      440.0, 460.0, 480.0, 500.0, 520.0, 540.0, 560.0, 580.0,
+      600.0, 620.0, 640.0, 660.0, 680.0, 700.0, 720.0, 740.0
+    ],
+    "wavelength_nodes": 9,
+    "wavelength_range_nm": [400.0, 550.0],
+    "scattering_degree": 24,
+    "source_degree": 32,
+    "azimuthal_degree": 4,
+    "cell_m": 0.12,
+    "k_max_per_m": 8.0,
+    "k_panel_per_m": 0.04,
+    "k_order": 10,
+    "radial_range_m": [3.0, 300.0],
+    "radial_nodes": 220,
+    "angular_backend": "numpy",
+    "threshold_pe": 0.01
+  },
+  "source": {
+    "kind": "CherenkovTrack",
+    "start_m": [0.0, 0.0, -10.0],
+    "direction": [0.0, 0.0, 1.0],
+    "length_m": 20.0,
+    "beta": 1.0,
+    "time_ns": 0.0,
+    "reference_phase_index": 1.35
+  },
+  "acceptance": {
+    "degree": 2,
+    "alpha": [5.529203070318017, 2.0106192982973923, 0.201061929829628],
+    "residual_above_degree": 2.9456386972517565e-14
+  },
+  "om": [1, 2, 3, 4, 5],
+  "distance_m": [32.01562118716424, 25.0, 32.01562118716424, 60.0, 400.0],
+  "charge_pe": [
+    0.0004133858541661483, 0.007200074815735856, 0.9324222074068118,
+    0.0012636641531635821, 0.0
+  ],
+  "charge_order0_pe": [0.0, 0.0, 0.5205415927976219, 0.0, 0.0],
+  "charge_order1_pe": [
+    6.59150333071185e-05, 0.0031691611560432376, 0.28699349400096336,
+    0.00014980872892671475, 0.0
+  ],
+  "charge_order2plus_pe": [
+    0.0003474708208590298, 0.004030913659692619, 0.12488712060822643,
+    0.0011138554242368674, 0.0
+  ],
+  "window_charge_pe": [0.0, 0.0, 0.9447122013119392, 0.0, 0.0],
+  "negative_bin_mass_pe": [0.0, 0.0, 0.12296957482061031, 0.0, 0.0],
+  "active": [false, false, true, false, false],
+  "method": "track",
+  "detector_angular_model": "exact_m_blocks",
+  "transport_backend": "numba axial compile + numba directional",
+  "transport_metadata": {
+    "backend": "numba axial compile + numba directional",
+    "wavelength_nodes": 9,
+    "spectral_source": "S0=lambda^-2; S2=lambda^-2*n_phase^-2",
+    "source_fields": 2,
+    "reference_phase_index": 1.35,
+    "source_elements": 80,
+    "source_elements_dropped_at_spectral_threshold": 0,
+    "source_coefficient_fraction_dropped": 0.0,
+    "active_modules": 1,
+    "threshold_pe": 0.01,
+    "radial_range_m": [3.0, 300.0],
+    "omitted_outside_range": 1,
+    "detector_angular_model": "exact_m_blocks",
+    "detector_acceptance_degree": 2,
+    "detector_acceptance_residual_above_degree": 2.9456386972517565e-14,
+    "azimuthal_degree": 4,
+    "ballistic_angular_model": "exact per-element arrival direction",
+    "ballistic_spectrum": "charge and exact bins stored; nonzero-frequency column omitted"
+  },
+  "repeats": 2,
+  "reproducible": true
+}
