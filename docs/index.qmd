@@ -1,60 +1,127 @@
 # About this book {.unnumbered #sec-about}
 
-LightHit computes the light seen by a point detector in a scattering medium
-without simulating individual photon histories. A photon emitted in water
-either reaches the detector directly, changes direction after one or more
-scattering events, or is absorbed. Rather than sampling this random walk,
-the package solves for the photon distribution directly and evaluates the
-part of it that a given detector would register.
+LightHit computes the light that the optical modules of a neutrino telescope
+see, without following individual photons. A photon emitted in water reaches a
+module directly, arrives after one or more scattering events, or is absorbed.
+Instead of sampling that random walk, the package solves the radiative transfer
+equation for the photon distribution and evaluates the part of it that a given
+module registers.
 
-This book documents the first module of that package: the Green's function
-of a point source and a point isotropic detector in an infinite, homogeneous
-medium with Henyey–Greenstein scattering. @sec-rte derives the radiative
-transfer equation (RTE) that the whole package solves, starting from a
-photon balance and fixing the notation used throughout. @sec-point-source
-solves it for a point source and a point detector: an adjoint formulation
-turns the angular problem into a finite linear system with an exact free
-tail, and the result decomposes into three parts — no scattering, exactly
-one scattering, and two or more. @sec-histogram-binning explains why the
-first two parts are computed differently from the third: they are singular
-in physical time, and folding a finite time bin onto them analytically
-avoids a numerically dangerous Fourier inversion. @sec-bgvd-water applies
-the solver to the measured optical properties of Lake Baikal water at one
-wavelength.
+This book follows one route from end to end: the spectral transfer equation, a
+Fourier-adjoint Green's function, a real Cherenkov source, a module that looks
+in a definite direction, and the expected number of photoelectrons in each time
+bin. Every step is given three times over --- as the physics, as the discrete
+algorithm, and as the symbols in `src/lighthit` that implement it --- so that a
+reader can check a formula against the code without reading the code first.
 
-Our worked example is Cherenkov light propagating to the optical modules of
-a neutrino telescope. Nothing here yet needs a shower model, a Geant4 event
-format, or detector electronics; those attach to a transport model that is
-already understood on its own, not alongside it.
+## What the book covers {.unnumbered #sec-about-scope}
 
-Familiarity with derivatives, multivariate integrals, linear algebra, and
-elementary probability is assumed. Spherical-harmonic and operator notation
-is introduced where it is first needed. The reference implementation is in
-`src/lighthit`; equations here are cross-referenced to the functions that
-implement them.
+@sec-overview states the problem the package solves and lays out the whole
+computation on one page; the remaining chapters expand one box of that map
+each. Part I fixes the physics and the observable: the spectral transfer
+equation (@sec-spectral-rte) and the optical module (@sec-optical-module). Part
+II builds the Green's function in an infinite homogeneous medium --- the
+Fourier-adjoint formulation (@sec-fourier-adjoint), the angular system with its
+exact free tail (@sec-angular-system), the separation of scattering orders and
+the spatial inversion (@sec-scattering-orders), and the passage back to time
+(@sec-time-and-bins). Part III replaces the point flash by a real source and the
+point receiver by a real module: the spectral Cherenkov emission
+(@sec-cherenkov-source), tracks and showers (@sec-track-and-shower), and the
+exact directional module (@sec-directional-om). Part IV is the production
+scheme itself: the cache and its cost (@sec-cache-and-memory), the end-to-end
+algorithm (@sec-rte-to-pe), the weak-module threshold
+(@sec-weak-module-threshold), the public interface (@sec-api-and-viewer), and
+the error budget (@sec-validation).
 
-## What "solution" means here {.unnumbered}
+The appendices carry what would interrupt that route: notation (@sec-notation),
+the special-function identities the derivations use (@sec-identities), the
+independent reference solutions that the main text compares against
+(@sec-reference-solutions), the methods that were tried and rejected
+(@sec-rejected-methods), the benchmark protocol (@sec-benchmark-protocol), and
+a catalogue of scripts, tests and file formats (@sec-catalogue).
 
-The book distinguishes an exact solution of the original RTE, an exact
-solution of an approximated equation, and a numerical estimate of one
-observable. A finite-rank truncation of the scattering operator at degree
-$L$ is an approximation of the RTE; the linear system built from that
-truncation is then solved exactly. "All orders of scattering" is likewise
-scoped to that same finite-rank approximation: increasing the number of
-retained angular moments and increasing the number of scattering events
-summed are different knobs, and both are reported separately wherever they
-matter.
+## How a chapter is built {.unnumbered #sec-about-structure}
 
-## Status {.unnumbered}
+Every chapter in the main route has the same nine sections, in the same order:
+the physical question; the assumptions and definitions it rests on; the
+derivation; the discrete algorithm; the correspondence with the code; a worked
+number; the checks that number passed; the range of validity; and exercises
+with the notebook that goes with them.
 
-This is the first module: a point source, a point isotropic detector, one
-wavelength at a time, an infinite homogeneous medium. A finite optical
-module, real detector acceptance, shower sources, and a spatial cache for
-reusing computations across many source–detector pairs are future work,
-tracked in `STATE.md` at the repository root.
+The reason for the fixed shape is that the three failure modes of a book like
+this one are different and are caught in different places. A wrong formula is
+caught in the derivation. A formula that is right but implemented differently
+is caught by the correspondence table, which names the function that evaluates
+each expression. A formula that is right and implemented faithfully but used
+outside its range is caught by the range-of-validity section, which states what
+breaks first and at which parameter.
 
-The radiative transfer equation and its photon-balance derivation in
-@sec-rte follow the treatment in the author's own lecture notes on radiative
-transfer for the Baikal-GVD programme; the material is rewritten here for
-this package, not reproduced verbatim, and is scoped to what @sec-point-source
-and @sec-histogram-binning actually use.
+## What "solution" means here {.unnumbered #sec-about-solution}
+
+The book distinguishes an exact solution of the original transfer equation, an
+exact solution of an approximated equation, and a numerical estimate of one
+observable. Truncating the scattering operator at angular degree $L$
+approximates the transfer equation; the linear system built from that
+truncation is then solved exactly, including an exact treatment of the infinite
+free tail above $L$. "All orders of scattering" is scoped the same way:
+increasing the number of retained angular moments and increasing the number of
+scattering events summed are different knobs, and both are reported separately
+wherever they matter.
+
+Exactness claims in this book are therefore always qualified by the
+approximation they are exact *within*. Where a step is exact in the stronger
+sense --- the ballistic term, the angular integrals of the Cherenkov cone, and
+the physical-time binning used by the ballistic contribution --- it is said so
+explicitly. The production event route currently Fourier-inverts both scattered
+components; that distinction is stated wherever time bins are discussed.
+
+## How numbers are reported {.unnumbered #sec-about-numbers}
+
+A numerical result in this book is quoted together with the configuration that
+produced it, the name of the algorithm or benchmark set, the number of threads,
+whether a warm-up run preceded it, the number of repetitions, the median and
+the spread, and the script that reproduces it. Timings without that envelope
+are not comparable between machines and are not quoted.
+
+Figures and tables name the script that regenerates them. Where a number
+depends on private optical data that is not distributed with the package, the
+text says so and gives the public synthetic configuration that produces a
+number of the same shape.
+
+## How the code is referenced {.unnumbered #sec-about-code}
+
+Code is referenced by stable symbols --- `lighthit.angular.resolvent_rows`,
+`lighthit.directional.DirectionalCache`,
+`lighthit.transport.TransportKernel.transport` --- never by line number. A
+correspondence table in each chapter maps every displayed formula to the symbol
+that evaluates it. If a symbol in this book does not exist in the package, that
+is a defect in the book and not a naming convention.
+
+Modules under `lighthit.experimental` are research code: they are reachable
+from the public interface only with an explicit opt-in, and the book marks them
+as such wherever they appear.
+
+## What the book does not cover {.unnumbered #sec-about-excluded}
+
+The medium is homogeneous and unbounded. Polarisation, the water--air and
+water--ice boundaries, shadowing by the detector structure, and inelastic
+scattering are outside the model. Detector electronics, trigger and noise are
+outside the package: the observable computed here is the expected number of
+photoelectrons per module and per time bin, which is the input to a readout
+simulation rather than its output.
+
+The development history is also outside the main route. Methods that were
+tried and abandoned are described in @sec-rejected-methods, as reproducible
+experiments with a stated hypothesis, an acceptance criterion, the measurement
+that failed it, and whatever remained useful --- not as a narrative of who
+proposed what and when.
+
+## Prerequisites {.unnumbered #sec-about-prerequisites}
+
+Derivatives, multivariate integrals, linear algebra and elementary probability
+are assumed. Spherical-harmonic and operator notation is introduced where it is
+first needed, and collected in @sec-notation. The reference implementation is
+in `src/lighthit`; the executable notebooks under `notebooks/course` illustrate
+the methods chapter by chapter. A notebook is an illustration: it is never the
+only place a number in this book comes from, and never the only proof of a
+statement.

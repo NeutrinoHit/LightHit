@@ -11,8 +11,9 @@ What this measures, in the order it measures it:
    per piece;
 2. orders 1 and >=2 from ``effective_segment_response`` against the same
    element-by-element ``direct_response`` reference ``run_shower_moments.py``
-   uses, at a handful of control receivers spread across the array -- this is
-   where the error should shrink monotonically as K grows;
+   uses, at a handful of control receivers spread across the array -- this
+   tests whether the error shrinks as K grows; axial refinement alone does
+   not guarantee that for a shower with broad directions at every depth;
 3. the ballistic order from ``full_response``, which never comes from the
    segment fit at any K: it is ``ballistic_fast``'s exact closed form on the
    real elements, so this section checks that it is identical across K, not
@@ -21,10 +22,10 @@ What this measures, in the order it measures it:
    control receivers and across the full detector array, so the K vs.
    accuracy vs. cost trade-off is visible in one table.
 
-The point of the method is that a shower is a sum of segments and each
-segment's own time and angular distribution is exact by construction, not
-smoothed by a global fit -- see ``effective_segments.py`` for how each piece's
-direction, effective beta and start time are fit from only its own elements.
+Each fitted segment is evaluated exactly, but replacing all elements in one
+axial slab by that segment is an approximation. In particular, the mean
+direction and mean cone cosine do not preserve the slab's higher angular
+moments and need not preserve even its dipole. See ``effective_segments.py``.
 """
 from pathlib import Path
 import argparse

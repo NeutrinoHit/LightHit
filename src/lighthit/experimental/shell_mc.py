@@ -11,7 +11,7 @@ from scipy.special import roots_legendre
 try:
     from numba import njit
 except ImportError as exc:
-    raise ImportError("shell_mc requires pip install -e '.[accelerate]'") from exc
+    raise ImportError("shell_mc requires pip install 'lighthit[accelerate]'") from exc
 
 
 @njit(cache=True)

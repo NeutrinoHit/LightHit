@@ -1,0 +1,32 @@
+# Cache, Numba and memory {#sec-cache-and-memory}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Which tables are built.
+- `build(source=..., method=...)`.
+- Radial splines.
+- Why the NumPy route was memory-bound.
+- Fused kernels.
+- The $m=0$ and directional routes compared.
+- Memory requirements.
+:::
+
+## The physical question {#sec-cache-and-memory-question}
+
+## Assumptions and definitions {#sec-cache-and-memory-assumptions}
+
+## Derivation {#sec-cache-and-memory-derivation}
+
+## The discrete algorithm {#sec-cache-and-memory-algorithm}
+
+## Correspondence with the code {#sec-cache-and-memory-code}
+
+## A worked number {#sec-cache-and-memory-example}
+
+## Checks {#sec-cache-and-memory-checks}
+
+## Range of validity {#sec-cache-and-memory-validity}
+
+## Exercises {#sec-cache-and-memory-exercises}

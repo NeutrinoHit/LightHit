@@ -29,12 +29,13 @@ try:
     from numba import njit, prange
 except ImportError as exc:  # pragma: no cover - exercised only without numba
     raise ImportError(
-        "ballistic_fast needs numba (pip install -e '.[accelerate]'); "
+        "ballistic_fast needs numba (pip install 'lighthit[accelerate]'); "
         "the uncompiled formula lives in "
         "scripts/run_shower_moments.py:vectorised_ballistic"
     ) from exc
 
-__all__ = ["vectorised_ballistic_fast", "vectorised_ballistic_bins_fast"]
+__all__ = ["vectorised_ballistic_fast", "vectorised_ballistic_bins_fast",
+           "ballistic_directional_fast"]
 
 
 @njit(parallel=True, cache=True, fastmath=False)
@@ -195,3 +196,140 @@ def vectorised_ballistic_bins_fast(elements, receivers, medium, cone_cosine,
         receivers, start, direction, length, photons, cone_cosine, sine,
         start_ns, end_ns, float(medium.extinction_per_m),
         float(medium.speed_m_per_ns), origins, edges)
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _acceptance(alpha, x):
+    """``sum_l alpha_l (2l+1) P_l(x) / (4 pi)``, by the Legendre recurrence."""
+    total = alpha[0] / (4.0 * np.pi)
+    if len(alpha) == 1:
+        return total
+    previous = 1.0
+    current = x
+    total += alpha[1] * 3.0 * current / (4.0 * np.pi)
+    for ell in range(2, len(alpha)):
+        value = ((2 * ell - 1) * x * current - (ell - 1) * previous) / ell
+        previous = current
+        current = value
+        total += alpha[ell] * (2 * ell + 1) * value / (4.0 * np.pi)
+    return total
+
+
+@njit(parallel=True, cache=True, fastmath=False)
+def _ballistic_directional_kernel(receivers, looks, start, direction, length,
+                                  photons, cone_cosine, sine, extinction_per_m,
+                                  alpha, speed_m_per_ns, start_ns, end_ns,
+                                  origins, edges, want_bins):
+    """Same closed form as ``_ballistic_bins_kernel``, with the module response
+    evaluated at the exact arrival direction of each element's cone photon."""
+    n_recv = receivers.shape[0]
+    n_el = start.shape[0]
+    n_bins = len(edges) - 1
+    total = np.zeros(n_recv, dtype=np.float64)
+    bins = np.zeros((n_recv, n_bins if want_bins else 1), dtype=np.float64)
+    two_pi = 2.0 * np.pi
+    for r in prange(n_recv):
+        rx = receivers[r, 0]
+        ry = receivers[r, 1]
+        rz = receivers[r, 2]
+        nx = looks[r, 0]
+        ny = looks[r, 1]
+        nz = looks[r, 2]
+        acc = 0.0
+        for i in range(n_el):
+            dx = rx - start[i, 0]
+            dy = ry - start[i, 1]
+            dz = rz - start[i, 2]
+            ux = direction[i, 0]
+            uy = direction[i, 1]
+            uz = direction[i, 2]
+            along = dx * ux + dy * uy + dz * uz
+            dot = dx * dx + dy * dy + dz * dz
+            impact2 = dot - along * along
+            if impact2 < 1e-300:
+                impact2 = 1e-300
+            impact = np.sqrt(impact2)
+            s = sine[i]
+            mu = cone_cosine[i]
+            root = along - impact * mu / s
+            len_i = length[i]
+            if root < 0.0 or root >= len_i:
+                continue
+            distance = impact / s
+            safe_len = len_i if len_i > 1e-300 else 1e-300
+            # exact incoming direction of this element's cone photon
+            sx = (dx - root * ux) / distance
+            sy = (dy - root * uy) / distance
+            sz = (dz - root * uz) / distance
+            cosine = sx * nx + sy * ny + sz * nz
+            if cosine > 1.0:
+                cosine = 1.0
+            elif cosine < -1.0:
+                cosine = -1.0
+            weight = (photons[i] / safe_len
+                      * np.exp(-extinction_per_m * distance)
+                      / (two_pi * impact * s)
+                      * _acceptance(alpha, cosine))
+            acc += weight
+            if want_bins:
+                fraction = root / safe_len
+                arrival = (start_ns[i] + fraction * (end_ns[i] - start_ns[i])
+                           + distance / speed_m_per_ns - origins[r])
+                left = 0
+                right = len(edges)
+                while left < right:
+                    middle = (left + right) // 2
+                    if arrival < edges[middle]:
+                        right = middle
+                    else:
+                        left = middle + 1
+                index = left - 1
+                if 0 <= index < n_bins:
+                    bins[r, index] += weight
+        total[r] = acc
+    return total, bins
+
+
+def ballistic_directional_fast(elements, receivers, look_directions, medium,
+                               cone_cosine, alpha, *, time_origin_ns=None,
+                               relative_edges_ns=None):
+    """Fused twin of :func:`lighthit.ballistic.ballistic_directional`."""
+    receivers = np.ascontiguousarray(receivers, dtype=np.float64)
+    looks = np.ascontiguousarray(look_directions, dtype=np.float64)
+    if receivers.ndim != 2 or receivers.shape[1] != 3 or not len(receivers):
+        raise ValueError("receivers must be a nonempty (n, 3) array")
+    if looks.shape != receivers.shape:
+        raise ValueError("look_directions must match receivers")
+    if not np.allclose(np.linalg.norm(looks, axis=1), 1.0, rtol=0, atol=1e-9):
+        raise ValueError("look_directions must be unit vectors")
+    cone_cosine = np.ascontiguousarray(cone_cosine, dtype=np.float64)
+    sine = np.sqrt(np.maximum(1.0 - cone_cosine ** 2, 0.0))
+    start = np.ascontiguousarray(elements.start_m, dtype=np.float64)
+    direction = np.ascontiguousarray(elements.direction, dtype=np.float64)
+    length = np.ascontiguousarray(elements.length_m, dtype=np.float64)
+    photons = np.ascontiguousarray(elements.photons, dtype=np.float64)
+    if not (len(start) == len(direction) == len(length) == len(photons)
+            == len(cone_cosine)):
+        raise ValueError("elements arrays and cone_cosine must share one length")
+    want_bins = time_origin_ns is not None and relative_edges_ns is not None
+    if want_bins:
+        origins = np.ascontiguousarray(time_origin_ns, dtype=np.float64)
+        edges = np.ascontiguousarray(relative_edges_ns, dtype=np.float64)
+        if origins.shape != (len(receivers),) or not np.isfinite(origins).all():
+            raise ValueError("time_origin_ns must contain one finite value per receiver")
+        if (edges.ndim != 1 or len(edges) < 2 or not np.isfinite(edges).all()
+                or np.any(np.diff(edges) <= 0)):
+            raise ValueError("relative_edges_ns must be finite and strictly increasing")
+        start_ns = np.ascontiguousarray(elements.start_ns, dtype=np.float64)
+        end_ns = np.ascontiguousarray(elements.end_ns, dtype=np.float64)
+    else:
+        origins = np.zeros(len(receivers))
+        edges = np.array([0.0, 1.0])
+        start_ns = np.zeros(len(start))
+        end_ns = np.zeros(len(start))
+    charge, bins = _ballistic_directional_kernel(
+        receivers, looks, start, direction, length, photons, cone_cosine, sine,
+        float(medium.extinction_per_m), np.ascontiguousarray(alpha, np.float64),
+        float(medium.speed_m_per_ns), start_ns, end_ns, origins, edges,
+        bool(want_bins))
+    return charge, (bins if want_bins else None)

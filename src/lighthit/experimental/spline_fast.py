@@ -43,7 +43,7 @@ try:
     from numba import njit, prange
 except ImportError as exc:  # pragma: no cover - exercised only without numba
     raise ImportError(
-        "spline_fast needs numba (pip install -e '.[accelerate]'); "
+        "spline_fast needs numba (pip install 'lighthit[accelerate]'); "
         "the uncompiled path is ResponseCache.moments_at"
     ) from exc
 

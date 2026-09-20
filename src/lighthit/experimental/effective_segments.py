@@ -18,22 +18,28 @@ independently, from only its own true elements --
   piece can follow real curvature),
 * its own photon-weighted **cone cosine**, which fixes an effective beta
   through ``cone_cosine = 1/(beta * phase_index)`` at the contract's fixed
-  phase index, so the piece's angular content is exact at first moment even
-  though real elements in it have a spread of cone cosines,
+  phase index. This preserves that scalar mean, but not the angular dipole
+  ``<cone_cosine * direction>``: averaging the cone cosine and direction
+  separately does not preserve their joint moment,
 * its own **start time**, fit by a weighted least-squares intercept against
   the position each element occupies along the piece's own direction, at the
   piece's own effective speed -- exact at the piece's photon-weighted mean
   position and time, not assumed linear from a global start.
 
-So "one segment" (``segments=1``) is the crude whole-shower test; as
-``segments`` grows each piece's own element spread shrinks, and the straight-
-track, fixed-direction, fixed-beta, linear-time approximation that
-:class:`~lighthit.experimental.cone_segment.ConeSegment` makes becomes exact
-piece by piece. What is never approximated further, at any ``segments``, is
-what :func:`~lighthit.experimental.cone_segment.segment_spectrum` itself does
-not approximate: the longitudinal quadrature along a piece, the closed-form
-ballistic term, and the addition-theorem angular projection onto the cached
-multipoles.
+So "one segment" (``segments=1``) is the crude whole-shower test. Increasing
+``segments`` shrinks only the spread in axial position. It does **not** shrink
+the transverse or directional distribution at a fixed shower depth. The
+construction therefore converges for a genuinely one-dimensional curved
+track, but need not converge for an electromagnetic shower: one physical
+Cherenkov cone cannot in general reproduce even the angular dipole of a broad
+mixture of particle directions. Convergence on the synthetic track fixture is
+a regression check, not a theorem about stored showers.
+
+Within the reduced source, :func:`~lighthit.experimental.cone_segment.segment_spectrum`
+still evaluates the longitudinal quadrature, closed-form ballistic term and
+addition-theorem angular projection without further approximation. The public
+``full_response`` deliberately replaces its fitted ballistic column with the
+exact per-element result.
 """
 from dataclasses import dataclass
 import numpy as np
@@ -75,6 +81,11 @@ def fit_effective_segments(elements, segments, *, frame=None, minimum_length_m=1
     Bins with no element are skipped rather than raising: a shower's photon
     density is uneven along its own axis, and asking for more segments than
     the data can fill some of is a normal, reportable outcome, not an error.
+
+    ``segments`` controls the axial partition only. It does not resolve a
+    broad mixture of directions inside one slab; use a harmonic source such
+    as :class:`~lighthit.experimental.axial_source.AxialSource` when that
+    angular content must be retained.
     """
     if not isinstance(segments, (int, np.integer)) or segments < 1:
         raise ValueError("segments must be a positive integer")
@@ -120,7 +131,18 @@ def fit_effective_segments(elements, segments, *, frame=None, minimum_length_m=1
             u_eff = u_eff / norm
 
         cone_eff = float((share * cone_cosine[mask]).sum())
-        cone_eff = min(max(cone_eff, 1e-6), 1 - 1e-9)
+        # Every physical input cone obeys mu_C >= 1 / n_phase (beta <= 1),
+        # but a weighted sum of values sitting exactly on that boundary can
+        # round a few ulps below it.  The old generic ``1e-6`` lower clip did
+        # not enforce the actual physical bound and made sufficiently fine K
+        # scans fail spuriously with beta just above one.
+        physical_min = 1.0 / phase_index
+        tolerance = 16 * np.finfo(float).eps * max(1.0, abs(physical_min))
+        if cone_eff < physical_min - tolerance:
+            raise ValueError(
+                f"segment {i}: fitted cone cosine {cone_eff:g} is below the "
+                f"physical beta=1 boundary {physical_min:g}")
+        cone_eff = min(max(cone_eff, physical_min), np.nextafter(1.0, 0.0))
         beta_eff = 1.0 / (phase_index * cone_eff)
         if not 0 < beta_eff <= 1.0:
             raise ValueError(
@@ -186,9 +208,10 @@ def full_response(cache, elements, medium, effective, receivers_m, *,
     handful of straight pieces cannot reproduce the ballistic term, however
     many are used, because it is a near-singular function of exact cone
     alignment, and it is already fast in closed form -- there is no reason
-    to approximate what costs almost nothing to get exactly. Only orders 1
-    and >=2, which are smooth functions of the geometry, are worth fitting
-    with segments at all; that smoothness is what segments=K converges on.
+    to approximate what costs almost nothing to get exactly. Orders 1 and
+    >=2 are the only columns supplied by the fit. Whether they converge
+    with this axial-only partition is source dependent; a broad shower can
+    retain an irreducible angular mixture in every slab.
 
     ``ballistic`` may be passed precomputed (shape ``(receivers,)``) to
     avoid recomputing it across a scan over ``effective`` at fixed elements

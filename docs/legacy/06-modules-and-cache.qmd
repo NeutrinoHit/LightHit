@@ -173,15 +173,15 @@ measuring them apart.
 
 ## What is not covered {#sec-om-limits}
 
-A directed source read by a directional module is not implemented. It needs
-the $m\ne0$ blocks of @sec-om-acceptance, and its spatial inversion no longer
-collapses to a single $j_l$ sum, because the integrand then depends on
-$\widehat{\mathbf k}$ through two independent directions. The result would be
-a function of $r$ and three cosines rather than $r$ and one.
-
-Nothing else here is an approximation of that case: the isotropic-flash
-result of @eq-om-multipole is exact. The gap is a missing capability, not a
-hidden error.
+A directed source read by a directional module needs more than this chapter
+has: the $m\ne0$ blocks of @sec-om-acceptance, because its spatial inversion no
+longer collapses to a single $j_l$ sum --- the integrand depends on
+$\widehat{\mathbf k}$ through two independent directions, and the result is a
+function of $r$ and three cosines rather than $r$ and one. That case is built
+in @sec-directional-om, which supersedes this section; what stays true here is
+that nothing in this chapter approximates it. The isotropic-flash result of
+@eq-om-multipole is exact, and the cache of @eq-cache-moments turns out to be
+the two boundary rows of the directional table.
 
 Also outside scope, and more mundane: the finite size of the module, shadowing
 by its own hardware and by the string, the cable, the glass, and any

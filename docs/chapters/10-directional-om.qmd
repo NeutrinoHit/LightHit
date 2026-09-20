@@ -1,0 +1,34 @@
+# The exact directional module {#sec-directional-om}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Why one preferred axis is enough for $m=0$.
+- Why a directional source together with a directional module needs $m\ne0$.
+- The blocks $G^{(m)}$.
+- $G^{(m)}=G^{(-m)}$.
+- The acceptance bandwidth $L_A$.
+- The Clebsch-Gordan and Wigner factorisation.
+- Exact ballistics.
+- Independent rotation of the source and of every module.
+- Code: `lighthit.directional`, `lighthit._directional_numba`, `lighthit.ballistic`.
+:::
+
+## The physical question {#sec-directional-om-question}
+
+## Assumptions and definitions {#sec-directional-om-assumptions}
+
+## Derivation {#sec-directional-om-derivation}
+
+## The discrete algorithm {#sec-directional-om-algorithm}
+
+## Correspondence with the code {#sec-directional-om-code}
+
+## A worked number {#sec-directional-om-example}
+
+## Checks {#sec-directional-om-checks}
+
+## Range of validity {#sec-directional-om-validity}
+
+## Exercises {#sec-directional-om-exercises}

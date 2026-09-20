@@ -1,0 +1,29 @@
+# The Fourier-adjoint formulation {#sec-fourier-adjoint}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- The space and time transforms, with the sign convention fixed.
+- Reciprocity.
+- Source and detector as the right- and left-hand sides.
+- Why one solve serves many geometries.
+:::
+
+## The physical question {#sec-fourier-adjoint-question}
+
+## Assumptions and definitions {#sec-fourier-adjoint-assumptions}
+
+## Derivation {#sec-fourier-adjoint-derivation}
+
+## The discrete algorithm {#sec-fourier-adjoint-algorithm}
+
+## Correspondence with the code {#sec-fourier-adjoint-code}
+
+## A worked number {#sec-fourier-adjoint-example}
+
+## Checks {#sec-fourier-adjoint-checks}
+
+## Range of validity {#sec-fourier-adjoint-validity}
+
+## Exercises {#sec-fourier-adjoint-exercises}

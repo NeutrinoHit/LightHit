@@ -1,0 +1,30 @@
+# The spectral Cherenkov source {#sec-cherenkov-source}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Frank-Tamm.
+- The two fields $S_0$ and $S_2$.
+- The phase index.
+- Integration over wavelength.
+- `SpectralLightElements`.
+:::
+
+## The physical question {#sec-cherenkov-source-question}
+
+## Assumptions and definitions {#sec-cherenkov-source-assumptions}
+
+## Derivation {#sec-cherenkov-source-derivation}
+
+## The discrete algorithm {#sec-cherenkov-source-algorithm}
+
+## Correspondence with the code {#sec-cherenkov-source-code}
+
+## A worked number {#sec-cherenkov-source-example}
+
+## Checks {#sec-cherenkov-source-checks}
+
+## Range of validity {#sec-cherenkov-source-validity}
+
+## Exercises {#sec-cherenkov-source-exercises}

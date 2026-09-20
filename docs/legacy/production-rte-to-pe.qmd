@@ -1,0 +1,314 @@
+---
+title: "LightHit production: от RTE до фотоэлектронов"
+format: html
+---
+
+# Область расчёта
+
+Этот документ описывает **текущую основную производственную схему**, а не все
+исследовательские ветви репозитория. Среда однородна и бесконечна, поляризация,
+границы воды и тени конструкций не учитываются. Индикатрисса рассеяния —
+Henyey–Greenstein с явно заданным $g=0.9$. Приватный `bgvd_model` читается
+только во время выполнения и не входит в пакет LightHit.
+
+Публичная точка входа — `lighthit.transport.TransportKernel`; спектральная среда
+и детектор определены в `lighthit.model`, источники — в `lighthit.sources`,
+адаптер Байкала — в `lighthit.bgvd`.
+
+# 1. Спектральное RTE
+
+Для каждой длины волны задача независима:
+
+$$
+\left[\frac1{v_g(\lambda)}\partial_t+\mathbf s\cdot\nabla
++\mu_a(\lambda)+\mu_s(\lambda)\right]I_\lambda
+-\mu_s(\lambda)\int p_g(\mathbf s\cdot\mathbf s')I_\lambda(\mathbf s')d\Omega'
+=q_\lambda.
+$$
+
+Здесь $v_g=c_0/n_g(\lambda)$. Фазовый показатель $n_{ph}(\lambda)$ относится
+к черенковскому источнику, групповой $n_g(\lambda)$ — к времени переноса.
+`SpectralMedium.sample` интерполирует четыре таблицы воды, а
+`SpectralMedium.band` создаёт монохроматический `Medium`. Приватные массивы
+читаются `load_bgvd_model`; `cs_scattering` и `cosines` намеренно не читаются.
+
+Используется
+
+$$
+p_g(\cos\theta)=\frac{1-g^2}{4\pi(1+g^2-2g\cos\theta)^{3/2}},\qquad g=0.9,
+$$
+
+реализованная в `single.hg_phase`; её коэффициенты Лежандра равны $g^\ell$.
+
+# 2. Fourier–adjoint задача одного спектрального узла
+
+Соглашение:
+
+$$
+\widetilde f(\mathbf k,\omega)=\int f(\mathbf x,t)
+e^{-i\mathbf k\cdot\mathbf x+i\omega t}\,d^3x\,dt.
+$$
+
+После преобразования и переноса детекторного функционала на правую часть:
+
+$$
+(D-V)h=A,
+\qquad D=d_0+ik\mu,
+\qquad d_0=\mu_a+\mu_s-i\omega/v_g.
+$$
+
+$A(\mathbf s)$ — угловая чувствительность ОМ. Для изотропного приёмника
+$A=1$. Реализация свободных моментов, точного свободного хвоста и выбора
+NumPy/Numba находится в `angular._free_moments_and_ratios`.
+
+В нормированном базисе
+$p_\ell=\sqrt{(2\ell+1)/2}P_\ell$ матрица трёхдиагональна:
+
+$$
+M_{\ell\ell}=d_0-\mu_sg^\ell,
+\qquad M_{\ell,\ell+1}=M_{\ell+1,\ell}
+=ik\frac{\ell+1}{\sqrt{4(\ell+1)^2-1}}.
+$$
+
+Строка $L$ получает точный Schur-вклад бесконечного свободного хвоста
+$h_{L+1}=r_Lh_L$. Прогонка — `angular.solve_tail_system`.
+
+# 3. Разделение порядков рассеяния
+
+Схема не получает малые компоненты вычитанием:
+
+$$
+h^{(0)}=b,qquad
+M_{free}h^{(1)}=\Gamma b,qquad
+Mh^{(\ge2)}=\Gamma h^{(1)}.
+$$
+
+`angular.angular_components` возвращает эти три части. Для точечного
+изотропного приёмника порядок 1 дополнительно доступен с полной HG-фазой через
+`single.single_spectrum`; направленный ОМ использует конечный $L$ кэша.
+
+# 4. Пространственное обращение и кэш
+
+Сохраняются радиальные мультиполи
+
+$$
+M_\ell(r,\omega)=\frac{i^\ell}{2\pi^2}\sqrt{\frac{2\ell+1}{2}}
+\int_0^\infty k^2j_\ell(kr)h_\ell(k,\omega)\,dk.
+$$
+
+`ResponseCache.build` строит их на радиальной сетке; `moments_at` интерполирует
+только $r$. Опция `radial_phase="flight"` перед интерполяцией снимает
+$e^{i\omega r/v_g}$. `TransportKernel._cache_for` создаёт или загружает
+отдельный кэш для каждого спектрального узла; ключ включает среду, частоты,
+радиальную сетку и настройки решателя.
+
+По умолчанию production-кэш покрывает 3–300 м с 220 радиальными узлами. Для ОМ
+вне диапазона баллистика изотропной вспышки остаётся аналитической, а рассеянный
+вклад пропускается только если absorption-only оценка с запасом 10 ниже порога.
+Если оценка выше, расчёт останавливается и требует расширить **проверенный**
+диапазон кэша. Axial-движок применяет такое же правило к ограничивающей сфере
+источника: он не экстраполирует радиальные сплайны молча.
+
+# 5. Два спектральных поля черенковского источника
+
+Дифференциальный выход одного шага длины $ds$:
+
+$$
+\frac{dN}{d\lambda_{nm}}=2\pi\alpha\,10^9 ds\,
+\lambda_{nm}^{-2}\left(1-\frac1{\beta^2n_{ph}^2(\lambda)}\right).
+$$
+
+Он записывается точно по амплитуде как
+
+$$
+q_e(\lambda)=S_0(\lambda)F_{e0}+S_2(\lambda)F_{e2},
+\quad S_0=\lambda^{-2},\quad S_2=\lambda^{-2}n_{ph}^{-2},
+$$
+
+$$
+F_{e0}=2\pi\alpha10^9ds\,F_e,
+\qquad F_{e2}=-\beta^{-2}2\pi\alpha10^9ds\,F_e.
+$$
+
+`SpectralLightElements.coefficient0` и `coefficient2` хранят эти коэффициенты;
+`photon_density_per_nm` проверяет формулу. `G4Shower.from_hdf5` строит поля из
+истинной длины шага, физического $\beta$, хорды и времён. `CherenkovTrack`
+создаёт тот же контракт для прямого трека.
+
+В текущей двухполевой модели угловой конус фиксируется при
+`reference_phase_index` (по умолчанию 1.35). Спектральная амплитуда учитывается
+двумя полями точно, но дисперсия самого угла Черенкова не представляется двумя
+функциями. Элементы, пересекающие черенковский порог
+$\beta n_{ph}\le1$ внутри выбранной полосы, не могут быть представлены двумя
+глобальными функциями без дополнительного порогового базиса. Текущая схема
+исключает их целиком и записывает число элементов и долю исходного коэффициента
+в `TransportResponse.metadata`; если ниже порога весь источник, расчёт
+останавливается.
+
+# 6. Axial-представление ливня и трека
+
+В собственной системе источника (`AxisFrame`) ось — третья координата:
+
+$$
+P_\ell(\widehat{\mathbf r}\cdot\mathbf u)
+=\frac{4\pi}{2\ell+1}\sum_mY^R_{\ell m}(\widehat{\mathbf r})
+Y^R_{\ell m}(\mathbf u).
+$$
+
+Для каждого поля компилируется
+
+$$
+A^{(a)}_{\ell m}(\mathbf x_b,\omega)=
+\sum_{i\in b}C_i^{(a)}P_\ell(\mu_{C,i})Y^R_{\ell m}(\mathbf u_i)
+e^{i\omega(t_i-t_{ref})},\qquad a\in\{0,2\}.
+$$
+
+`compile_axial_source_fast` выполняет CIC-депонирование; `PreparedAxialKernel.apply`
+интерполирует радиальный кэш и одновременно накапливает порядки 1 и $\ge2$ без
+тензора `(ОМ,ячейка,канал,частота)`. `method="axial"` оставляет $|m|\le M$,
+а `method="axial_full"` оставляет все $m$ и требует
+`allow_experimental=True`. Имя `generic` является его более понятным alias для
+сравнительных запусков произвольного набора элементов; это всё ещё axial-сетка,
+а не независимый универсальный решатель без аппроксимаций.
+
+# 7. Геометрия и отклик BGVD OM
+
+`load_bgvd_model(..., dataset="2021")` читает все 2304 строки
+`median_om_coordinates_2021.csv`: позиции, направления, cluster/string/channel.
+Площадь равна $\pi R_{OM}^2$ с приватным `OpticalModule.radius`.
+
+Спектральный множитель берётся без дополнительной константы:
+
+$$
+\epsilon_{OM}(\lambda)=
+\texttt{efficiency}(\lambda)\,
+\texttt{transmission\_gel\_glass}(\lambda).
+$$
+
+Угловая функция — приватный кубический полином. В приватной конвенции head-on
+соответствует $\cos\theta=-1$; публичный `DetectorArray` использует head-on
+$x=+1$, поэтому адаптер вычисляет $A_{public}(x)=A_{private}(-x)$.
+
+Для изотропной вспышки угловой отклик применяется через точное мультипольное
+свёртывание `ResponseCache.acceptance_spectrum`. Для источника из элементов он
+применяется через точное $m$-блочное ядро `lighthit.directional`: приёмистость
+входит внутрь углового свёртывания для рассеянных порядков и берётся по
+точному входящему направлению каждого элемента для баллистики. Выбор модели ОМ
+определяется измеренной полосой приёмистости и записывается в
+`TransportResponse.metadata["detector_angular_model"]`: `exact_m_blocks` для
+направленного модуля. Прежнее приближение — направление на центроид источника —
+осталось только как experimental-метод `axial_centroid` для регрессии.
+Вывод и измерения — @sec-directional-om.
+
+# 8. Свёртка по длине волны
+
+`WavelengthQuadrature.gauss_legendre` задаёт узлы и веса в нм. Для каждого узла
+решается собственная среда, после чего
+
+$$
+\widetilde N_d^{(p)}(\omega)=
+\sum_j w_j\,A_d\,\epsilon_{OM}(\lambda_j)\,A_{ang,d}
+\left[S_0(\lambda_j)\widetilde K_{d,0}^{(p)}
++S_2(\lambda_j)\widetilde K_{d,2}^{(p)}\right].
+$$
+
+Знак $F_{e2}$ уже включён в коэффициенты источника; в скомпилированном коде
+хранится его положительный модуль и второй вклад вычитается. По умолчанию девять
+узлов интегрируют диапазон приватной воды 350–610 нм. Сходимость по числу узлов
+является отдельной проверкой.
+
+# 9. Баллистика, временные бины и заряд
+
+Для axial-источника порядок 0 вычисляется на исходных элементах:
+
+$$
+a_*=z-b\frac{\cos\theta_C}{\sin\theta_C},\qquad
+Q^{(0)}=\frac{Y\,e^{-\mu_td}}{2\pi b\sin\theta_C},
+$$
+
+с точным временем эмиссии вдоль хорды и $d/v_g(\lambda)$. Реализация —
+`ballistic_fast.vectorised_ballistic_bins_fast`. Интегральный заряд хранится
+отдельно от конечного временного окна.
+
+Рассеянные порядки обращаются функцией `readout.inverse_bins`:
+
+$$
+N_{ab}=\frac1\pi\Re\sum_j\Delta\omega_j\,
+\widetilde K(\omega_j)e^{-i\omega_jt_c}
+\Delta t\,\operatorname{sinc}(\omega_j\Delta t/2).
+$$
+
+Отрицательные бины не клиппируются. `TransportResponse` содержит
+`spectrum_pe`, `components_pe`, `charge_components_pe`, `time_origin_ns` и
+маску `active`.
+
+# 10. Порог слабых ОМ
+
+Перед полным частотным axial-применением оба поля считаются для всех ОМ только
+при $\omega=0$ и сразу сворачиваются по длине волны и отклику ОМ. Полный спектр
+строится только если
+
+$$Q_d^{(0)}+Q_d^{(1)}+Q_d^{(\ge2)}\ge Q_{cut}.$$
+
+По умолчанию $Q_{cut}=0.01$ фэ; ноль отключает screening. Это точная проверка
+заряда в текущей двухполевой axial-модели, не эвристическая оценка. Заряд слабых
+ОМ сохраняется, их временные бины остаются нулевыми.
+
+# 11. Публичный API
+
+```python
+import lighthit as lh
+
+bgvd = lh.load_bgvd_model(
+    "/private/path/bgvd-model-master",
+    dataset="2021",
+)
+
+config = lh.KernelConfig(
+    cache_directory="/local/cache/lighthit-bgvd",
+    wavelength_nodes=9,
+    threshold_pe=0.01,
+)
+
+kernel = bgvd.kernel(config).build()
+
+laser = lh.IsotropicFlash.monochromatic(
+    position_m=[0, 0, 0], photons=1e12, wavelength_nm=532,
+)
+laser_response = kernel.transport(laser)  # auto -> isotropic
+
+track = lh.CherenkovTrack(
+    start_m=[0, 0, -50], direction=[0.2, 0.1, 0.97], length_m=120,
+)
+track_response = kernel.transport(track, method="track")
+
+shower = lh.G4Shower.from_hdf5("event.h5", event=5)
+shower_response = kernel.transport(shower, method="axial")
+assert shower_response.metadata["detector_angular_model"] == "exact_m_blocks"
+
+# Explicit opt-in for a research variant:
+control = kernel.transport(
+    shower, method="axial_full", allow_experimental=True,
+)
+```
+
+Имя метода говорит о том, как обрабатывается **источник**; модель ОМ —
+свойство самого модуля, и она выводится из измеренной полосы приёмистости.
+`build()` строит именно те таблицы, которые этот выбор потребует
+(`kernel.cache_kinds(method)` показывает какие), поэтому направленный модуль
+больше не платит за сборку старого мультипольного кэша впустую; перед
+изотропной вспышкой нужен `build(method="isotropic")`, а `build(method="all")`
+строит обе таблицы.
+
+Новые методы можно добавить через `TransportKernel.register_method`; флаг
+`experimental` после регистрации проверяется тем же диспетчером. Это позволяет
+сравнивать движки через один объект среды, детектора и настроек, не создавая
+глобальное состояние `lh.response`.
+
+# 12. Что входит в PyPI-поставку
+
+Wheel содержит пакет `lighthit`, type marker и assets автономного viewer.
+Приватный `bgvd_model`, `g4_data`, `.build`, книга, ноутбуки, внутренние отчёты,
+слайды и тестовые результаты не являются package data. Минимальные интеграционные
+примеры находятся в `examples/production_*.py`; их пути к приватным данным
+задаются переменными окружения или аргументами пользователя.

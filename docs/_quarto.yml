@@ -5,25 +5,42 @@ project:
 
 book:
   title: "LightHit"
-  subtitle: "Point-source light transport in a scattering medium"
+  subtitle: "From the radiative transfer equation to expected photoelectrons"
   author: "D. V. Naumov"
-  date: "2026-09-16"
+  date: today
   date-format: "D MMMM YYYY"
   chapters:
     - index.qmd
-    - chapters/01-rte.qmd
-    - chapters/02-point-source.qmd
-    - chapters/03-histogram-binning.qmd
-    - chapters/04-bgvd-water.qmd
-    - chapters/05-numerical-scheme.qmd
-    - chapters/06-modules-and-cache.qmd
-    - chapters/07-cone-segments.qmd
-    - chapters/08-event-moments.qmd
-    - chapters/09-axial-source.qmd
-    - chapters/10-scripts-and-programs.qmd
+    - part: "I. The physical model"
+      chapters:
+        - chapters/01-what-lighthit-computes.qmd
+        - chapters/02-spectral-rte.qmd
+        - chapters/03-optical-module.qmd
+    - part: "II. The Green's function and the numerical method"
+      chapters:
+        - chapters/04-fourier-adjoint.qmd
+        - chapters/05-angular-system.qmd
+        - chapters/06-scattering-orders.qmd
+        - chapters/07-time-and-bins.qmd
+    - part: "III. Real sources and a directional detector"
+      chapters:
+        - chapters/08-cherenkov-source.qmd
+        - chapters/09-track-and-shower.qmd
+        - chapters/10-directional-om.qmd
+    - part: "IV. The production scheme"
+      chapters:
+        - chapters/11-cache-numba-memory.qmd
+        - chapters/12-rte-to-photoelectrons.qmd
+        - chapters/13-weak-module-threshold.qmd
+        - chapters/14-api-and-visualisation.qmd
+        - chapters/15-validation-and-error-budget.qmd
   appendices:
-    - appendices/notation.qmd
-    - VALIDATION.md
+    - appendices/a-notation.qmd
+    - appendices/b-identities.qmd
+    - appendices/c-reference-solutions.qmd
+    - appendices/d-rejected-methods.qmd
+    - appendices/e-benchmark-protocol.qmd
+    - appendices/f-catalogue.qmd
 
 lang: en
 link-citations: true

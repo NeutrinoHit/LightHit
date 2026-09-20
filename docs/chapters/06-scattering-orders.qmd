@@ -1,0 +1,31 @@
+# Scattering orders and the spatial inversion {#sec-scattering-orders}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- Ballistic light.
+- Exactly one scattering.
+- Two and more.
+- Spherical Bessel functions.
+- The radial cache.
+- Independent reference solutions.
+:::
+
+## The physical question {#sec-scattering-orders-question}
+
+## Assumptions and definitions {#sec-scattering-orders-assumptions}
+
+## Derivation {#sec-scattering-orders-derivation}
+
+## The discrete algorithm {#sec-scattering-orders-algorithm}
+
+## Correspondence with the code {#sec-scattering-orders-code}
+
+## A worked number {#sec-scattering-orders-example}
+
+## Checks {#sec-scattering-orders-checks}
+
+## Range of validity {#sec-scattering-orders-validity}
+
+## Exercises {#sec-scattering-orders-exercises}

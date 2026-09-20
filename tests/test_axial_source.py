@@ -54,6 +54,15 @@ def test_channel_index_counts_the_kept_orders():
         assert np.all(np.diff(kept) > 0)
 
 
+def test_axis_frame_coordinate_order_is_transverse_transverse_longitudinal():
+    frame = AxisFrame.of(make_event(count=80))
+    vectors = np.array([frame.first, frame.second, frame.axis,
+                        2 * frame.first - 3 * frame.second + 5 * frame.axis])
+    np.testing.assert_allclose(
+        frame.rotate(vectors),
+        [[1, 0, 0], [0, 1, 0], [0, 0, 1], [2, -3, 5]], atol=2e-15)
+
+
 def test_the_emission_phase_survives_the_move_onto_the_grid():
     """The identity that a cell-centred front phase would silently break.
 

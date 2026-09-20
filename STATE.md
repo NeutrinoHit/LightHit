@@ -1,28 +1,23 @@
-# LightHit — state of the first part
+# LightHit — current state
 
-Implemented: an independent package, a point isotropic detector, directed
-and isotropic monochromatic flashes, every scattering order, charge, time
-bins, a CLI, a synthetic example, a notebook, and the private-water adapter
-code. Normalization: response per unit effective area, efficiency 1.
+LightHit provides a spectral, time-dependent RTE response for isotropic
+flashes, Cherenkov tracks and stored G4 showers. The production API combines a
+homogeneous spectral medium, wavelength-dependent OM efficiency, directional
+acceptance and detector geometry into integrated and time-binned expected
+photoelectrons.
 
-Numerical scheme: exact orders 0 and full-HG 1; orders $\ge2$ use finite-HG
-scattering with an exact free angular tail. The matrix has size $L+1$;
-output angular degrees up to $J$ are continued by recursion. $k$ and
-$\omega$ are integrated numerically.
+The Green-function solver separates ballistic, once-scattered and
+multiply-scattered light. Free angular transport has an exact infinite tail;
+the HG scattering operator, spatial inversion, frequency range, wavelength
+quadrature and source representation retain explicit numerical truncations.
+Directional sources read by directional modules are handled by fixed-$m$
+blocks and a fused Numba contraction.
 
-Math: `docs/` (a short Quarto book — `chapters/01-rte.qmd` through
-`chapters/04-bgvd-water.qmd`, `appendices/notation.qmd`).
-Exact scope of the checks performed: `docs/VALIDATION.md`.
-`synthetic_medium()` in `src/lighthit/medium.py` now uses parameters close
-to, but not equal to, measured Baikal water at 450 nm (absorption exceeding
-scattering, a strongly forward-peaked $g=0.9$); it is still not a
-calibration (`PROVENANCE.md`). `docs/chapters/04-bgvd-water.qmd` and
-`docs/bgvd-450nm/` record one run against the actual private water table at
-450 nm, including the $(L,k_{\max})$ convergence study that run needed.
+The private BGVD model and G4 event files are runtime inputs and are excluded
+from distributions. The public package uses HG with explicit `g`; it does not
+copy the private scattering indicatrix. Exact provenance and model boundaries
+are recorded in `PROVENANCE.md` and the Quarto book under `docs/`.
 
-No commit and no publication had happened before this pass; a license and
-copyright holders are for the author to decide.
-
-The next small, checkable step is discussed after a local run of this
-example and a look at its time front. The earlier exploratory `baikal-rte`
-project remains separate and is not imported automatically.
+The package version is defined in `pyproject.toml` and `lighthit.__version__`.
+Release checks are documented in `PUBLISHING.md`. LightHit is licensed under
+BSD-3-Clause; see `LICENSE`.

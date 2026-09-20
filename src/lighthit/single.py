@@ -66,7 +66,7 @@ def _path_rate_backend(backend="auto"):
         if backend == "numba":
             raise ImportError(
                 "The numba single-scattering backend requires the optional "
-                "accelerate extra: python -m pip install -e '.[accelerate]'"
+                "accelerate extra: python -m pip install 'lighthit[accelerate]'"
             ) from exc
         return _single_scattering_path_rate_numpy, "numpy"
     return single_scattering_path_rate, "numba"

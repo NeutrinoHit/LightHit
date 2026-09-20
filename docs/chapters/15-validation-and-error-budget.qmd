@@ -1,0 +1,33 @@
+# Validation and the error budget {#sec-validation}
+
+::: {.callout-important title="Placeholder"}
+This chapter has not been written yet. The list below fixes its scope;
+the text replaces this note in a later pass.
+
+- $L$, $L_s$, $M$, $L_A$.
+- $k_{\max}$, the quadrature and the radial grid.
+- The frequency grid.
+- The spectral quadrature.
+- Axial discretisation.
+- Rotational invariance.
+- Numba against NumPy.
+- The recommended `quick`, `standard` and `precision` profiles.
+:::
+
+## The physical question {#sec-validation-question}
+
+## Assumptions and definitions {#sec-validation-assumptions}
+
+## Derivation {#sec-validation-derivation}
+
+## The discrete algorithm {#sec-validation-algorithm}
+
+## Correspondence with the code {#sec-validation-code}
+
+## A worked number {#sec-validation-example}
+
+## Checks {#sec-validation-checks}
+
+## Range of validity {#sec-validation-validity}
+
+## Exercises {#sec-validation-exercises}
