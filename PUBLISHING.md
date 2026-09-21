@@ -1,6 +1,6 @@
 # PyPI release checklist
 
-LightHit is packaged as `0.2.0a5`, under BSD-3-Clause
+LightHit is packaged as `0.2.0a6`, under BSD-3-Clause
 (`LICENSE`, `Copyright (c) 2026, Dmitry Naumov`), declared in
 `pyproject.toml` as `license = {text = "BSD-3-Clause"}` with the matching OSI
 classifier. Raising the build requirement to `setuptools>=77` would allow the
@@ -12,7 +12,7 @@ PEP 639 SPDX form and `license-files`; that is a follow-up, not a blocker.
 LIGHTHIT_G4_FILE=g4_data/sim_e_100GeV_10.h5 python -m pytest -q
 quarto render docs
 python -m build --sdist --wheel
-python -m twine check dist/lighthit-0.2.0a5*
+python -m twine check dist/lighthit-0.2.0a6*
 ```
 
 Both forms of the build command must work --- with isolation, where the
@@ -45,8 +45,8 @@ tests, and the `lighthit/experimental` directory must hold exactly the seven
 modules of the allowlist:
 
 ```bash
-python -m zipfile -l dist/lighthit-0.2.0a5-*.whl | grep experimental/
-tar tzf dist/lighthit-0.2.0a5.tar.gz | grep experimental/
+python -m zipfile -l dist/lighthit-0.2.0a6-*.whl | grep experimental/
+tar tzf dist/lighthit-0.2.0a6.tar.gz | grep experimental/
 ```
 
 The sdist intentionally includes `LICENSE`, `setup.py`, `packaging_filter.py`
@@ -56,9 +56,9 @@ and package sources.
 ## TestPyPI, then PyPI
 
 ```bash
-python -m twine upload --repository testpypi dist/lighthit-0.2.0a5*
+python -m twine upload --repository testpypi dist/lighthit-0.2.0a6*
 # Test in a clean environment using the exact uploaded version.
-python -m twine upload dist/lighthit-0.2.0a5*
+python -m twine upload dist/lighthit-0.2.0a6*
 ```
 
 Credentials/tokens are supplied by the publisher at upload time and must never
