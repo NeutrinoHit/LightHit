@@ -15,13 +15,18 @@ from .directional import DirectionalCache, acceptance_bandwidth, directional_res
 from .green import SolverSettings
 from .model import DetectorArray, SpectralMedium, WavelengthQuadrature
 from .readout import inverse_bins
+from .single import single_bins
 from .sources import CherenkovTrack, G4Shower, IsotropicFlash, SpectralLightElements
 
 
 @dataclass(frozen=True)
 class KernelConfig:
     """Numerical and operational settings shared by all source engines."""
-    omega_per_ns: np.ndarray = field(default_factory=lambda: np.linspace(0.0, 0.15, 41))
+    # Keep the established 0.00375 ns^-1 spacing (and therefore its long
+    # 2*pi/delta-omega image period), while resolving the physical-time bins
+    # with a substantially wider band.  Increasing only omega_max with the old
+    # 41 nodes would move periodic Fourier images into the readout window.
+    omega_per_ns: np.ndarray = field(default_factory=lambda: np.linspace(0.0, 1.2, 321))
     relative_time_edges_ns: np.ndarray = field(
         default_factory=lambda: np.arange(-60.0, 740.0 + 10.0, 20.0))
     wavelength_nodes: int = 9
@@ -81,6 +86,31 @@ class TransportResponse:
     @property
     def bins_pe(self):
         return self.components_pe.sum(axis=2)
+
+    def components_at_frequency_cutoff(self, omega_max_per_ns):
+        """Re-bin Fourier-derived orders using a prefix of the stored spectrum.
+
+        Exact physical-time orders are copied unchanged.  This makes cutoff
+        convergence checks cheap: build the widest frequency grid once, then
+        compare nested cutoffs without rebuilding any transport cache.
+        """
+        cutoff = float(omega_max_per_ns)
+        if not np.isfinite(cutoff) or cutoff <= 0:
+            raise ValueError("omega_max_per_ns must be finite and positive")
+        mask = self.omega_per_ns <= cutoff + 1e-12
+        if np.count_nonzero(mask) < 2:
+            raise ValueError("frequency cutoff must retain at least two nodes")
+        omega = self.omega_per_ns[mask]
+        phase = np.exp(-1j * omega[:, None] * self.time_origin_ns[None, :])
+        relative = self.spectrum_pe[mask] * phase[:, :, None]
+        components = self.components_pe.copy()
+        orders = self.metadata.get("fourier_inverted_orders", (1, 2))
+        for order in orders:
+            if order not in (1, 2):
+                raise ValueError("fourier_inverted_orders may contain only 1 and 2")
+            components[:, :, order] = inverse_bins(
+                omega, relative[:, :, order], self.relative_time_edges_ns)
+        return components
 
     def save(self, path):
         path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
@@ -389,6 +419,14 @@ class TransportKernel:
         wavelengths, photon_weight = self._flash_nodes(source)
         spectrum = np.zeros((len(omega), len(positions), 3), complex)
         ballistic_rows = []
+        first_order_rows = []
+        acceptance_probe = np.asarray(
+            self.detector.angular_acceptance(np.linspace(-1.0, 1.0, 65)), float)
+        constant_acceptance = (
+            float(acceptance_probe[0])
+            if np.allclose(acceptance_probe, acceptance_probe[0],
+                           rtol=1e-11, atol=1e-14)
+            else None)
         low, high = self.config.radial_range_m
         radial_inside = (radii >= low) & (radii <= high)
         upper = np.zeros(len(positions))
@@ -400,6 +438,7 @@ class TransportKernel:
             if np.any(radial_inside):
                 value = cache.acceptance_spectrum(
                     radii[radial_inside], cosines[radial_inside], alpha,
+                    exact_first_order=constant_acceptance is not None,
                     acceptance=self.detector.angular_acceptance)
                 spectrum[:, radial_inside] += value * scale[radial_inside][None, :, None]
             acceptance = np.asarray(self.detector.angular_acceptance(cosines), float)
@@ -412,6 +451,8 @@ class TransportKernel:
                 spectrum[:, outside, 0] += (q0[outside][None, :]
                                              * np.exp(1j * omega[:, None] * arrival[None, :]))
             ballistic_rows.append((q0, source.time_ns + radii / cache.medium.speed_m_per_ns))
+            if constant_acceptance is not None:
+                first_order_rows.append((cache.medium, scale * constant_acceptance))
             upper += (photons * self.detector.effective_area_m2 * efficiency * acceptance
                       * np.exp(-cache.medium.absorption_per_m * radii)
                       / (4 * np.pi * radii * radii))
@@ -426,9 +467,19 @@ class TransportKernel:
         edges = self.config.relative_time_edges_ns
         components = np.zeros((len(positions), len(edges) - 1, 3))
         if len(omega) > 1:
-            for order in (1, 2):
+            fourier_orders = (2,) if constant_acceptance is not None else (1, 2)
+            for order in fourier_orders:
                 components[:, :, order] = inverse_bins(
                     omega, relative[:, :, order], edges)
+        else:
+            fourier_orders = ()
+        if constant_acceptance is not None:
+            absolute_edges = edges[None, :] + origins[:, None] - source.time_ns
+            for band, scale in first_order_rows:
+                for detector_index in np.flatnonzero(radial_inside):
+                    components[detector_index, :, 1] += scale[detector_index] * single_bins(
+                        absolute_edges[detector_index], radii[detector_index], None, band,
+                        backend=self.resolved_angular_backend())
         for weight, arrival in ballistic_rows:
             index = np.searchsorted(edges, arrival - origins, side="right") - 1
             bin_inside = (index >= 0) & (index < len(edges) - 1)
@@ -443,7 +494,11 @@ class TransportKernel:
             {"elapsed_seconds": perf_counter() - began,
              "wavelength_nm": wavelengths.tolist(),
              "detector_angular_model": "exact multipole contraction",
-             "first_order": "finite-L for directional OM acceptance",
+             "first_order": (
+                 "exact full-HG spectrum and physical-time bins"
+                 if constant_acceptance is not None else
+                 "finite-L directional-acceptance spectrum and Fourier bins"),
+             "fourier_inverted_orders": list(fourier_orders),
              "radial_range_m": list(self.config.radial_range_m),
              "omitted_outside_range": int((~radial_inside).sum())})
 
@@ -618,6 +673,7 @@ class TransportKernel:
              "source_elements_dropped_at_spectral_threshold": original_elements - len(elements),
              "source_coefficient_fraction_dropped": dropped_fraction,
              "active_modules": int(active.sum()), "threshold_pe": self.config.threshold_pe,
+             "fourier_inverted_orders": [1, 2] if len(omega) > 1 else [],
              "radial_range_m": list(self.config.radial_range_m),
              "omitted_outside_range": int((~inside).sum()),
              "detector_angular_model": (
@@ -798,6 +854,7 @@ class TransportKernel:
              "source_elements_dropped_at_spectral_threshold": original_elements - len(elements),
              "source_coefficient_fraction_dropped": dropped_fraction,
              "active_modules": int(active.sum()), "threshold_pe": self.config.threshold_pe,
+             "fourier_inverted_orders": [1, 2] if len(omega) > 1 else [],
              "radial_range_m": list(self.config.radial_range_m),
              "omitted_outside_range": int((~inside).sum()),
              "detector_angular_model": "exact_m_blocks",

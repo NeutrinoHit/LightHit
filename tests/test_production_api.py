@@ -21,6 +21,13 @@ def detector():
         identifiers={"om": [1, 2]})
 
 
+def isotropic_detector():
+    return lh.DetectorArray(
+        [[10., 0., 0.], [0., 20., 0.]], [[-1., 0., 0.], [0., -1., 0.]],
+        .05, lambda x: np.ones_like(np.asarray(x, float)),
+        lambda wavelength: np.ones_like(np.asarray(wavelength, float)) * .2)
+
+
 def config(tmp_path, *, omega=(0.,), threshold=0):
     return lh.KernelConfig(
         omega_per_ns=np.asarray(omega), relative_time_edges_ns=np.arange(-10., 111., 20.),
@@ -29,6 +36,15 @@ def config(tmp_path, *, omega=(0.,), threshold=0):
         k_order=4, radial_range_m=(2., 60.), radial_nodes=8,
         angular_backend="numpy", threshold_pe=threshold,
         cache_directory=tmp_path)
+
+
+def test_default_frequency_grid_widens_cutoff_without_shortening_image_period():
+    cfg = lh.KernelConfig()
+    assert len(cfg.omega_per_ns) == 321
+    assert cfg.omega_per_ns[-1] == pytest.approx(1.2)
+    assert np.diff(cfg.omega_per_ns) == pytest.approx(0.00375)
+    assert 2 * np.pi / np.diff(cfg.omega_per_ns).max() > np.ptp(
+        cfg.relative_time_edges_ns)
 
 
 def test_two_field_identity_matches_frank_tamm_differential():
@@ -67,6 +83,30 @@ def test_isotropic_public_api_and_cache_reuse(tmp_path):
     # and the transport that follows must not add another.
     assert len(list(tmp_path.glob("transport-*.npz"))) == 1
     assert not list(tmp_path.glob("directional-*.npz"))
+
+
+def test_isotropic_flash_uses_exact_physical_time_first_order(tmp_path):
+    from lighthit.single import single_bins
+
+    source = lh.IsotropicFlash.monochromatic([0, 0, 0], 1e5, 450., time_ns=7.)
+    cfg = config(tmp_path, omega=(0., .04), threshold=0)
+    kernel = lh.TransportKernel(spectral_medium(), isotropic_detector(), cfg)
+    response = kernel.transport(source)
+    band = spectral_medium().band(450.)
+    radii = np.linalg.norm(isotropic_detector().positions_m - source.position_m, axis=1)
+    scale = source.photons * .05 * .2
+    for index, radius in enumerate(radii):
+        absolute_edges_from_emission = (
+            response.relative_time_edges_ns + response.time_origin_ns[index] - source.time_ns)
+        expected = scale * single_bins(
+            absolute_edges_from_emission, radius, None, band,
+            backend=kernel.resolved_angular_backend())
+        np.testing.assert_allclose(response.components_pe[index, :, 1], expected,
+                                   rtol=2e-10, atol=1e-14)
+        assert np.all(response.components_pe[index, :, 1] >= 0)
+    assert response.metadata["fourier_inverted_orders"] == [2]
+    assert response.metadata["first_order"] == (
+        "exact full-HG spectrum and physical-time bins")
 
 
 def test_build_convenience_returns_an_explicit_reusable_kernel(tmp_path):

@@ -77,6 +77,15 @@ def test_self_contained_viewer_and_safe_json(tmp_path):
     assert json.loads((tmp_path / "viewer.json").read_text())["schema"] == SCHEMA
 
 
+def test_viewer_accepts_payload_without_optional_medium_and_catches_async_errors(tmp_path):
+    value = payload()
+    value.pop("medium")
+    path = write_event_viewer(value, tmp_path / "viewer.html")
+    text = path.read_text()
+    assert "data.medium?.provenance" in text
+    assert 'load(JSON.parse($("result").textContent)).catch' in text
+
+
 @pytest.mark.parametrize("mutation", [
     lambda x: x.update(schema="wrong"),
     lambda x: x["events"][0].update(components=[]),
