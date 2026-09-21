@@ -17,4 +17,4 @@ __all__ = [
     "BGVDModel", "load_bgvd_model", "build", "viewer_payload",
     "write_event_viewer",
 ]
-__version__ = "0.2.0a5"
+__version__ = "0.2.0a6"
