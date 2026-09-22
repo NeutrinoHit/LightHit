@@ -131,9 +131,13 @@ def test_the_release_metadata_is_present_and_consistent():
 PROJECT_FILES = ("setup.py", "packaging_filter.py", "MANIFEST.in",
                  "pyproject.toml", "README.md", "LICENSE")
 PROJECT_TREES = ("src", "examples")
-FORBIDDEN_IN_ARCHIVES = ("g4_data", "bgvd_model", "docs/", "notebooks/",
-                         "slides/", "scripts/", "tests/", ".build",
-                         "results/", "preview/")
+FORBIDDEN_TOP_LEVEL = {"g4_data", "bgvd_model", "docs", "notebooks",
+                       "slides", "scripts", "tests", ".build", "results",
+                       "preview", "examples"}
+
+
+def forbidden_archive_member(name):
+    return bool(Path(name).parts and Path(name).parts[0] in FORBIDDEN_TOP_LEVEL)
 
 
 def project_copy(destination):
@@ -222,6 +226,9 @@ def test_python_m_build_produces_clean_archives(tmp_path):
         metadata = archive.read(
             next(name for name in names if name.endswith(".dist-info/METADATA"))
         ).decode()
+        entry_points = archive.read(
+            next(name for name in names if name.endswith(".dist-info/entry_points.txt"))
+        ).decode()
     experimental = sorted(Path(name).stem for name in names
                           if "lighthit/experimental/" in name
                           and name.endswith(".py"))
@@ -235,8 +242,12 @@ def test_python_m_build_produces_clean_archives(tmp_path):
     assert "License: BSD-3-Clause" in metadata
     assert "Classifier: License :: OSI Approved :: BSD License" in metadata
     assert not [name for name in names if "packaging_filter" in name]
-    assert not [name for name in names
-                if any(bad in name for bad in FORBIDDEN_IN_ARCHIVES)]
+    assert not [name for name in names if forbidden_archive_member(name)]
+    assert "lighthit/examples/synthetic.py" in names
+    assert "lighthit/selftest.py" in names
+    assert "lighthit/tests/test_public_smoke.py" in names
+    assert "lighthit-demo = lighthit.examples.synthetic:main" in entry_points
+    assert "lighthit-selftest = lighthit.selftest:main" in entry_points
 
     with tarfile.open(sdists[0]) as archive:
         inside = [name.split("/", 1)[1] for name in archive.getnames()
@@ -245,5 +256,4 @@ def test_python_m_build_produces_clean_archives(tmp_path):
                           if "experimental/" in name and name.endswith(".py"))
     assert experimental == sorted(REQUIRED_EXPERIMENTAL)
     assert {"LICENSE", "setup.py", "packaging_filter.py"} <= set(inside)
-    assert not [name for name in inside
-                if any(bad in name for bad in FORBIDDEN_IN_ARCHIVES)]
+    assert not [name for name in inside if forbidden_archive_member(name)]

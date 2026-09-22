@@ -4,20 +4,12 @@ The stored showers are private inputs, so the tests that need a file run only
 when one is pointed at through ``LIGHTHIT_G4_FILE``. Everything that can be
 checked without one is checked always.
 """
-import os
-from pathlib import Path
-
 import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
 from lighthit.experimental.g4_source import (LightElements, SourceContract,
                                              cherenkov_yield_per_m, load_event)
-
-FILE = Path(os.environ.get("LIGHTHIT_G4_FILE", ""))
-needs_file = pytest.mark.skipif(not FILE.is_file(),
-                                reason="set LIGHTHIT_G4_FILE to a stored G4 event file")
-
 
 def make_elements(count=50, seed=3):
     rng = np.random.default_rng(seed)
@@ -77,9 +69,8 @@ def test_centroid_is_photon_weighted():
     np.testing.assert_allclose(elements.centroid_m, expected, atol=1e-12)
 
 
-@needs_file
-def test_reading_a_stored_event_keeps_the_provenance():
-    elements = load_event(FILE, 5)
+def test_reading_a_stored_event_keeps_the_provenance(stored_g4_file):
+    elements = load_event(stored_g4_file, 5)
     summary = elements.summary()
     assert summary["elements"] > 0
     assert summary["photons"] > 0
@@ -89,12 +80,11 @@ def test_reading_a_stored_event_keeps_the_provenance():
     assert np.all(elements.cone_cosine > 0) and np.all(elements.cone_cosine <= 1)
 
 
-@needs_file
-def test_the_band_scales_the_photon_count_but_not_the_geometry():
-    narrow = load_event(FILE, 5, SourceContract(wavelength_low_nm=440,
-                                                wavelength_high_nm=460))
-    wide = load_event(FILE, 5, SourceContract(wavelength_low_nm=400,
-                                              wavelength_high_nm=500))
+def test_the_band_scales_the_photon_count_but_not_the_geometry(stored_g4_file):
+    narrow = load_event(stored_g4_file, 5, SourceContract(wavelength_low_nm=440,
+                                                          wavelength_high_nm=460))
+    wide = load_event(stored_g4_file, 5, SourceContract(wavelength_low_nm=400,
+                                                        wavelength_high_nm=500))
     assert len(narrow) == len(wide)
     np.testing.assert_allclose(narrow.start_m, wide.start_m)
     ratio = wide.photons.sum() / narrow.photons.sum()

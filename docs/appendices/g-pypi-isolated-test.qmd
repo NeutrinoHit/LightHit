@@ -1,0 +1,338 @@
+# Testing the published PyPI package in isolation {#sec-pypi-isolated-test}
+
+This appendix tests LightHit as a user receives it: from a specific wheel in a
+new virtual environment, outside the source checkout, with no private detector
+or event input.  The installed demonstration uses a small Baikal-like geometry
+but no Baikal calibration.  Full detector-specific examples remain in the
+repository and are described separately below.
+
+The quick profile is an installation and API test.  It is not a convergence
+claim for a physics analysis; production grids must be validated as described
+in @sec-validation.
+
+## 1. Install one exact release
+
+```bash
+export LH_VERSION="0.2.0a7"
+export LH_SMOKE_ROOT="$(mktemp -d /tmp/lighthit-pypi-smoke.XXXXXX)"
+export LH_SMOKE_ENV="${LH_SMOKE_ROOT}/venv"
+
+cd "${LH_SMOKE_ROOT}"
+python3 --version
+python3 -m venv "${LH_SMOKE_ENV}"
+"${LH_SMOKE_ENV}/bin/python" -m pip install --upgrade pip
+"${LH_SMOKE_ENV}/bin/python" -m pip install --no-cache-dir \
+  --index-url https://pypi.org/simple \
+  "lighthit[demo,test]==${LH_VERSION}"
+```
+
+The `demo` extra installs the Numba accelerator and Plotly viewer.  The `test`
+extra installs pytest for the small test suite shipped in the wheel.  Confirm
+that Python imports the installed package rather than a checkout:
+
+```bash
+LH_VERSION="${LH_VERSION}" "${LH_SMOKE_ENV}/bin/python" - <<'PY'
+import os
+from pathlib import Path
+import lighthit
+
+location = Path(lighthit.__file__).resolve()
+print("version:", lighthit.__version__)
+print("imported from:", location)
+assert lighthit.__version__ == os.environ["LH_VERSION"]
+assert "site-packages" in location.parts
+PY
+```
+
+Record the environment when the result may need to be reproduced:
+
+```bash
+"${LH_SMOKE_ENV}/bin/python" -m pip freeze > installed-packages.txt
+```
+
+## 2. Run the installed self-test
+
+The basic check needs no checkout, private model, G4 file or pre-existing
+cache:
+
+```bash
+"${LH_SMOKE_ENV}/bin/lighthit-selftest"
+```
+
+To retain a standalone viewer as well:
+
+```bash
+"${LH_SMOKE_ENV}/bin/lighthit-selftest" \
+  --viewer \
+  --output "${LH_SMOKE_ROOT}/selftest"
+open "${LH_SMOKE_ROOT}/selftest/viewer.html"
+```
+
+The installed pytest subset checks provider-neutral geometry and explicit
+numeric source placement:
+
+```bash
+cd "${LH_SMOKE_ROOT}"
+"${LH_SMOKE_ENV}/bin/python" -m pytest --pyargs lighthit.tests -q
+```
+
+The complete repository suite remains a developer test and is intentionally
+not copied into the wheel.
+
+## 3. Inspect the synthetic detector coordinates
+
+```bash
+"${LH_SMOKE_ENV}/bin/lighthit-demo" geometry --clusters 1
+```
+
+The command prints only explicit numbers: module count, geometric centroid,
+axis-aligned minimum and maximum coordinates, size, bounding radius and the
+same quantities per cluster.  These values are useful for choosing source
+coordinates, but the Python API never replaces a position by a string such as
+`"detector-centre"`.
+
+The equivalent API is
+
+```python
+import lighthit as lh
+from lighthit.examples.synthetic import baikal_like_detector
+
+detector = baikal_like_detector(clusters=1)
+geometry = lh.describe_geometry(detector)
+print(geometry.centroid_m)
+print(geometry.bounds_min_m)
+print(geometry.bounds_max_m)
+```
+
+## 4. Prepare the cache as a separate operation
+
+```bash
+export LH_CACHE="${LH_SMOKE_ROOT}/cache"
+
+"${LH_SMOKE_ENV}/bin/lighthit-demo" cache \
+  --profile quick \
+  --cache "${LH_CACHE}" \
+  --sources all
+```
+
+Before calculation starts, the command reports cache kinds, wavelength and
+frequency counts, radial range, output directory and whether forced rebuilding
+was requested.  During the build it reports completed frequencies.  Run the
+same command again:
+
+```bash
+"${LH_SMOKE_ENV}/bin/lighthit-demo" cache \
+  --profile quick \
+  --cache "${LH_CACHE}" \
+  --sources all
+```
+
+The second run should finish with messages of the form
+
+```text
+Cache ready: 2/2 compatible table(s) found.
+Nothing to build. Pass force=True to rebuild.
+```
+
+Use `--force` only for an intentional rebuild.  Cache files are written
+atomically, so an interrupted calculation does not masquerade as a completed
+table.
+
+The public Python interface keeps the reusable kernel return value and exposes
+the report separately:
+
+```python
+kernel.build(source=source, progress="console", force=False)
+print(kernel.last_build_report.as_dict())
+```
+
+For event processing, use strict cache policy so that `transport` cannot start
+an expensive build unexpectedly:
+
+```python
+config = lh.KernelConfig(
+    cache_directory="lighthit-cache",
+    cache_policy="require",
+)
+kernel = lh.TransportKernel(medium, detector, config)
+response = kernel.transport(source)
+```
+
+If a required table is absent, LightHit raises an error with the expected path
+and asks the user to run `kernel.build(...)` first.
+
+## 5. Transport three source types and build one viewer
+
+```bash
+export LH_OUTPUT="${LH_SMOKE_ROOT}/run"
+
+"${LH_SMOKE_ENV}/bin/lighthit-demo" run \
+  --profile quick \
+  --cache "${LH_CACHE}" \
+  --output "${LH_OUTPUT}" \
+  --sources all
+```
+
+The run transports a monochromatic isotropic laser, a finite Cherenkov track
+and a deterministic synthetic shower through the same detector and prepared
+kernel.  It writes
+
+```text
+run/
+  laser-response.npz
+  track-response.npz
+  shower-response.npz
+  manifest.json
+  viewer.json
+  viewer.html
+```
+
+The manifest records numerical configuration, explicit geometry and per-event
+charge.  An event with zero active modules is treated as a likely placement or
+threshold error unless the user passes `--allow-empty` explicitly.
+
+Open the result on macOS with
+
+```bash
+open "${LH_OUTPUT}/viewer.html"
+```
+
+or serve it on any platform:
+
+```bash
+cd "${LH_OUTPUT}"
+"${LH_SMOKE_ENV}/bin/python" -m http.server 8000
+```
+
+Then visit <http://127.0.0.1:8000/viewer.html>.
+
+## 6. Explicit numeric source poses
+
+Source placement is defined by numbers, not detector-specific labels:
+
+```python
+import lighthit as lh
+
+pose = lh.SourcePose(
+    position_m=[25.0, -10.0, -720.0],
+    direction=[0.40, 0.20, -0.89442719],
+    time_ns=0.0,
+)
+
+placed_shower = shower.placed(pose)
+```
+
+For a shower, LightHit rotates the original photon-weighted principal axis onto
+`direction`, translates its photon-weighted centroid to `position_m`, and moves
+the earliest emission to `time_ns`.  Rotation, translation, old pose and new
+pose are written into source provenance.  A centred track uses the same idea:
+
+```python
+track = lh.CherenkovTrack.centered(
+    position_m=[25.0, -10.0, -720.0],
+    direction=[0.40, 0.20, -0.89442719],
+    length_m=100.0,
+)
+```
+
+## 7. Time bins and the appearance of the viewer
+
+The installed demo uses 5 ns bins.  The viewer plots signal per nanosecond from
+bin integrals, so this grid resolves the scattered profile more finely than the
+earlier 20 ns smoke example.  It is still an **unsmeared** transport response:
+ballistic light is a delta contribution placed in one bin and remains a narrow
+spike.  Some smoother legacy-book plots applied a finite detector response,
+for example a 3 ns Gaussian.  Smaller bins alone are not that additional
+physical model.
+
+The viewer supports full-array payloads without spreading hundreds of thousands
+of values through `Math.max`.  If no module has a full time spectrum, it keeps
+the geometry and integrated charge visible and reports that the pose and
+threshold should be checked.
+
+## 8. Repository-only detector and G4 examples
+
+The repository contains comprehensive scripts that are deliberately not PyPI
+assets.  They may use separately installed detector models and private G4
+files, but all file paths and source coordinates are command-line inputs.
+
+First inspect the detector and build the event cache:
+
+```bash
+cd /absolute/path/to/LightHit
+
+python examples/production_cache.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --cache /local/cache/lighthit-bgvd \
+  --kind events
+```
+
+Then place one stored shower explicitly:
+
+```bash
+python examples/production_shower.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --g4 /absolute/path/to/events.h5 \
+  --event 5 \
+  --position 25 -10 -720 \
+  --direction 0.40 0.20 -0.89442719 \
+  --cache /local/cache/lighthit-bgvd \
+  --output /local/results/event-5.npz \
+  --viewer /local/results/event-5.html
+```
+
+For several positions and directions, copy
+`examples/production_multi_shower.toml`, replace every numeric pose and input
+path, and run
+
+```bash
+python examples/production_multi_shower.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --events /local/config/events.toml \
+  --cache /local/cache/lighthit-bgvd \
+  --output /local/results/multi-pose
+```
+
+One kernel and cache serve every event; the output contains one NPZ per pose,
+one provenance manifest and a combined viewer.
+
+## 9. NTSim as a downstream consumer
+
+NTSim integration is tested from NTSim, not emulated inside LightHit.  The
+intended alternative route is
+
+```text
+primary generation -> charged-particle propagation -> LightHit expectation
+```
+
+instead of
+
+```text
+Cherenkov photon generation -> MC photon propagation -> ray tracing
+```
+
+The NTSim integration branch must depend on the public LightHit wheel and pass
+ordinary arrays and public LightHit source objects.  LightHit continues to
+return expected photoelectrons; optional NTSim electronics and stochastic
+sampling remain outside this interface.
+
+## 10. Troubleshooting
+
+**The import path points to a checkout.** Change to `${LH_SMOKE_ROOT}` and use
+the virtual-environment interpreter by its full path.
+
+**`No matching distribution found`.** Verify the exact release and Python
+version. LightHit requires Python 3.11 or newer.
+
+**Transport reports a missing cache.** Run the matching `cache` command first.
+Do not switch to implicit building merely to suppress the error.
+
+**No modules are active.** Compare the explicit source centroid and extent
+with `describe_geometry`, then inspect `threshold_pe` and `radial_range_m`.
+
+**Time bins contain signed values.** Order `>=2` uses finite-frequency
+inversion and may ring.  Check convergence by changing the frequency cutoff at
+fixed spacing; never hide the effect by clipping or renormalising bins.
+
+**The first accelerated run is slower.** Initial Numba compilation is a
+one-time process cost and is distinct from the persistent transport cache.

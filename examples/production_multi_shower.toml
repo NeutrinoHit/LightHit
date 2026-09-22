@@ -1,0 +1,20 @@
+# Copy this file outside the repository and replace every input and pose.
+# Coordinates are metres in the detector frame; directions are normalized by LightHit.
+
+[[events]]
+id = "event-5-down"
+label = "G4 event 5 at pose A"
+file = "/absolute/path/to/events.h5"
+event = 5
+position_m = [0.0, 0.0, -750.0]
+direction = [0.0, 0.0, -1.0]
+time_ns = 0.0
+
+[[events]]
+id = "event-5-inclined"
+label = "G4 event 5 at pose B"
+file = "/absolute/path/to/events.h5"
+event = 5
+position_m = [40.0, -20.0, -700.0]
+direction = [0.60, 0.20, -0.7745966692]
+time_ns = 0.0

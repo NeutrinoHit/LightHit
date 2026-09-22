@@ -1,6 +1,6 @@
 # PyPI release checklist
 
-LightHit is packaged as `0.2.0a6`, under BSD-3-Clause
+LightHit is packaged as `0.2.0a7`, under BSD-3-Clause
 (`LICENSE`, `Copyright (c) 2026, Dmitry Naumov`), declared in
 `pyproject.toml` as `license = {text = "BSD-3-Clause"}` with the matching OSI
 classifier. Raising the build requirement to `setuptools>=77` would allow the
@@ -9,10 +9,20 @@ PEP 639 SPDX form and `license-files`; that is a follow-up, not a blocker.
 ## Preflight
 
 ```bash
-LIGHTHIT_G4_FILE=g4_data/sim_e_100GeV_10.h5 python -m pytest -q
+python -m pytest -q tests --g4-file g4_data/sim_e_100GeV_10.h5
 quarto render docs
 python -m build --sdist --wheel
-python -m twine check dist/lighthit-0.2.0a6*
+python -m twine check dist/lighthit-0.2.0a7*
+```
+
+Install the wheel in an environment outside the checkout and run the assets
+that are intentionally shipped for consumers:
+
+```bash
+python -m pip install 'dist/lighthit-0.2.0a7-py3-none-any.whl[demo,test]'
+lighthit-selftest
+python -m pytest --pyargs lighthit.tests -q
+lighthit-demo geometry
 ```
 
 Both forms of the build command must work --- with isolation, where the
@@ -39,26 +49,28 @@ skips where the `build` frontend is not installed). Keep
 `packaging_filter.REQUIRED_EXPERIMENTAL` and the `MANIFEST.in` allowlist equal
 --- a test checks that too.
 
-Inspect both archives before upload. They must not contain `g4_data`, the
-private `bgvd_model`, caches, results, docs, notebooks, slides, scripts or
-tests, and the `lighthit/experimental` directory must hold exactly the seven
-modules of the allowlist:
+Inspect both archives before upload. They must not contain top-level `g4_data`,
+the private `bgvd_model`, caches, results, docs, notebooks, slides, scripts,
+repository tests or repository examples. The installed package intentionally
+contains only `lighthit.examples.synthetic`, `lighthit.selftest` and the small
+`lighthit.tests` public-wheel suite. The `lighthit/experimental` directory must
+hold exactly the seven modules of the allowlist:
 
 ```bash
-python -m zipfile -l dist/lighthit-0.2.0a6-*.whl | grep experimental/
-tar tzf dist/lighthit-0.2.0a6.tar.gz | grep experimental/
+python -m zipfile -l dist/lighthit-0.2.0a7-*.whl | grep experimental/
+tar tzf dist/lighthit-0.2.0a7.tar.gz | grep experimental/
 ```
 
 The sdist intentionally includes `LICENSE`, `setup.py`, `packaging_filter.py`
-and only three `examples/production_*.py` files in addition to build metadata
-and package sources.
+and package sources. Full detector-specific and integration examples remain in
+the repository and are not PyPI distribution assets.
 
 ## TestPyPI, then PyPI
 
 ```bash
-python -m twine upload --repository testpypi dist/lighthit-0.2.0a6*
+python -m twine upload --repository testpypi dist/lighthit-0.2.0a7*
 # Test in a clean environment using the exact uploaded version.
-python -m twine upload dist/lighthit-0.2.0a6*
+python -m twine upload dist/lighthit-0.2.0a7*
 ```
 
 Credentials/tokens are supplied by the publisher at upload time and must never
