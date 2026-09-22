@@ -1,20 +1,26 @@
 """LightHit: time-dependent light transport and detector response."""
+from ._version import VERSION as __version__
 from .medium import Medium, synthetic_medium
 from .model import DetectorArray, SpectralMedium, WavelengthQuadrature
+from .geometry import GeometryRegion, DetectorGeometrySummary, describe_geometry
 from .green import PointGreenSolver, SolverSettings, GreenResult
 from .single import single_scattering_rate
-from .sources import IsotropicFlash, CherenkovTrack, G4Shower, SpectralLightElements
-from .transport import KernelConfig, TransportKernel, TransportResponse
+from .sources import (SourcePose, IsotropicFlash, CherenkovTrack, G4Shower,
+                      SpectralLightElements, SyntheticShower)
+from .transport import (KernelConfig, CacheProgress, CacheBuildEntry,
+                        CacheBuildReport, TransportKernel, TransportResponse)
 from .bgvd import BGVDModel, load_bgvd_model
 from .api import build
-from .viewer import viewer_payload, write_event_viewer
+from .viewer import viewer_payload, merge_event_viewers, write_event_viewer
 
 __all__ = [
     "Medium", "synthetic_medium", "DetectorArray", "SpectralMedium",
+    "GeometryRegion", "DetectorGeometrySummary", "describe_geometry",
     "WavelengthQuadrature", "PointGreenSolver", "SolverSettings", "GreenResult",
-    "single_scattering_rate", "IsotropicFlash", "CherenkovTrack", "G4Shower",
-    "SpectralLightElements", "KernelConfig", "TransportKernel", "TransportResponse",
+    "single_scattering_rate", "SourcePose", "IsotropicFlash", "CherenkovTrack",
+    "G4Shower", "SyntheticShower", "SpectralLightElements", "KernelConfig",
+    "CacheProgress", "CacheBuildEntry", "CacheBuildReport", "TransportKernel",
+    "TransportResponse",
     "BGVDModel", "load_bgvd_model", "build", "viewer_payload",
-    "write_event_viewer",
+    "merge_event_viewers", "write_event_viewer",
 ]
-__version__ = "0.2.0a6"

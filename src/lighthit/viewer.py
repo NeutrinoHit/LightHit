@@ -27,7 +27,8 @@ def _display_source(source):
     """Portable viewer description for public source objects we can show exactly."""
     if source is None:
         return []
-    from .sources import CherenkovTrack, IsotropicFlash
+    from .sources import (CherenkovTrack, G4Shower, IsotropicFlash,
+                          SyntheticShower)
     if isinstance(source, IsotropicFlash):
         return [{"type": "point", "position_m": source.position_m.tolist(),
                  "label": "isotropic flash"}]
@@ -38,6 +39,13 @@ def _display_source(source):
                  "position_m": np.asarray(source.start_m, float).tolist(),
                  "direction": direction.tolist(), "extent_m": float(source.length_m),
                  "label": "Cherenkov track"}]
+    if isinstance(source, (G4Shower, SyntheticShower)):
+        return [{"type": "axis", "shape": "spindle",
+                 "position_m": source.centroid_m.tolist(),
+                 "direction": source.principal_axis.tolist(),
+                 "extent_m": float(source.extent_m),
+                 "label": ("G4 shower" if isinstance(source, G4Shower)
+                           else "synthetic shower")}]
     return []
 
 
@@ -139,6 +147,27 @@ def validate_event_viewer(result):
     return result
 
 
+def merge_event_viewers(*payloads):
+    """Combine compatible one- or multi-event payloads into one viewer.
+
+    Detector geometry, units and time edges must match exactly.  This keeps a
+    multi-pose study honest: only events evaluated on the same readout grid are
+    placed behind one selector.
+    """
+    if not payloads:
+        raise ValueError("at least one viewer payload is required")
+    values = [validate_event_viewer(value) for value in payloads]
+    result = json.loads(json.dumps(values[0], ensure_ascii=False))
+    result["events"] = []
+    reference = values[0]
+    for value in values:
+        for section in ("units", "detector", "readout"):
+            if value.get(section) != reference.get(section):
+                raise ValueError(f"viewer payloads have different {section}")
+        result["events"].extend(value["events"])
+    return validate_event_viewer(result)
+
+
 def save_event_result(result, path):
     """Write validated viewer data as portable JSON."""
     validate_event_viewer(result)
@@ -183,5 +212,5 @@ def write_event_viewer(result, output_path, *, json_path=None):
     return output
 
 
-__all__ = ["SCHEMA", "viewer_payload", "validate_event_viewer",
+__all__ = ["SCHEMA", "viewer_payload", "validate_event_viewer", "merge_event_viewers",
            "save_event_result", "load_event_result", "write_event_viewer"]

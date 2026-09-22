@@ -6,17 +6,20 @@ from pathlib import Path
 from time import perf_counter
 from typing import Callable
 import json
+import os
 
 import numpy as np
 
 from .ballistic import ballistic_directional
+from ._version import VERSION
 from .cache import CacheGrid, ResponseCache, acceptance_coefficients
 from .directional import DirectionalCache, acceptance_bandwidth, directional_response
 from .green import SolverSettings
 from .model import DetectorArray, SpectralMedium, WavelengthQuadrature
 from .readout import inverse_bins
 from .single import single_bins
-from .sources import CherenkovTrack, G4Shower, IsotropicFlash, SpectralLightElements
+from .sources import (CherenkovTrack, G4Shower, IsotropicFlash,
+                      SpectralLightElements, SyntheticShower)
 
 
 @dataclass(frozen=True)
@@ -28,7 +31,7 @@ class KernelConfig:
     # 41 nodes would move periodic Fourier images into the readout window.
     omega_per_ns: np.ndarray = field(default_factory=lambda: np.linspace(0.0, 1.2, 321))
     relative_time_edges_ns: np.ndarray = field(
-        default_factory=lambda: np.arange(-60.0, 740.0 + 10.0, 20.0))
+        default_factory=lambda: np.arange(-60.0, 740.0 + 5.0, 5.0))
     wavelength_nodes: int = 9
     wavelength_range_nm: tuple[float, float] | None = None
     scattering_degree: int = 24
@@ -46,6 +49,7 @@ class KernelConfig:
     receiver_block: int = 8
     threshold_pe: float = 0.01
     cache_directory: str | Path | None = None
+    cache_policy: str = "build"
     allow_experimental: bool = False
 
     def __post_init__(self):
@@ -61,8 +65,95 @@ class KernelConfig:
             raise ValueError("threshold_pe must be finite and nonnegative")
         if self.angular_backend not in ("auto", "numpy", "numba"):
             raise ValueError("angular_backend must be 'auto', 'numpy' or 'numba'")
+        if self.cache_policy not in ("build", "require"):
+            raise ValueError("cache_policy must be 'build' or 'require'")
         object.__setattr__(self, "omega_per_ns", omega)
         object.__setattr__(self, "relative_time_edges_ns", edges)
+
+
+@dataclass(frozen=True)
+class CacheProgress:
+    """One cache-preparation event delivered to a progress callback."""
+    kind: str
+    wavelength_nm: float
+    action: str
+    completed: int = 0
+    total: int = 0
+    path: str | None = None
+    elapsed_seconds: float = 0.0
+
+
+@dataclass(frozen=True)
+class CacheBuildEntry:
+    kind: str
+    wavelength_nm: float
+    status: str
+    path: str | None
+    elapsed_seconds: float
+
+    def as_dict(self):
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CacheBuildReport:
+    """What an explicit :meth:`TransportKernel.build` call actually did."""
+    entries: tuple[CacheBuildEntry, ...] = ()
+
+    @property
+    def built(self):
+        return sum(entry.status == "built" for entry in self.entries)
+
+    @property
+    def loaded(self):
+        return sum(entry.status in ("loaded", "memory") for entry in self.entries)
+
+    def as_dict(self):
+        return {"built": self.built, "loaded": self.loaded,
+                "entries": [entry.as_dict() for entry in self.entries]}
+
+
+class _ConsoleCacheProgress:
+    def __init__(self):
+        self._last_bucket = {}
+
+    def plan(self, kernel, kinds, wavelengths, force):
+        c = kernel.config
+        print("Cache plan:")
+        print(f"  kinds: {', '.join(kinds)}")
+        print(f"  wavelengths: {len(wavelengths)}")
+        print(f"  frequencies: {len(c.omega_per_ns)} "
+              f"[0, {c.omega_per_ns[-1]:g}] ns^-1")
+        print(f"  radii: {c.radial_nodes} "
+              f"[{c.radial_range_m[0]:g}, {c.radial_range_m[1]:g}] m")
+        directory = (Path(c.cache_directory).expanduser().resolve()
+                     if c.cache_directory is not None else "memory only")
+        print(f"  directory: {directory}")
+        print(f"  force rebuild: {bool(force)}")
+
+    def __call__(self, event):
+        label = f"{event.kind} {event.wavelength_nm:g} nm"
+        if event.action == "frequency":
+            bucket = int(20 * event.completed / max(event.total, 1))
+            key = (event.kind, event.wavelength_nm)
+            if (event.completed not in (1, event.total)
+                    and self._last_bucket.get(key) == bucket):
+                return
+            self._last_bucket[key] = bucket
+            print(f"  {label}: {event.completed}/{event.total} frequencies")
+        elif event.action == "loaded":
+            print(f"  {label}: ready (loaded)")
+        elif event.action == "memory":
+            print(f"  {label}: ready (already in memory)")
+        elif event.action == "built":
+            print(f"  {label}: built in {event.elapsed_seconds:.2f} s")
+
+    def complete(self, report):
+        if report.built:
+            print(f"Cache ready: built {report.built}, reused {report.loaded} table(s).")
+        else:
+            print(f"Cache ready: {report.loaded}/{len(report.entries)} compatible "
+                  "table(s) found. Nothing to build. Pass force=True to rebuild.")
 
 
 @dataclass
@@ -172,6 +263,7 @@ class TransportKernel:
         }
         self._acceptance = None
         self._directional_caches = {}
+        self.last_build_report = CacheBuildReport()
 
     def register_method(self, name, function, *, experimental=True, description="user method"):
         if not name or name in self._methods:
@@ -246,27 +338,117 @@ class TransportKernel:
                    "nodes": self.config.radial_nodes, "phase": "flight"}
         return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:20]
 
-    def _cache_for(self, wavelength_nm):
+    @staticmethod
+    def _notify_cache(progress, event):
+        if progress is not None:
+            progress(event)
+
+    @staticmethod
+    def _atomic_cache_save(cache, path):
+        temporary = path.with_name(f".{path.stem}.{os.getpid()}.tmp.npz")
+        try:
+            cache.save(temporary)
+            temporary.replace(path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+
+    @staticmethod
+    def _json_value(value):
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, (np.integer, np.floating)):
+            return value.item()
+        raise TypeError(type(value).__name__)
+
+    def _write_cache_manifest(self, *, method, kinds, wavelengths, report):
+        if self.config.cache_directory is None:
+            return None
+        directory = Path(self.config.cache_directory).expanduser().resolve()
+        directory.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema": "lighthit/cache-manifest/1",
+            "package_version": VERSION,
+            "method": method,
+            "cache_kinds": list(kinds),
+            "wavelength_nm": np.asarray(wavelengths, float).tolist(),
+            "medium": asdict(self.medium),
+            "detector": {"modules": len(self.detector),
+                         "provenance": self.detector.provenance},
+            "config": asdict(self.config),
+            "last_build": report.as_dict(),
+            "available_files": sorted(path.name for path in directory.glob("*.npz")),
+        }
+        path = directory / "cache-manifest.json"
+        temporary = directory / f".cache-manifest.{os.getpid()}.tmp.json"
+        try:
+            temporary.write_text(
+                json.dumps(payload, indent=2, default=self._json_value),
+                encoding="utf-8")
+            temporary.replace(path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        return path
+
+    def _cache_for(self, wavelength_nm, *, force=False, progress=None,
+                   allow_build=None, entries=None):
         wavelength_nm = float(wavelength_nm)
         key = self._cache_key(wavelength_nm)
-        if key in self._caches:
+        began = perf_counter()
+        if key in self._caches and not force:
+            entry = CacheBuildEntry("multipole", wavelength_nm, "memory", None,
+                                    perf_counter() - began)
+            if entries is not None:
+                entries.append(entry)
+            self._notify_cache(progress, CacheProgress(
+                "multipole", wavelength_nm, "memory", path=entry.path,
+                elapsed_seconds=entry.elapsed_seconds))
             return self._caches[key]
         path = None
         if self.config.cache_directory is not None:
             directory = Path(self.config.cache_directory).expanduser().resolve()
-            directory.mkdir(parents=True, exist_ok=True)
             path = directory / f"transport-{key}.npz"
-        if path is not None and path.exists():
+        if path is not None and path.exists() and not force:
             cache = ResponseCache.load(path)
+            entry = CacheBuildEntry("multipole", wavelength_nm, "loaded", str(path),
+                                    perf_counter() - began)
+            self._notify_cache(progress, CacheProgress(
+                "multipole", wavelength_nm, "loaded", path=str(path),
+                elapsed_seconds=entry.elapsed_seconds))
         else:
+            can_build = (self.config.cache_policy == "build"
+                         if allow_build is None else bool(allow_build))
+            if not can_build:
+                expected = str(path) if path is not None else "a configured cache directory"
+                raise FileNotFoundError(
+                    f"required multipole cache is missing: {expected}; "
+                    "run kernel.build(...) before transport or use cache_policy='build'")
+            if path is not None:
+                path.parent.mkdir(parents=True, exist_ok=True)
             low, high = self.config.radial_range_m
+            def update(done, total):
+                self._notify_cache(progress, CacheProgress(
+                    "multipole", wavelength_nm, "frequency", done, total,
+                    None if path is None else str(path), perf_counter() - began))
             cache = ResponseCache.build(
                 self.medium.band(wavelength_nm), self._solver_settings(),
                 CacheGrid.geometric(low, high, self.config.radial_nodes,
                                     self.config.omega_per_ns),
-                angular_backend=self.resolved_angular_backend(), radial_phase="flight")
+                angular_backend=self.resolved_angular_backend(), progress=update,
+                radial_phase="flight")
             if path is not None:
-                cache.save(path)
+                self._atomic_cache_save(cache, path)
+            entry = CacheBuildEntry("multipole", wavelength_nm, "built",
+                                    None if path is None else str(path),
+                                    perf_counter() - began)
+            self._notify_cache(progress, CacheProgress(
+                "multipole", wavelength_nm, "built", path=entry.path,
+                elapsed_seconds=entry.elapsed_seconds))
+        if entries is not None:
+            entries.append(entry)
         self._caches[key] = cache
         return cache
 
@@ -280,29 +462,64 @@ class TransportKernel:
                    "kernel": "directional_m_blocks"}
         return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:20]
 
-    def _directional_cache_for(self, wavelength_nm):
+    def _directional_cache_for(self, wavelength_nm, *, force=False, progress=None,
+                               allow_build=None, entries=None):
         wavelength_nm = float(wavelength_nm)
         key = self._directional_cache_key(wavelength_nm)
-        if key in self._directional_caches:
+        began = perf_counter()
+        if key in self._directional_caches and not force:
+            entry = CacheBuildEntry("directional", wavelength_nm, "memory", None,
+                                    perf_counter() - began)
+            if entries is not None:
+                entries.append(entry)
+            self._notify_cache(progress, CacheProgress(
+                "directional", wavelength_nm, "memory",
+                elapsed_seconds=entry.elapsed_seconds))
             return self._directional_caches[key]
         path = None
         if self.config.cache_directory is not None:
             directory = Path(self.config.cache_directory).expanduser().resolve()
-            directory.mkdir(parents=True, exist_ok=True)
             path = directory / f"directional-{key}.npz"
-        if path is not None and path.exists():
+        if path is not None and path.exists() and not force:
             cache = DirectionalCache.load(path)
+            entry = CacheBuildEntry("directional", wavelength_nm, "loaded", str(path),
+                                    perf_counter() - began)
+            self._notify_cache(progress, CacheProgress(
+                "directional", wavelength_nm, "loaded", path=str(path),
+                elapsed_seconds=entry.elapsed_seconds))
         else:
+            can_build = (self.config.cache_policy == "build"
+                         if allow_build is None else bool(allow_build))
+            if not can_build:
+                expected = str(path) if path is not None else "a configured cache directory"
+                raise FileNotFoundError(
+                    f"required directional cache is missing: {expected}; "
+                    "run kernel.build(...) before transport or use cache_policy='build'")
+            if path is not None:
+                path.parent.mkdir(parents=True, exist_ok=True)
             low, high = self.config.radial_range_m
+            def update(done, total):
+                self._notify_cache(progress, CacheProgress(
+                    "directional", wavelength_nm, "frequency", done, total,
+                    None if path is None else str(path), perf_counter() - began))
             cache = DirectionalCache.build(
                 self.medium.band(wavelength_nm), self._solver_settings(),
                 CacheGrid.geometric(low, high, self.config.radial_nodes,
                                     self.config.omega_per_ns),
                 self.acceptance()["degree"],
                 angular_backend=self.resolved_angular_backend(),
+                progress=update,
                 radial_phase="flight")
             if path is not None:
-                cache.save(path)
+                self._atomic_cache_save(cache, path)
+            entry = CacheBuildEntry("directional", wavelength_nm, "built",
+                                    None if path is None else str(path),
+                                    perf_counter() - began)
+            self._notify_cache(progress, CacheProgress(
+                "directional", wavelength_nm, "built", path=entry.path,
+                elapsed_seconds=entry.elapsed_seconds))
+        if entries is not None:
+            entries.append(entry)
         self._directional_caches[key] = cache
         return cache
 
@@ -338,7 +555,8 @@ class TransportKernel:
             return np.atleast_1d(np.asarray(self._flash_nodes(source)[0], float))
         return self.wavelength.wavelength_nm
 
-    def build(self, wavelengths_nm=None, *, method="auto", source=None):
+    def build(self, wavelengths_nm=None, *, method="auto", source=None,
+              force=False, progress=None):
         """Build the tables ``method`` needs, at the wavelengths it will read.
 
         ``method="auto"`` builds what an element source would use on this
@@ -362,11 +580,30 @@ class TransportKernel:
         else:
             wavelengths = self.wavelength.wavelength_nm
         kinds = self.cache_kinds(method)
+        if progress in (True, "console"):
+            reporter = _ConsoleCacheProgress()
+            reporter.plan(self, kinds, wavelengths, force)
+        elif progress is None or progress is False:
+            reporter = None
+        elif callable(progress):
+            reporter = progress
+        else:
+            raise ValueError("progress must be None, False, True, 'console' or callable")
+        entries = []
         for wavelength in wavelengths:
             if "multipole" in kinds:
-                self._cache_for(float(wavelength))
+                self._cache_for(float(wavelength), force=force, progress=reporter,
+                                allow_build=True, entries=entries)
             if "directional" in kinds:
-                self._directional_cache_for(float(wavelength))
+                self._directional_cache_for(
+                    float(wavelength), force=force, progress=reporter,
+                    allow_build=True, entries=entries)
+        self.last_build_report = CacheBuildReport(tuple(entries))
+        self._write_cache_manifest(
+            method=method, kinds=kinds, wavelengths=wavelengths,
+            report=self.last_build_report)
+        if isinstance(reporter, _ConsoleCacheProgress):
+            reporter.complete(self.last_build_report)
         return self
 
     def _auto_method(self, source):
@@ -374,7 +611,7 @@ class TransportKernel:
             return "isotropic"
         if isinstance(source, CherenkovTrack):
             return "track"
-        if isinstance(source, (G4Shower, SpectralLightElements)):
+        if isinstance(source, (G4Shower, SyntheticShower, SpectralLightElements)):
             return "axial"
         raise TypeError("No automatic method for this source type")
 
@@ -503,13 +740,14 @@ class TransportKernel:
              "omitted_outside_range": int((~radial_inside).sum())})
 
     def _source_elements(self, source):
-        if isinstance(source, G4Shower):
+        if isinstance(source, (G4Shower, SyntheticShower)):
             return source.elements
         if isinstance(source, SpectralLightElements):
             return source
         if isinstance(source, CherenkovTrack):
             return source.to_elements(step_m=max(self.config.cell_m, 0.25))
-        raise TypeError("axial/track methods require G4Shower, SpectralLightElements or CherenkovTrack")
+        raise TypeError("axial/track methods require G4Shower, SyntheticShower, "
+                        "SpectralLightElements or CherenkovTrack")
 
     def _transport_elements(self, source, *, method, azimuthal_degree=None):
         """Route an element source to the module model its detector needs.
@@ -878,4 +1116,5 @@ class TransportKernel:
                               receiver_block=self.config.receiver_block)
 
 
-__all__ = ["KernelConfig", "TransportResponse", "TransportKernel"]
+__all__ = ["KernelConfig", "CacheProgress", "CacheBuildEntry",
+           "CacheBuildReport", "TransportResponse", "TransportKernel"]

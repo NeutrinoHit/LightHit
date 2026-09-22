@@ -26,6 +26,13 @@ detector arrays:
 python -m pip install 'lighthit[accelerate]'
 ```
 
+For the installed synthetic demonstration, viewer and wheel self-tests:
+
+```bash
+python -m pip install 'lighthit[demo,test]'
+lighthit-selftest
+```
+
 Python 3.11 or newer is required.
 
 ## Quick start
@@ -98,6 +105,15 @@ track = lh.CherenkovTrack(
 )
 
 shower = lh.G4Shower.from_hdf5("event.h5", event=0)
+
+synthetic_shower = lh.SyntheticShower.gaussian(
+    lh.SourcePose(
+        position_m=[25.0, -10.0, -720.0],
+        direction=[0.4, 0.2, -0.89442719],
+        time_ns=0.0,
+    ),
+    charged_track_length_m=300.0,
+)
 ```
 
 For tracks and showers, `kernel.transport(source)` automatically selects the
@@ -117,6 +133,33 @@ config = lh.KernelConfig(
 
 kernel = lh.build(medium, detector, track, config=config)
 response = kernel.transport(track)
+```
+
+For production jobs, prepare the cache explicitly and forbid event processing
+from starting an expensive build unexpectedly:
+
+```python
+build_config = lh.KernelConfig(cache_directory="lighthit-cache")
+kernel = lh.TransportKernel(medium, detector, build_config)
+kernel.build(source=track, progress="console")
+print(kernel.last_build_report.as_dict())
+
+run_config = lh.KernelConfig(
+    cache_directory="lighthit-cache",
+    cache_policy="require",
+)
+kernel = lh.TransportKernel(medium, detector, run_config)
+response = kernel.transport(track)
+```
+
+Repeated `build` calls reuse compatible tables and report that there is nothing
+to do. Pass `force=True` only for an intentional rebuild. Detector coordinates
+can be inspected without detector-specific assumptions:
+
+```python
+geometry = lh.describe_geometry(detector)
+print(geometry.centroid_m)
+print(geometry.bounds_min_m, geometry.bounds_max_m)
 ```
 
 Important inputs are explicit:
@@ -188,10 +231,32 @@ viewer_path = lh.write_event_viewer(payload, "lighthit-viewer.html")
 print(viewer_path)
 ```
 
+Compatible event payloads can share one viewer:
+
+```python
+combined = lh.merge_event_viewers(laser_payload, track_payload, shower_payload)
+lh.write_event_viewer(combined, "multi-event-viewer.html")
+```
+
 Open `lighthit-viewer.html` in a web browser. It contains the detector geometry,
 integrated charge by scattering order, a selectable per-OM time histogram and a
 time animation. A portable `lighthit-viewer.json` companion is written beside
 the HTML file.
+
+## Installed synthetic demonstration
+
+The wheel includes one public-data-only Baikal-like example. Its geometry and
+OM response are illustrative and are not a Baikal calibration:
+
+```bash
+lighthit-demo geometry
+lighthit-demo cache --profile quick --cache ./demo-cache --sources all
+lighthit-demo run --profile quick --cache ./demo-cache \
+  --output ./demo-output --sources all
+```
+
+The repository, but not the wheel, contains detector-specific laser, track and
+G4-shower examples with explicit source positions and directions.
 
 ## Scope
 

@@ -1,4 +1,6 @@
 from pathlib import Path
+from dataclasses import replace
+import json
 
 import numpy as np
 import pytest
@@ -45,6 +47,12 @@ def test_default_frequency_grid_widens_cutoff_without_shortening_image_period():
     assert np.diff(cfg.omega_per_ns) == pytest.approx(0.00375)
     assert 2 * np.pi / np.diff(cfg.omega_per_ns).max() > np.ptp(
         cfg.relative_time_edges_ns)
+    assert np.diff(cfg.relative_time_edges_ns) == pytest.approx(5.0)
+
+
+def test_cache_policy_is_validated():
+    with pytest.raises(ValueError, match="cache_policy"):
+        lh.KernelConfig(cache_policy="typo")
 
 
 def test_two_field_identity_matches_frank_tamm_differential():
@@ -119,6 +127,48 @@ def test_build_convenience_returns_an_explicit_reusable_kernel(tmp_path):
     response = kernel.transport(source)
     assert response.method == "isotropic"
     assert len(kernel._caches) == 1
+
+
+def test_explicit_cache_build_reports_build_load_reuse_and_force(tmp_path, capsys):
+    source = lh.IsotropicFlash.monochromatic([0, 0, 0], 1e5, 450.)
+    cfg = config(tmp_path)
+    events = []
+    first = lh.TransportKernel(spectral_medium(), detector(), cfg)
+    first.build(source=source, progress=events.append)
+    assert first.last_build_report.built == 1
+    assert first.last_build_report.loaded == 0
+    assert events[-1].action == "built"
+    assert not list(tmp_path.glob("*.tmp.npz"))
+    manifest = json.loads((tmp_path / "cache-manifest.json").read_text())
+    assert manifest["schema"] == "lighthit/cache-manifest/1"
+    assert manifest["package_version"] == lh.__version__
+    assert manifest["method"] == "isotropic"
+    assert manifest["last_build"]["built"] == 1
+    assert manifest["available_files"] == [
+        path.name for path in sorted(tmp_path.glob("transport-*.npz"))]
+
+    second = lh.TransportKernel(spectral_medium(), detector(), cfg)
+    second.build(source=source, progress="console")
+    assert second.last_build_report.built == 0
+    assert second.last_build_report.loaded == 1
+    assert "Nothing to build" in capsys.readouterr().out
+
+    second.build(source=source, force=True)
+    assert second.last_build_report.built == 1
+    assert not list(tmp_path.glob("*.tmp.npz"))
+
+
+def test_require_cache_policy_never_builds_during_transport(tmp_path):
+    source = lh.IsotropicFlash.monochromatic([0, 0, 0], 1e5, 450.)
+    cfg = replace(config(tmp_path), cache_policy="require")
+    kernel = lh.TransportKernel(spectral_medium(), detector(), cfg)
+    with pytest.raises(FileNotFoundError, match="kernel.build"):
+        kernel.transport(source)
+    assert not list(tmp_path.glob("*.npz"))
+
+    kernel.build(source=source)
+    response = kernel.transport(source)
+    assert np.all(response.charge_pe > 0)
 
 
 def test_radial_range_is_never_silently_extrapolated(tmp_path):

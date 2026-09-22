@@ -6,7 +6,7 @@ import pytest
 
 from lighthit import DetectorArray, IsotropicFlash
 from lighthit.viewer import (SCHEMA, load_event_result, save_event_result,
-                             validate_event_viewer, viewer_payload,
+                             merge_event_viewers, validate_event_viewer, viewer_payload,
                              write_event_viewer)
 
 
@@ -84,6 +84,48 @@ def test_viewer_accepts_payload_without_optional_medium_and_catches_async_errors
     text = path.read_text()
     assert "data.medium?.provenance" in text
     assert 'load(JSON.parse($("result").textContent)).catch' in text
+
+
+def test_viewer_avoids_spread_maximum_on_full_array_heatmaps(tmp_path):
+    value = payload()
+    count, bins = 2304, 160
+    positions = np.zeros((count, 3))
+    positions[:, 0] = np.arange(count)
+    value["detector"]["positions_m"] = positions.tolist()
+    value["detector"]["cluster_id"] = (np.arange(count) // 288).tolist()
+    value["detector"]["string_id"] = (np.arange(count) // 36 % 8).tolist()
+    value["detector"]["module_id"] = (np.arange(count) % 36).tolist()
+    value["readout"]["relative_time_edges_ns"] = np.arange(bins + 1).tolist()
+    value["events"][0]["components"] = np.zeros((count, bins, 3)).tolist()
+    value["events"][0]["charge_components"] = np.zeros((count, 3)).tolist()
+    value["events"][0]["time_origin_ns"] = np.zeros(count).tolist()
+    value["events"][0]["active"] = np.zeros(count, bool).tolist()
+    path = write_event_viewer(value, tmp_path / "large-viewer.html")
+    text = path.read_text()
+    assert "function maxAbs" in text
+    assert "Math.max(...raw.flat()" not in text
+    assert "Math.max(...z.flat()" not in text
+
+
+def test_compatible_events_merge_and_duplicate_ids_are_rejected():
+    first = payload()
+    second = payload()
+    second["events"][0]["event_id"] = "event-2"
+    second["events"][0]["label"] = "second pose"
+    merged = merge_event_viewers(first, second)
+    assert [event["event_id"] for event in merged["events"]] == ["event", "event-2"]
+
+    second["events"][0]["event_id"] = "event"
+    with pytest.raises(ValueError, match="unique"):
+        merge_event_viewers(first, second)
+
+
+def test_incompatible_viewer_payloads_do_not_merge():
+    first = payload()
+    second = payload()
+    second["readout"]["relative_time_edges_ns"][-1] = 3.0
+    with pytest.raises(ValueError, match="readout"):
+        merge_event_viewers(first, second)
 
 
 @pytest.mark.parametrize("mutation", [

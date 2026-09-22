@@ -41,6 +41,7 @@ book:
     - appendices/d-rejected-methods.qmd
     - appendices/e-benchmark-protocol.qmd
     - appendices/f-catalogue.qmd
+    - appendices/g-pypi-isolated-test.qmd
 
 lang: en
 link-citations: true
