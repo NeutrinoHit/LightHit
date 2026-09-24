@@ -590,12 +590,55 @@ def test_directional_transport_reports_the_exact_model(tmp_path):
     assert response.metadata["detector_acceptance_residual_above_degree"] < 1e-9
     assert response.metadata["ballistic_angular_model"] == (
         "exact per-element arrival direction")
-    # the spectral model is untouched
-    assert response.metadata["spectral_source"] == (
-        "S0=lambda^-2; S2=lambda^-2*n_phase^-2")
-    assert response.metadata["source_fields"] == 2
+    if response.metadata.get("track_fast_path"):
+        assert response.metadata["spectral_source"] == (
+            "lambda^-2 * (1 - (beta*n_phase)^-2)")
+        assert response.metadata["source_fields"] == 1
+        assert response.metadata["azimuthal_degree"] == 0
+    else:
+        # Core installs without Numba retain the generic two-field route.
+        assert response.metadata["spectral_source"] == (
+            "S0=lambda^-2; S2=lambda^-2*n_phase^-2")
+        assert response.metadata["source_fields"] == 2
     assert response.charge_components_pe.shape == (2, 3)
     assert response.components_pe.shape == (2, 6, 3)
+
+
+def test_straight_track_fast_path_matches_the_generic_two_field_engine(tmp_path):
+    pytest.importorskip("numba")
+    track = lh.CherenkovTrack([0, 0, -2], [0, 0, 1], 4., beta=.99)
+    fast = directional_kernel(tmp_path / "fast").transport(
+        track, method="directional")
+    generic = directional_kernel(tmp_path / "generic").transport(
+        track.to_elements(step_m=1.), method="directional")
+
+    assert fast.metadata["track_fast_path"] is True
+    assert fast.metadata["source_fields"] == 1
+    assert fast.metadata["compiled_source_channels"] == 5  # source_degree + 1
+    scale = max(float(np.max(np.abs(generic.spectrum_pe))), 1e-30)
+    assert np.max(np.abs(fast.spectrum_pe - generic.spectrum_pe)) < 2e-10 * scale
+    charge_scale = max(float(np.max(np.abs(generic.charge_components_pe))), 1e-30)
+    assert (np.max(np.abs(fast.charge_components_pe - generic.charge_components_pe))
+            < 2e-10 * charge_scale)
+
+
+def test_long_track_uses_per_om_radial_windows(tmp_path):
+    pytest.importorskip("numba")
+    track = lh.CherenkovTrack([0, 0, -30], [0, 0, 1], 60., beta=.99)
+    safe = directional_kernel(
+        tmp_path / "safe", radial_range_m=(2., 15.), threshold_pe=1e20)
+    response = safe.transport(track, method="directional")
+
+    assert response.metadata["track_fast_path"] is True
+    assert response.metadata["omitted_outside_range"] == 2
+    assert response.metadata["radial_windowed_modules"] == 2
+    assert (response.metadata["radial_cells_used_max"]
+            < response.metadata["compiled_source_cells"])
+
+    strict = directional_kernel(
+        tmp_path / "strict", radial_range_m=(2., 15.), threshold_pe=0.)
+    with pytest.raises(ValueError, match="track segments outside"):
+        strict.transport(track, method="directional")
 
 
 def test_detector_efficiency_enters_linearly_and_unchanged(tmp_path):

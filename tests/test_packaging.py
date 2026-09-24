@@ -244,7 +244,10 @@ def test_python_m_build_produces_clean_archives(tmp_path):
     assert not [name for name in names if "packaging_filter" in name]
     assert not [name for name in names if forbidden_archive_member(name)]
     assert "lighthit/examples/synthetic.py" in names
+    assert "lighthit/_track_transport.py" in names
+    assert "lighthit/_spectral_fold.py" in names
     assert "lighthit/selftest.py" in names
+    assert "lighthit/assets/event_viewer_smoothing.js" in names
     assert "lighthit/tests/test_public_smoke.py" in names
     assert "lighthit-demo = lighthit.examples.synthetic:main" in entry_points
     assert "lighthit-selftest = lighthit.selftest:main" in entry_points
@@ -256,4 +259,5 @@ def test_python_m_build_produces_clean_archives(tmp_path):
                           if "experimental/" in name and name.endswith(".py"))
     assert experimental == sorted(REQUIRED_EXPERIMENTAL)
     assert {"LICENSE", "setup.py", "packaging_filter.py"} <= set(inside)
+    assert "src/lighthit/_track_transport.py" in inside
     assert not [name for name in inside if forbidden_archive_member(name)]

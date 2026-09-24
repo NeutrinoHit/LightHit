@@ -1,78 +1,73 @@
-# PyPI release checklist
+# Releasing LightHit 0.2.0a8
 
-LightHit is packaged as `0.2.0a7`, under BSD-3-Clause
-(`LICENSE`, `Copyright (c) 2026, Dmitry Naumov`), declared in
-`pyproject.toml` as `license = {text = "BSD-3-Clause"}` with the matching OSI
-classifier. Raising the build requirement to `setuptools>=77` would allow the
-PEP 639 SPDX form and `license-files`; that is a follow-up, not a blocker.
+Use the existing development Python to test code from the LightHit checkout.
+Use the existing `lighthit-test` environment only after publication to check
+the PyPI package. No new environment or branch is needed. The PyPI wheel
+contains the package and synthetic demos, but not the repository-only BGVD
+examples, private model, G4 data or book.
 
-## Preflight
+## Check the development checkout
+
+Run from the LightHit repository root. The import path must point into its
+`src/lighthit` directory, not `site-packages`:
+
+```bash
+cd /path/to/LightHit
+python -c 'import sys, pathlib, lighthit as lh; p=pathlib.Path(lh.__file__).resolve(); print(sys.executable, lh.__version__, p); assert p.is_relative_to(pathlib.Path.cwd().resolve() / "src")'
+```
+
+Run and benchmark the desired examples with this Python. PyPI need not be
+involved. Before the release, run the repository tests once. Render the book
+when its source files changed, as they did for this release:
 
 ```bash
 python -m pytest -q tests --g4-file g4_data/sim_e_100GeV_10.h5
 quarto render docs
-python -m build --sdist --wheel
-python -m twine check dist/lighthit-0.2.0a7*
 ```
 
-Install the wheel in an environment outside the checkout and run the assets
-that are intentionally shipped for consumers:
+## Commit on main and publish
+
+For this release, `fix/track-fast-path-a8` and `main` started at the same
+commit. Switch to `main` before staging; review the staged list. The paths
+below cover the package, examples, tests and release instructions, while
+leaving separate book/notebook work unstaged.
 
 ```bash
-python -m pip install 'dist/lighthit-0.2.0a7-py3-none-any.whl[demo,test]'
+git switch main
+git add pyproject.toml README.md PUBLISHING.md src/lighthit examples tests \
+  docs/appendices/g-pypi-isolated-test.qmd
+git diff --cached --check
+git diff --cached --stat
+git status --short
+git commit -m "Release LightHit 0.2.0a8"
+
+python -m build --no-isolation --sdist --wheel --outdir dist
+python -m twine check dist/lighthit-0.2.0a8-py3-none-any.whl \
+  dist/lighthit-0.2.0a8.tar.gz
+```
+
+Only after the build and check succeed:
+
+```bash
+git tag -a v0.2.0a8 -m "LightHit 0.2.0a8"
+git push origin main v0.2.0a8
+python -m twine upload -u __token__ dist/lighthit-0.2.0a8-py3-none-any.whl \
+  dist/lighthit-0.2.0a8.tar.gz
+```
+
+Stop if a test, build or check fails; do not upload incomplete artifacts. If
+`build` or `twine` is missing in the development environment, install it once
+with `python -m pip install build twine`. Twine prompts for the PyPI token;
+never put that token in a command, file or Git history.
+
+## Check the published package
+
+In the existing `lighthit-test` environment, replace only LightHit, not its
+large dependencies. `python -I` excludes the current directory from imports,
+so the check works even while standing in the source checkout:
+
+```bash
+python -m pip install --no-deps --no-cache-dir --force-reinstall 'lighthit==0.2.0a8'
+python -I -c 'import pathlib, lighthit as lh; p=pathlib.Path(lh.__file__).resolve(); print(lh.__version__, p); assert lh.__version__ == "0.2.0a8" and "site-packages" in p.parts'
 lighthit-selftest
-python -m pytest --pyargs lighthit.tests -q
-lighthit-demo geometry
 ```
-
-Both forms of the build command must work --- with isolation, where the
-backend is installed fresh, and `--no-isolation`, where it is the one in the
-current environment --- and neither may need `PYTHONPATH`. The distribution
-filter lives in `packaging_filter.py` beside `setup.py`, because it decides
-what the package contains and must not be inside it; under PEP 517
-`pyproject_hooks` runs the backend from a helper script of its own, so
-`sys.path[0]` is that helper's directory and a bare import of the filter fails
-exactly where it matters. `setup.py` puts its own directory on `sys.path`
-first, and `tests/test_packaging.py` reproduces the hook-style invocation with
-`PYTHONPATH` removed so the import cannot be rescued by the environment.
-
-`python -m build` does **not** start from a clean tree, and `build_py` copies
-without ever removing. A checkout whose `build/lib` predates the distribution
-filter therefore used to hand every experimental module to the wheel while the
-sdist stayed correct. `packaging_filter.ProductionBuildPy` now prunes
-`build_lib` of anything the current build would not produce, so `rm -rf build`
-is no longer load-bearing; `tests/test_packaging.py` plants a forbidden module
-in a build tree and asserts that it is gone, and runs
-`python -m build --no-isolation --sdist --wheel` on a copy of the project with
-a deliberately dirty `build/lib`, inspecting both archives (that last test
-skips where the `build` frontend is not installed). Keep
-`packaging_filter.REQUIRED_EXPERIMENTAL` and the `MANIFEST.in` allowlist equal
---- a test checks that too.
-
-Inspect both archives before upload. They must not contain top-level `g4_data`,
-the private `bgvd_model`, caches, results, docs, notebooks, slides, scripts,
-repository tests or repository examples. The installed package intentionally
-contains only `lighthit.examples.synthetic`, `lighthit.selftest` and the small
-`lighthit.tests` public-wheel suite. The `lighthit/experimental` directory must
-hold exactly the seven modules of the allowlist:
-
-```bash
-python -m zipfile -l dist/lighthit-0.2.0a7-*.whl | grep experimental/
-tar tzf dist/lighthit-0.2.0a7.tar.gz | grep experimental/
-```
-
-The sdist intentionally includes `LICENSE`, `setup.py`, `packaging_filter.py`
-and package sources. Full detector-specific and integration examples remain in
-the repository and are not PyPI distribution assets.
-
-## TestPyPI, then PyPI
-
-```bash
-python -m twine upload --repository testpypi dist/lighthit-0.2.0a7*
-# Test in a clean environment using the exact uploaded version.
-python -m twine upload dist/lighthit-0.2.0a7*
-```
-
-Credentials/tokens are supplied by the publisher at upload time and must never
-be stored in this repository. The separately installed private `bgvd_model` is
-a runtime input, not a LightHit dependency or distribution asset.

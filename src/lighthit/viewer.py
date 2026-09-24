@@ -36,8 +36,9 @@ def _display_source(source):
         direction = np.asarray(source.direction, float)
         direction /= np.linalg.norm(direction)
         return [{"type": "axis", "shape": "track",
-                 "position_m": np.asarray(source.start_m, float).tolist(),
-                 "direction": direction.tolist(), "extent_m": float(source.length_m),
+                 "position_m": (np.asarray(source.start_m, float)
+                                + 0.5 * source.length_m * direction).tolist(),
+                 "direction": direction.tolist(), "extent_m": float(source.length_m) / 2,
                  "label": "Cherenkov track"}]
     if isinstance(source, (G4Shower, SyntheticShower)):
         return [{"type": "axis", "shape": "spindle",
@@ -205,6 +206,7 @@ def write_event_viewer(result, output_path, *, json_path=None):
         "__VIEWER_CSS__": assets.joinpath("event_viewer.css").read_text(encoding="utf-8"),
         "__PLOTLY_JS__": get_plotlyjs(),
         "__RESULT_JSON__": payload,
+        "__VIEWER_SMOOTHING_JS__": assets.joinpath("event_viewer_smoothing.js").read_text(encoding="utf-8"),
         "__VIEWER_JS__": assets.joinpath("event_viewer.js").read_text(encoding="utf-8"),
     }.items():
         html = html.replace(token, value)

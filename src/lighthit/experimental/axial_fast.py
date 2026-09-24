@@ -258,7 +258,7 @@ def accumulate_cell_gemm(spread, angular, node_elements, times_ns, omega_per_ns,
 def compile_axial_source_fast(elements, degree, omega_per_ns, *, azimuthal_degree=0,
                               cell_m=None,bins=512,transverse_m=None,
                               deposit='linear',element_order=2,frame=None,
-                              chunk=16384,link_chunk=8192):
+                              chunk=16384,link_chunk=8192,axial_only=False):
     """Compile the SAME lattice, chord rule, m band and absolute emission phases.
 
     This opt-in alternative changes only evaluation order. It avoids the
@@ -266,6 +266,10 @@ def compile_axial_source_fast(elements, degree, omega_per_ns, *, azimuthal_degre
     ``chunk`` and ``link_chunk`` limit work arrays, NOT the final dense source.
     The output still has the original possibly large (cell,channel,frequency)
     shape. Arrays produced from actual G4 must be compared with AxialSource.of.
+
+    ``axial_only=True`` keeps the requested longitudinal ``cell_m`` but omits
+    transverse CIC cells.  It is exact for a source known to lie on the chosen
+    axis, in particular a straight Cherenkov track.
     """
     from itertools import product
     from scipy.sparse import coo_matrix
@@ -278,6 +282,8 @@ def compile_axial_source_fast(elements, degree, omega_per_ns, *, azimuthal_degre
         raise ValueError('Invalid chord quadrature order')
     if not isinstance(chunk,(int,np.integer)) or chunk<1 or link_chunk<1:
         raise ValueError('Chunk sizes must be positive')
+    if not isinstance(axial_only,(bool,np.bool_)):
+        raise ValueError('axial_only must be boolean')
     frame=frame or AxisFrame.of(elements)
     omega=np.atleast_1d(np.asarray(omega_per_ns,float))
     if omega.ndim!=1 or not len(omega) or not np.isfinite(omega).all():
@@ -292,9 +298,8 @@ def compile_axial_source_fast(elements, degree, omega_per_ns, *, azimuthal_degre
     z,transverse,_,_=frame.coordinates(elements)
     local_transverse=np.stack((transverse@frame.first,transverse@frame.second),axis=-1)
     along=(z.max()-z.min()+1e-9)/int(max(1,bins)) if cell_m is None else float(cell_m)
-    across=along if transverse_m is None else float(transverse_m)
-    flat=cell_m is None and transverse_m is None
-    if flat: across=np.inf
+    flat=bool(axial_only) or (cell_m is None and transverse_m is None)
+    across=np.inf if flat else (along if transverse_m is None else float(transverse_m))
     if not np.isfinite(along) or along<=0 or (not flat and (not np.isfinite(across) or across<=0)):
         raise ValueError('Grid spacing must be finite and positive')
     spacing=np.array([along,1.0 if flat else across,1.0 if flat else across])
@@ -351,7 +356,8 @@ def compile_axial_source_fast(elements, degree, omega_per_ns, *, azimuthal_degre
                  cells=len(unique),cell_m=along,transverse_m=None if flat else across,
                  azimuthal_degree=int(azimuthal_degree),channels=len(kept),
                  channels_if_full=(degree+1)**2,deposit=deposit,element_order=int(element_order),
-                 coefficients=int(table.size),compiler='cell_gemm_no_new_approximation')
+                 axial_only=bool(axial_only),coefficients=int(table.size),
+                 compiler='cell_gemm_no_new_approximation')
     return AxialSource(frame,centres[:,0],np.zeros((len(unique),2)) if flat else centres[:,1:],
                        table,kept,channel_degree,int(degree),int(azimuthal_degree),reference,summary)
 

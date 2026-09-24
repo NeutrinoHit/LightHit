@@ -35,6 +35,11 @@ lighthit-selftest
 
 Python 3.11 or newer is required.
 
+To run the detector-specific scripts in this repository, install the checkout
+into that environment first: `python -m pip install -e '.[demo,test]'`. A script
+under `examples/` does not automatically import the adjacent `src/` tree; an
+older PyPI installation in the active environment will otherwise be used.
+
 ## Quick start
 
 The example below defines a spectral medium, two optical modules and a
@@ -117,8 +122,21 @@ synthetic_shower = lh.SyntheticShower.gaussian(
 ```
 
 For tracks and showers, `kernel.transport(source)` automatically selects the
-source engine and uses the detector's angular response. Research methods are
-never selected unless explicitly enabled.
+source engine and uses the detector's angular response. A compatible prepared
+wavelength-folded cache is used when present; set
+`KernelConfig(spectral_folded_cache=False)` for the original reference path.
+
+Applications can select any calculated signal without using the CLI:
+
+```python
+response = kernel.transport(track)
+prompt = response.select("0+1")  # unscattered plus once-scattered
+print(prompt.charge_pe, prompt.bins_pe, prompt.rate_pe_per_ns)
+# Other selectors: 0, 1, ">=2", "all".
+```
+
+This selects stored components; it does not skip the multiply-scattered solve
+or make the transport itself faster.
 
 ## Configuring the calculation
 
@@ -153,14 +171,59 @@ response = kernel.transport(track)
 ```
 
 Repeated `build` calls reuse compatible tables and report that there is nothing
-to do. Pass `force=True` only for an intentional rebuild. Detector coordinates
-can be inspected without detector-specific assumptions:
+to do. Pass `force=True` only for an intentional rebuild.
+
+For many independent Cherenkov events on the same medium and OM spectral
+response, an optional second build folds the wavelength quadrature into two
+directional kernels (one for a beta-one straight track). This avoids preparing
+nine large radial splines during each event:
+
+```python
+kernel.build_folded_directional()
+fast_config = lh.KernelConfig(
+    cache_directory="lighthit-cache", cache_policy="require",
+    spectral_folded_cache=True,
+)
+fast_kernel = lh.TransportKernel(medium, detector, fast_config)
+response = fast_kernel.transport(track)
+```
+
+Use the same numerical configuration in both kernels. Once a compatible
+derived cache exists, it is selected automatically; set
+`spectral_folded_cache=False` to force the original nine-wavelength reference.
+Without a derived cache the original path remains available. The shared radial
+interpolation is a numerical approximation, so compare representative events
+against the reference before analysis. On the BGVD 321-frequency profile the
+three prepared arrays occupy about 10 GiB on disk.
+
+Detector coordinates can be inspected without detector-specific assumptions:
 
 ```python
 geometry = lh.describe_geometry(detector)
 print(geometry.centroid_m)
 print(geometry.bounds_min_m, geometry.bounds_max_m)
 ```
+
+For a point laser, cover every source-to-module distance when preparing its
+cache. This matters for a bright source: modules that could be safely skipped
+at low photon count may contribute above `threshold_pe` at high photon count.
+
+```python
+laser_range = lh.point_source_radial_range(detector, flash.position_m)
+laser_config = lh.KernelConfig(
+    radial_range_m=laser_range,
+    k_panel_per_m=min(0.04, 2 * np.pi / laser_range[1]),
+    cache_directory="laser-cache",
+)
+laser_kernel = lh.build(medium, detector, flash, config=laser_config)
+```
+
+The returned range guarantees geometric coverage. The spatial panel rule
+resolves oscillations at the farthest OM better than the default panel; check
+convergence in `k_panel_per_m`, `radial_nodes` and the frequency grid for the
+medium and geometry being analysed. For several laser positions, choose one
+shared radial range that covers the signals of interest; the cache contains a
+radial transport kernel, not a source-position-specific result.
 
 Important inputs are explicit:
 
@@ -241,7 +304,11 @@ lh.write_event_viewer(combined, "multi-event-viewer.html")
 Open `lighthit-viewer.html` in a web browser. It contains the detector geometry,
 integrated charge by scattering order, a selectable per-OM time histogram and a
 time animation. A portable `lighthit-viewer.json` companion is written beside
-the HTML file.
+the HTML file. The Display selector offers raw bins, a 3 ns Gaussian view, or
+both overlaid on the OM waveform. Each scattering order and `0+1` has its own
+raw and smoothed curve. The Gaussian view redistributes already
+binned integrals under a uniform-within-bin assumption; it is for display and
+does not replace an exact detector timing response or modify saved raw data.
 
 ## Installed synthetic demonstration
 
@@ -255,8 +322,8 @@ lighthit-demo run --profile quick --cache ./demo-cache \
   --output ./demo-output --sources all
 ```
 
-The repository, but not the wheel, contains detector-specific laser, track and
-G4-shower examples with explicit source positions and directions.
+The repository, but not the wheel, contains detector-specific laser, track,
+multi-track and G4-shower examples with explicit source positions and directions.
 
 ## Scope
 

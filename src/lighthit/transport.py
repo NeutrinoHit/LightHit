@@ -50,6 +50,7 @@ class KernelConfig:
     threshold_pe: float = 0.01
     cache_directory: str | Path | None = None
     cache_policy: str = "build"
+    spectral_folded_cache: bool | str = "auto"
     allow_experimental: bool = False
 
     def __post_init__(self):
@@ -67,6 +68,9 @@ class KernelConfig:
             raise ValueError("angular_backend must be 'auto', 'numpy' or 'numba'")
         if self.cache_policy not in ("build", "require"):
             raise ValueError("cache_policy must be 'build' or 'require'")
+        if (self.spectral_folded_cache != "auto"
+                and not isinstance(self.spectral_folded_cache, (bool, np.bool_))):
+            raise ValueError("spectral_folded_cache must be 'auto', True or False")
         object.__setattr__(self, "omega_per_ns", omega)
         object.__setattr__(self, "relative_time_edges_ns", edges)
 
@@ -157,6 +161,20 @@ class _ConsoleCacheProgress:
 
 
 @dataclass
+class TransportComponent:
+    """One selected signal with the same OM and time axes as its response."""
+    charge_pe: np.ndarray
+    bins_pe: np.ndarray
+    time_origin_ns: np.ndarray
+    relative_time_edges_ns: np.ndarray
+    active: np.ndarray
+
+    @property
+    def rate_pe_per_ns(self):
+        return self.bins_pe / np.diff(self.relative_time_edges_ns)[None, :]
+
+
+@dataclass
 class TransportResponse:
     """Detector response already folded over wavelength and OM efficiency."""
     detector: DetectorArray
@@ -177,6 +195,22 @@ class TransportResponse:
     @property
     def bins_pe(self):
         return self.components_pe.sum(axis=2)
+
+    def select(self, component="all"):
+        """Select 0, 1, >=2, 0+1 or all from an already computed response.
+
+        Selection is exact arithmetic on stored components, not a faster
+        transport solve. ``0+1`` is the prompt signal often useful to callers.
+        """
+        choices = {0: (0,), 1: (1,), 2: (2,), "0": (0,), "1": (1,),
+                   ">=2": (2,), "0+1": (0, 1), "all": (0, 1, 2)}
+        if component not in choices:
+            raise ValueError("component must be 0, 1, >=2, 0+1 or all")
+        selected = choices[component]
+        charge = self.charge_components_pe[:, selected].sum(axis=1)
+        bins = self.components_pe[:, :, selected].sum(axis=2)
+        return TransportComponent(charge, bins, self.time_origin_ns,
+                                  self.relative_time_edges_ns, self.active)
 
     def components_at_frequency_cutoff(self, omega_max_per_ns):
         """Re-bin Fourier-derived orders using a prefix of the stored spectrum.
@@ -606,6 +640,17 @@ class TransportKernel:
             reporter.complete(self.last_build_report)
         return self
 
+    def build_folded_directional(self, *, progress=True):
+        """Prepare reusable wavelength-integrated Cherenkov kernels on disk.
+
+        Requires the ordinary directional wavelength caches. Compare the
+        resulting radial interpolant against the original path for
+        representative events; opting in never changes the original cache
+        or the default transport path.
+        """
+        from ._spectral_fold import build_folded_cache
+        return build_folded_cache(self, progress=progress)
+
     def _auto_method(self, source):
         if isinstance(source, IsotropicFlash):
             return "isotropic"
@@ -652,6 +697,8 @@ class TransportKernel:
         positions = self.detector.positions_m
         displacement = positions - source.position_m[None, :]
         radii = np.linalg.norm(displacement, axis=1)
+        if np.any(radii == 0):
+            raise ValueError("isotropic point source cannot coincide with an OM centre")
         cosines = self.detector.head_on_cosine(source.position_m)
         wavelengths, photon_weight = self._flash_nodes(source)
         spectrum = np.zeros((len(omega), len(positions), 3), complex)
@@ -695,9 +742,13 @@ class TransportKernel:
                       / (4 * np.pi * radii * radii))
         unsafe = (~radial_inside) & (10 * upper >= self.config.threshold_pe)
         if np.any(unsafe):
+            required_high = float(np.max(radii[unsafe]))
             raise ValueError(
                 f"{int(unsafe.sum())} OMs outside radial_range_m have an absorption-only "
-                "estimate above threshold; extend a validated cache range")
+                "estimate above threshold; prepare a cache covering the source-to-OM "
+                f"distances (up to {required_high:g} m). "
+                "point_source_radial_range(detector, source.position_m) gives "
+                "the geometric range; validate its numerical resolution separately")
         fastest = min(self.medium.band(float(w)).group_index for w in wavelengths)
         origins = source.time_ns + radii / (0.299792458 / fastest)
         relative = spectrum * np.exp(-1j * omega[:, None] * origins[None, :])[:, :, None]
@@ -834,7 +885,9 @@ class TransportKernel:
         # each spectral component before the wavelength sum.
         first = int(np.argmin(elements.start_ns))
         fastest_group = float(np.min(sample["group_index"]))
-        origins = (float(elements.start_ns[first])
+        origins = (source.earliest_arrival_ns(positions, fastest_group)
+                   if isinstance(source, CherenkovTrack) else
+                   float(elements.start_ns[first])
                    + np.linalg.norm(positions - elements.start_m[first], axis=1)
                    / (0.299792458 / fastest_group))
         charge = np.zeros((len(positions), 3))
@@ -931,6 +984,13 @@ class TransportKernel:
         Everything else -- the two-field spectral model, the cone, the radial
         cache rule, the time origin, the readout -- is unchanged.
         """
+        if isinstance(source, CherenkovTrack) and find_spec("numba") is not None:
+            # A straight track is exactly m=0 and admits a per-OM radial window.
+            # Keep the generic two-field source engine for showers and for
+            # installations without the optional Numba accelerator.
+            from ._track_transport import transport_track_directional
+            return transport_track_directional(self, source, method=method)
+
         from .experimental.axial_source import AxisFrame, AxialSource
         try:
             from .experimental.axial_fast import compile_axial_source_fast
@@ -950,6 +1010,13 @@ class TransportKernel:
             apply_backend = "numpy directional"
 
         began = perf_counter()
+        folded = None
+        folded_load_seconds = 0.0
+        if self.config.spectral_folded_cache is not False:
+            from ._spectral_fold import optional_folded_cache
+            started = perf_counter()
+            folded = optional_folded_cache(self)
+            folded_load_seconds = perf_counter() - started
         response = self.acceptance()
         alpha = np.ascontiguousarray(response["alpha"], float)
         elements = self._source_elements(source)
@@ -1008,7 +1075,9 @@ class TransportKernel:
         work = np.flatnonzero(inside)
         first = int(np.argmin(elements.start_ns))
         fastest_group = float(np.min(sample["group_index"]))
-        origins = (float(elements.start_ns[first])
+        origins = (source.earliest_arrival_ns(positions, fastest_group)
+                   if isinstance(source, CherenkovTrack) else
+                   float(elements.start_ns[first])
                    + np.linalg.norm(positions - elements.start_m[first], axis=1)
                    / (0.299792458 / fastest_group))
         charge = np.zeros((len(positions), 3))
@@ -1016,31 +1085,67 @@ class TransportKernel:
         zero2 = replace(source2, channels=np.ascontiguousarray(source2.channels[:, :, :1]))
         cache_seconds = 0.0
         prepass_seconds = 0.0
+        zero_prepare_seconds = zero_apply_seconds = ballistic_charge_seconds = 0.0
         caches = []
         for wavelength, weight, phase in zip(
                 self.wavelength.wavelength_nm, self.wavelength.weight_nm,
                 sample["phase_index"], strict=True):
             before = perf_counter()
-            cache = self._directional_cache_for(float(wavelength))
+            cache = (self._directional_cache_for(float(wavelength))
+                     if folded is None else None)
             cache_seconds += perf_counter() - before
             caches.append(cache)
+            medium = cache.medium if cache is not None else self.medium.band(float(wavelength))
             before = perf_counter()
-            r0, r2 = (self._directional_apply(
-                PreparedDirectionalKernel, cache, item, positions[work],
-                looks[work], alpha, omega[:1]) for item in (zero0, zero2))
             s0 = 1.0 / wavelength ** 2
             s2 = 1.0 / (wavelength ** 2 * phase ** 2)
-            ballistic_charge = (
-                s0 * ballistic(field0, positions[work], looks[work], cache.medium,
-                               field0.cone_cosine, alpha)[0]
-                - s2 * ballistic(field2, positions[work], looks[work], cache.medium,
-                                 field2.cone_cosine, alpha)[0])
+            if folded is not None:
+                scattered = None
+            elif PreparedDirectionalKernel is None:
+                r0, r2 = (self._directional_apply(
+                    None, cache, item, positions[work],
+                    looks[work], alpha, omega[:1]) for item in (zero0, zero2))
+                scattered = s0 * r0 - s2 * r2
+            else:
+                started = perf_counter()
+                prepared = PreparedDirectionalKernel.from_cache(
+                    cache, degree=degree, frequency_indices=[0])
+                zero_prepare_seconds += perf_counter() - started
+                started = perf_counter()
+                scattered = prepared.apply(
+                    zero0, positions[work], looks[work], alpha,
+                    source_omega_per_ns=omega[:1],
+                    receiver_block=self.config.receiver_block,
+                    second_source=zero2, first_scale=s0, second_scale=s2)
+                zero_apply_seconds += perf_counter() - started
+            combined_field = replace(
+                field0, photons=np.ascontiguousarray(
+                    s0 * field0.photons - s2 * field2.photons))
+            started = perf_counter()
+            ballistic_charge = ballistic(
+                combined_field, positions[work], looks[work], medium,
+                field0.cone_cosine, alpha)[0]
+            ballistic_charge_seconds += perf_counter() - started
             detector_scale = (weight * scale_area[work]
                               * float(self.detector.spectral_weight(float(wavelength))))
             charge[work, 0] += detector_scale * ballistic_charge
-            charge[work, 1:] += detector_scale[:, None] * (
-                s0 * r0[0].real - s2 * r2[0].real)
+            if folded is None:
+                charge[work, 1:] += detector_scale[:, None] * scattered[0].real
             prepass_seconds += perf_counter() - before
+        if folded is not None and len(work):
+            started = perf_counter()
+            first_zero = folded.zero_frequency("field0").apply(
+                zero0, positions[work], looks[work], alpha,
+                source_omega_per_ns=omega[:1],
+                receiver_block=self.config.receiver_block)
+            second_zero = folded.zero_frequency("field2").apply(
+                zero2, positions[work], looks[work], alpha,
+                source_omega_per_ns=omega[:1],
+                receiver_block=self.config.receiver_block)
+            charge[work, 1:] += scale_area[work, None] * (
+                first_zero[0] - second_zero[0]).real
+            zero_apply_seconds += perf_counter() - started
+            prepass_seconds += perf_counter() - started
         active = inside & (charge.sum(axis=1) >= self.config.threshold_pe)
         if self.config.threshold_pe == 0:
             active = inside
@@ -1048,6 +1153,20 @@ class TransportKernel:
         components = np.zeros((len(positions), len(self.config.relative_time_edges_ns) - 1, 3))
         spectrum[0] = charge
         apply_start = perf_counter()
+        full_prepare_seconds = full_apply_seconds = ballistic_bins_seconds = 0.0
+        if folded is not None and np.any(active):
+            started = perf_counter()
+            first_scattered = folded.field0.apply(
+                source0, positions[active], looks[active], alpha,
+                source_omega_per_ns=omega,
+                receiver_block=self.config.receiver_block)
+            second_scattered = folded.field2.apply(
+                source2, positions[active], looks[active], alpha,
+                source_omega_per_ns=omega,
+                receiver_block=self.config.receiver_block)
+            spectrum[:, active, 1:] += scale_area[active][None, :, None] * (
+                first_scattered - second_scattered)
+            full_apply_seconds += perf_counter() - started
         # Every module can fall below threshold -- a detector looking away from
         # the event does exactly that -- and an empty selection is a valid
         # answer, not an error.
@@ -1058,19 +1177,39 @@ class TransportKernel:
             s2 = 1.0 / (wavelength ** 2 * phase ** 2)
             detector_scale = (weight * scale_area[active]
                               * float(self.detector.spectral_weight(float(wavelength))))
-            r0, r2 = (self._directional_apply(
-                PreparedDirectionalKernel, cache, item, positions[active],
-                looks[active], alpha, omega) for item in (source0, source2))
-            spectrum[:, active, 1:] += detector_scale[None, :, None] * (s0 * r0 - s2 * r2)
-            _, b0 = ballistic(field0, positions[active], looks[active], cache.medium,
-                              field0.cone_cosine, alpha,
-                              time_origin_ns=origins[active],
-                              relative_edges_ns=self.config.relative_time_edges_ns)
-            _, b2 = ballistic(field2, positions[active], looks[active], cache.medium,
-                              field2.cone_cosine, alpha,
-                              time_origin_ns=origins[active],
-                              relative_edges_ns=self.config.relative_time_edges_ns)
-            components[active, :, 0] += detector_scale[:, None] * (s0 * b0 - s2 * b2)
+            if folded is not None:
+                scattered = None
+            elif PreparedDirectionalKernel is None:
+                r0, r2 = (self._directional_apply(
+                    None, cache, item, positions[active],
+                    looks[active], alpha, omega) for item in (source0, source2))
+                scattered = s0 * r0 - s2 * r2
+            else:
+                started = perf_counter()
+                prepared = PreparedDirectionalKernel.from_cache(cache, degree=degree)
+                full_prepare_seconds += perf_counter() - started
+                started = perf_counter()
+                scattered = prepared.apply(
+                    source0, positions[active], looks[active], alpha,
+                    source_omega_per_ns=omega,
+                    receiver_block=self.config.receiver_block,
+                    second_source=source2, first_scale=s0, second_scale=s2)
+                full_apply_seconds += perf_counter() - started
+            if folded is None:
+                spectrum[:, active, 1:] += detector_scale[None, :, None] * scattered
+            combined_field = replace(
+                field0, photons=np.ascontiguousarray(
+                    s0 * field0.photons - s2 * field2.photons))
+            started = perf_counter()
+            _, bins = ballistic(
+                combined_field, positions[active], looks[active],
+                cache.medium if cache is not None else self.medium.band(float(wavelength)),
+                field0.cone_cosine, alpha,
+                time_origin_ns=origins[active],
+                relative_edges_ns=self.config.relative_time_edges_ns)
+            ballistic_bins_seconds += perf_counter() - started
+            components[active, :, 0] += detector_scale[:, None] * bins
+        readout_start = perf_counter()
         spectrum[0] = charge
         relative = (spectrum[:, active, 1:]
                     * np.exp(-1j * omega[:, None] * origins[None, active])[:, :, None])
@@ -1079,15 +1218,33 @@ class TransportKernel:
                 components[active, :, order + 1] = inverse_bins(
                     omega, relative[:, :, order], self.config.relative_time_edges_ns)
         apply_seconds = perf_counter() - apply_start
+        readout_seconds = perf_counter() - readout_start
         return self._response(
             spectrum, components, charge, origins, active, method,
             {"elapsed_seconds": perf_counter() - began,
              "compile_seconds": compile_seconds, "apply_seconds": apply_seconds,
              "cache_seconds": cache_seconds, "prepass_seconds": prepass_seconds,
-             "backend": f"{compile_backend} + {apply_backend}",
+             "folded_load_seconds": folded_load_seconds,
+             "spectral_folded_cache": folded is not None,
+             "spectral_folded_cache_path": str(folded.path) if folded is not None else None,
+             "zero_prepare_seconds": zero_prepare_seconds,
+             "zero_apply_seconds": zero_apply_seconds,
+             "ballistic_charge_seconds": ballistic_charge_seconds,
+             "full_prepare_seconds": full_prepare_seconds,
+             "full_apply_seconds": full_apply_seconds,
+             "ballistic_bins_seconds": ballistic_bins_seconds,
+             "readout_seconds": readout_seconds,
+             "backend": (f"{compile_backend} + spectral-folded directional"
+                         if folded is not None else
+                         f"{compile_backend} + {apply_backend}"),
              "wavelength_nodes": len(self.wavelength.wavelength_nm),
              "spectral_source": "S0=lambda^-2; S2=lambda^-2*n_phase^-2",
              "source_fields": 2, "reference_phase_index": elements.reference_phase_index,
+             "fused_two_field_apply": PreparedDirectionalKernel is not None and folded is None,
+             "compiled_source_cells": int(len(source0.z_m)),
+             "compiled_source_channels": int(source0.channels.shape[1]),
+             "compiled_source_memory_mib": float(
+                 (source0.channels.nbytes + source2.channels.nbytes) / 2 ** 20),
              "source_elements": len(elements),
              "source_elements_dropped_at_spectral_threshold": original_elements - len(elements),
              "source_coefficient_fraction_dropped": dropped_fraction,
@@ -1117,4 +1274,5 @@ class TransportKernel:
 
 
 __all__ = ["KernelConfig", "CacheProgress", "CacheBuildEntry",
-           "CacheBuildReport", "TransportResponse", "TransportKernel"]
+           "CacheBuildReport", "TransportComponent", "TransportResponse",
+           "TransportKernel"]

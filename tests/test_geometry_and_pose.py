@@ -25,6 +25,41 @@ def test_detector_geometry_summary_reports_explicit_bounds_and_clusters():
     assert summary.as_dict()["clusters"]["2"]["centroid_m"] == [10., 4., 0.]
 
 
+def test_point_source_radial_range_covers_all_modules_independently_of_brightness():
+    array = detector()
+    position = np.array([0., 0., 0.])
+    low, high = lh.point_source_radial_range(
+        array, position, minimum_range_m=(1., 5.))
+    radii = np.linalg.norm(array.positions_m - position[None, :], axis=1)
+    assert low == 1.
+    assert high > radii.max()
+    with pytest.raises(ValueError, match="closer"):
+        lh.point_source_radial_range(array, [-2., 0., -5.])
+
+
+def test_bright_laser_example_resolves_spatial_quadrature_at_far_om(tmp_path):
+    from examples.laser_cache import laser_config
+
+    config = laser_config(detector(), cache_directory=tmp_path,
+                          cache_policy="require")
+    assert config.k_panel_per_m <= 2 * np.pi / config.radial_range_m[1]
+    assert config.radial_range_m[1] >= 300.
+    wider = laser_config(detector(), cache_directory=tmp_path,
+                         max_radius_m=500.)
+    assert wider.radial_range_m == (config.radial_range_m[0], 500.)
+    assert wider.k_panel_per_m < config.k_panel_per_m
+
+
+def test_laser_example_reports_an_outdated_installed_package(tmp_path, monkeypatch):
+    from examples.laser_cache import laser_config
+
+    monkeypatch.delattr(lh, "point_source_radial_range")
+    with pytest.raises(RuntimeError, match="require LightHit 0.2.0a8 or newer") as exc:
+        laser_config(detector(), cache_directory=tmp_path)
+    assert lh.__file__ in str(exc.value)
+    assert "pip install -e" in str(exc.value)
+
+
 def test_track_elements_are_placed_by_numeric_centroid_axis_and_time():
     elements = lh.CherenkovTrack.centered(
         [0, 0, 0], [0, 0, 1], 4., time_ns=3.).to_elements(step_m=.25)
@@ -57,3 +92,21 @@ def test_g4_shower_placement_preserves_input_identity():
     assert placed.event == 5
     np.testing.assert_allclose(placed.centroid_m, pose.position_m, atol=1e-12)
     np.testing.assert_allclose(placed.principal_axis, pose.direction, atol=1e-12)
+
+
+def test_long_track_time_origin_minimizes_emission_plus_group_flight():
+    track = lh.CherenkovTrack([0., 0., -210.], [0., 0., 1.], 420., beta=.99)
+    receivers = np.array([[30., 0., 0.], [0., 0., -200.], [30., 0., 300.]])
+    group_index = 1.37
+    origins = track.earliest_arrival_ns(receivers, group_index)
+    distance = np.linspace(0., track.length_m, 100_001)
+    start = np.asarray(track.start_m, float)
+    direction = np.asarray(track.direction, float)
+    points = start[None, :] + distance[:, None] * direction
+    for index, receiver in enumerate(receivers):
+        samples = (track.time_ns + distance / (track.beta * .299792458)
+                   + np.linalg.norm(points - receiver[None, :], axis=1)
+                   * group_index / .299792458)
+        assert origins[index] == pytest.approx(samples.min(), abs=.02)
+    old_origin = np.linalg.norm(receivers[0] - start) * group_index / .299792458
+    assert old_origin - origins[0] > 60.

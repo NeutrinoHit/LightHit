@@ -1,33 +1,35 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>LightHit · просмотр событий</title>
+  <title>LightHit · event viewer</title>
   <style>__VIEWER_CSS__</style>
   <script>__PLOTLY_JS__</script>
 </head>
 <body>
-  <header><div><span class="dot"></span><strong>LIGHTHIT</strong><span class="tag">RTE EVENT VIEWER</span></div><label class="file">Открыть JSON<input id="file" type="file" accept=".json,application/json"></label></header>
+  <header><div><span class="dot"></span><strong>LIGHTHIT</strong><span class="tag">RTE EVENT VIEWER</span></div><label class="file">Open JSON<input id="file" type="file" accept=".json,application/json"></label></header>
   <main>
-    <section class="intro"><div><p class="eyebrow">ПЕРЕНОС СВЕТА · 0 / 1 / ≥2</p><h1>События в детекторном массиве</h1><p id="description"></p></div><div id="status">Чтение результата…</div></section>
-    <section class="metrics"><div><span>ОМ / полных спектров</span><strong id="modules">—</strong></div><div><span>Интегральный заряд массива</span><strong id="charge">—</strong></div><div><span>Окно активных ОМ</span><strong id="window-charge">—</strong></div><div><span>Расчёт события</span><strong id="elapsed">—</strong></div></section>
+    <section class="intro"><div><p class="eyebrow">LIGHT TRANSPORT · 0 / 1 / ≥2</p><h1>Events in the detector array</h1><p id="description"></p></div><div id="status">Reading result…</div></section>
+    <section class="metrics"><div><span>OMs / full spectra</span><strong id="modules">—</strong></div><div><span>Integrated array charge</span><strong id="charge">—</strong></div><div><span id="window-charge-title">Raw window charge</span><strong id="window-charge">—</strong></div><div><span>Event computation</span><strong id="elapsed">—</strong></div></section>
     <section class="controls">
-      <label>Событие<select id="event"></select></label><label>Кластер<select id="cluster"></select></label>
-      <label>Компонента<select id="part"><option value="all">Сумма</option><option value="0">Без рассеяния</option><option value="1">Одно рассеяние</option><option value="2">Два и более</option></select></label>
-      <label>Временной бин<select id="rebin"><option value="1">Исходный</option><option value="2">Объединить ×2</option><option value="4">Объединить ×4</option></select></label>
-      <label>Режим времени<select id="time-mode"><option value="frame">Текущий бин</option><option value="cumulative">Накопленный</option><option value="integrated">Весь сигнал</option></select></label>
-      <label>Масштаб ОМ<input id="gain" type="range" min="0.4" max="3" step="0.1" value="1"></label>
+      <label>Event<select id="event"></select></label><label>Cluster<select id="cluster"></select></label>
+      <label>Component<select id="part"><option value="all">Total</option><option value="prompt">0+1 · prompt</option><option value="0">Unscattered</option><option value="1">One scattering</option><option value="2">Two or more</option></select></label>
+      <label>Display<select id="display"><option value="raw">Raw bins</option><option value="smooth">3 ns Gaussian</option><option value="both">Both</option></select></label>
+      <label>Time bins<select id="rebin"><option value="1">Original</option><option value="2">Merge ×2</option><option value="4">Merge ×4</option></select></label>
+      <label>Time mode<select id="time-mode"><option value="frame">Current bin</option><option value="cumulative">Cumulative</option><option value="integrated">Full signal</option></select></label>
+      <label>OM scale<input id="gain" type="range" min="0.4" max="3" step="0.1" value="1"></label>
     </section>
     <section class="workspace">
-      <article class="panel geometry-panel"><div class="panel-title"><h2>Геометрия и эволюция сигнала</h2><span>Нажмите на ОМ</span></div><div id="geometry"></div><div class="time-control"><button id="play">▶ Запустить</button><input id="time" type="range" min="0" value="0"><output id="time-label"></output><button id="all-time">Весь сигнал</button></div><p class="caption">Размер — модуль знакового сигнала; цвет — sign·log₁₀. Отрицательные Fourier-бины не обрезаются.</p></article>
-      <article class="panel waveform-panel"><div class="panel-title"><h2>Выбранный ОМ</h2><label><input id="absolute" type="checkbox"> Абсолютное время</label></div><label>Оптический модуль<select id="module"></select></label><div id="waveform"></div><dl id="details"></dl></article>
+      <article class="panel geometry-panel"><div class="panel-title"><h2>Geometry and signal evolution</h2><span>Click an OM</span></div><div id="geometry"></div><div class="time-control"><button id="play">▶ Play</button><input id="time" type="range" min="0" value="0"><output id="time-label"></output><button id="all-time">Full signal</button></div><p class="caption">Size shows absolute signed signal; colour uses sign·log₁₀. Negative Fourier bins are preserved.</p></article>
+      <article class="panel waveform-panel"><div class="panel-title"><h2>Selected OM</h2><label><input id="absolute" type="checkbox"> Absolute time</label></div><label>Optical module<select id="module"></select></label><div id="waveform"></div><dl id="details"></dl><p class="caption">The 3 ns view redistributes stored bin integrals assuming uniform signal within each raw bin. It is display-only, not an exact detector response; raw signed bins remain available.</p></article>
     </section>
-    <section class="panel heatmap-panel"><div class="panel-title"><h2>Временные гистограммы всех ОМ</h2><span>Нажмите на строку</span></div><div id="heatmap"></div><p class="caption">Объединение соседних бинов подавляет видимый ringing sinc-фильтром, но не изменяет интегральный заряд ω=0 и не восстанавливает частоты выше ωmax.</p></section>
+    <section class="panel heatmap-panel"><div class="panel-title"><h2>Time histograms for all OMs</h2><span id="heatmap-mode">Raw bins · click a row</span></div><div id="heatmap"></div><p class="caption">In Both mode, the waveform overlays both views; the map and animation use the 3 ns display. Smoothing and merging cannot recover frequencies above ωmax or change the integrated charge at ω=0.</p></section>
     <section id="diagnostics" class="diagnostics"></section>
-    <footer>Локальный автономный файл · исходные знаки и интегральные заряды сохранены</footer>
+    <footer>Standalone local file · original signs and integrated charges preserved</footer>
   </main>
   <script id="result" type="application/json">__RESULT_JSON__</script>
+  <script>__VIEWER_SMOOTHING_JS__</script>
   <script>__VIEWER_JS__</script>
 </body>
 </html>

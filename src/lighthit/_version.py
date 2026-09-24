@@ -1,5 +1,5 @@
 """Single import-safe package version constant."""
 
-VERSION = "0.2.0a7"
+VERSION = "0.2.0a8"
 
 __all__ = ["VERSION"]

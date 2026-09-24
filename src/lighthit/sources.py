@@ -280,6 +280,35 @@ class CherenkovTrack:
             pose.position_m, pose.direction, self.length_m, beta=self.beta,
             time_ns=pose.time_ns, reference_phase_index=self.reference_phase_index)
 
+    def earliest_arrival_ns(self, receiver_positions_m, group_index):
+        """Earliest possible track emission plus group flight at each receiver.
+
+        The minimum is analytic for a straight source with constant beta and
+        group index. It is a time origin, not a detector timing response.
+        """
+        receivers = np.atleast_2d(np.asarray(receiver_positions_m, float))
+        if (receivers.ndim != 2 or receivers.shape[1] != 3
+                or not np.isfinite(receivers).all()):
+            raise ValueError("receiver_positions_m must be finite (N,3)")
+        if (not np.isfinite(group_index) or group_index <= 0
+                or not np.isfinite(self.beta) or self.beta <= 0):
+            raise ValueError("group_index and beta must be finite and positive")
+        direction = _unit_vector(self.direction, "direction")
+        start = np.asarray(self.start_m, float)
+        relative = receivers - start[None, :]
+        along = relative @ direction
+        transverse = relative - along[:, None] * direction
+        impact = np.linalg.norm(transverse, axis=1)
+        ratio = 1.0 / (self.beta * float(group_index))
+        if ratio >= 1.0:
+            emission_distance = np.zeros(len(receivers))
+        else:
+            stationary = along - impact * ratio / np.sqrt(1.0 - ratio ** 2)
+            emission_distance = np.clip(stationary, 0.0, float(self.length_m))
+        distance = np.sqrt(impact ** 2 + (along - emission_distance) ** 2)
+        return (self.time_ns + emission_distance / (self.beta * 0.299792458)
+                + distance * float(group_index) / 0.299792458)
+
     def to_elements(self, *, step_m=0.5):
         start = np.asarray(self.start_m, float)
         direction = np.asarray(self.direction, float)
