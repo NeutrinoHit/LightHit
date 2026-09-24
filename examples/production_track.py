@@ -1,4 +1,4 @@
-"""Finite Cherenkov track: two-field spectral axial source, exact directional OM."""
+"""Finite Cherenkov track with an exact m=0 source and directional OM."""
 import argparse
 import numpy as np
 import lighthit as lh
@@ -16,12 +16,27 @@ def main():
                         metavar=("DX", "DY", "DZ"))
     parser.add_argument("--length-m", type=float, default=120.)
     parser.add_argument("--bin-ns", type=float, default=5.)
+    parser.add_argument("--frequencies", type=int, default=321)
+    parser.add_argument("--omega-max", type=float, default=1.2)
+    parser.add_argument("--spectral-folded", dest="spectral_folded", action="store_true",
+                        default="auto", help="require the wavelength-integrated cache")
+    parser.add_argument("--reference", dest="spectral_folded", action="store_false",
+                        help="use the original nine-wavelength calculation")
     parser.add_argument("--viewer", default=None)
     args = parser.parse_args()
+    if args.frequencies < 2 or args.omega_max <= 0:
+        parser.error("--frequencies must be >= 2 and --omega-max must be positive")
     bgvd = lh.load_bgvd_model(args.bgvd_model, dataset="2021")
     config = lh.KernelConfig(
-        relative_time_edges_ns=np.arange(-60., 740. + args.bin_ns, args.bin_ns),
-        cache_directory=args.cache, cache_policy="require")
+        omega_per_ns=np.linspace(0., args.omega_max, args.frequencies),
+        relative_time_edges_ns=np.arange(
+            -60., 740. + args.bin_ns, args.bin_ns
+        ),
+        cache_directory=args.cache,
+        cache_policy="require",
+        receiver_block=1,
+        spectral_folded_cache=args.spectral_folded,
+    )
     kernel = bgvd.kernel(config)
     geometry = lh.describe_geometry(bgvd.detector)
     centre = geometry.centroid_m if args.position is None else np.asarray(args.position)
@@ -31,6 +46,19 @@ def main():
     source = lh.CherenkovTrack.centered(centre, direction, args.length_m)
     response = kernel.transport(source, method="track")
     response.save(args.output)
+    timing_keys = ("compile_seconds", "cache_seconds", "prepass_seconds",
+                   "zero_apply_seconds", "full_prepare_seconds",
+                   "full_prepare_wait_seconds", "full_scatter_seconds",
+                   "apply_seconds", "elapsed_seconds")
+    print("timings_s:", {key: round(float(response.metadata.get(key, 0.0)), 3)
+                         for key in timing_keys})
+    if response.metadata.get("track_fast_path"):
+        print("track fast path:",
+              "cells", response.metadata["compiled_source_cells"],
+              "channels", response.metadata["compiled_source_channels"],
+              "window cells",
+              f'{response.metadata["radial_cells_used_min"]}..'
+              f'{response.metadata["radial_cells_used_max"]}')
     if args.viewer is not None:
         payload = lh.viewer_payload(
             response, source=source, event_id="track", label="Cherenkov track",

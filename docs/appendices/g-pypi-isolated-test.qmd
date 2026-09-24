@@ -13,7 +13,7 @@ in @sec-validation.
 ## 1. Install one exact release
 
 ```bash
-export LH_VERSION="0.2.0a7"
+export LH_VERSION="0.2.0a8"
 export LH_SMOKE_ROOT="$(mktemp -d /tmp/lighthit-pypi-smoke.XXXXXX)"
 export LH_SMOKE_ENV="${LH_SMOKE_ROOT}/venv"
 
@@ -214,8 +214,8 @@ Source placement is defined by numbers, not detector-specific labels:
 import lighthit as lh
 
 pose = lh.SourcePose(
-    position_m=[25.0, -10.0, -720.0],
-    direction=[0.40, 0.20, -0.89442719],
+    position_m=[0.0, -250.0, 360.0],
+    direction=[0.40, 0.20, 0.89442719],
     time_ns=0.0,
 )
 
@@ -229,8 +229,8 @@ pose are written into source provenance.  A centred track uses the same idea:
 
 ```python
 track = lh.CherenkovTrack.centered(
-    position_m=[25.0, -10.0, -720.0],
-    direction=[0.40, 0.20, -0.89442719],
+    position_m=[0.0, -250.0, 360.0],
+    direction=[0.40, 0.20, 0.89442719],
     length_m=100.0,
 )
 ```
@@ -249,22 +249,63 @@ The viewer supports full-array payloads without spreading hundreds of thousands
 of values through `Math.max`.  If no module has a full time spectrum, it keeps
 the geometry and integrated charge visible and reports that the pose and
 threshold should be checked.
+The Display selector can show raw bins, a 3 ns Gaussian view, or both on the
+selected-OM waveform. The Gaussian view redistributes stored bin integrals
+assuming uniform signal within each original bin. It is explicitly a display
+operation, not an exact PMT timing model, and the raw JSON is unchanged.
 
 ## 8. Repository-only detector and G4 examples
 
 The repository contains comprehensive scripts that are deliberately not PyPI
 assets.  They may use separately installed detector models and private G4
 files, but all file paths and source coordinates are command-line inputs.
+Use a development environment for these scripts, not the isolated PyPI test
+environment above: running current repository examples with an older installed
+`lighthit` mixes incompatible versions.
 
-First inspect the detector and build the event cache:
+First inspect the detector and build both cache kinds in one directory. The
+monochromatic laser uses one isotropic table at 532 nm; tracks and showers
+share the directional tables at the configured wavelength nodes. These are
+distinct radial kernels even though their files live together:
 
 ```bash
 cd /absolute/path/to/LightHit
+python -m pip install -e '.[demo,test]'
+python -c 'import lighthit as lh; print(lh.__version__, lh.__file__); assert hasattr(lh, "point_source_radial_range")'
 
 python examples/production_cache.py \
   --bgvd-model /absolute/path/to/bgvd-model-master \
   --cache /local/cache/lighthit-bgvd \
-  --kind events
+  --kind all --wavelength 532 --frequencies 321 --omega-max 1.2
+```
+
+The laser cache profile is fixed by detector geometry, not by an event pose.
+Run a 532 nm flash at the default detector centroid:
+
+```bash
+python examples/production_laser.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --cache /local/cache/lighthit-bgvd \
+  --wavelength 532 --photons 1e15 \
+  --frequencies 321 --omega-max 1.2 \
+  --output /local/results/laser.npz --viewer /local/results/laser.html
+```
+
+Change only the transport command to move the laser, for example by appending
+`--position -300 -300 200`; the same cache is read. OMs outside its radial
+range retain direct light but not a full scattered spectrum, and their count
+is printed. If those distant OMs matter above the threshold, build a wider
+laser cache once with `--max-radius-m` and supply that same radius at run time.
+
+Run one explicitly placed track:
+
+```bash
+python examples/production_track.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --cache /local/cache/lighthit-bgvd \
+  --position 0 -250 360 --direction 0.4 0.2 0.89442719 \
+  --length-m 120 --frequencies 321 --omega-max 1.2 \
+  --output /local/results/track.npz --viewer /local/results/track.html
 ```
 
 Then place one stored shower explicitly:
@@ -274,27 +315,100 @@ python examples/production_shower.py \
   --bgvd-model /absolute/path/to/bgvd-model-master \
   --g4 /absolute/path/to/events.h5 \
   --event 5 \
-  --position 25 -10 -720 \
-  --direction 0.40 0.20 -0.89442719 \
+  --position 11.428243447430553 -249.74053298611113 362.13987569444436 \
+  --direction 0.4 0.2 0.894 \
   --cache /local/cache/lighthit-bgvd \
   --output /local/results/event-5.npz \
   --viewer /local/results/event-5.html
 ```
 
-For several positions and directions, copy
-`examples/production_multi_shower.toml`, replace every numeric pose and input
-path, and run
+For several positions and directions, run the sample
+`examples/production_multi_shower.toml` from the repository root, or copy it
+and replace its G4 path and numeric poses:
 
 ```bash
 python examples/production_multi_shower.py \
   --bgvd-model /absolute/path/to/bgvd-model-master \
-  --events /local/config/events.toml \
+  --events examples/production_multi_shower.toml \
   --cache /local/cache/lighthit-bgvd \
   --output /local/results/multi-pose
 ```
 
 One kernel and cache serve every event; the output contains one NPZ per pose,
 one provenance manifest and a combined viewer.
+
+For several tracks, edit `examples/production_multi_track.toml` and run
+
+```bash
+python examples/production_multi_track.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --tracks examples/production_multi_track.toml \
+  --cache /local/cache/lighthit-bgvd \
+  --output /local/results/multi-track
+```
+
+This writes one NPZ per track, a combined viewer and a manifest. The sample
+TOML uses two explicit positions inside the BGVD 2021 geometry.
+
+For repeated independent tracks or showers, prepare the optional
+wavelength-folded directional cache after the ordinary 321-frequency event
+tables are ready:
+
+```bash
+python examples/production_cache.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --cache /local/cache/lighthit-bgvd \
+  --kind events --frequencies 321 --omega-max 1.2 \
+  --fold-spectral
+```
+
+This is a one-time transformation of the nine existing tables; it does not
+rebuild their RTE solutions. The BGVD profile used about 10 GiB of additional
+disk space. Those scripts now select a compatible folded cache automatically.
+Use `--reference` to force the original nine-wavelength calculation, or
+`--spectral-folded` to require the derived cache and fail if it is missing.
+For one 120 m track, transport took 2.26 s instead of 125.7 s;
+for one 100 GeV G4 shower, 91.9 s instead of 1752.8 s. The active OMs matched,
+and the largest 5 ns bin L1 difference divided by an active OM's charge was
+below 2e-7 in both checked events. The folded cache fits a shared radial
+spline and is therefore a validated approximation for these events, not a
+universal accuracy guarantee. Compare representative events before analysis.
+
+For an exploratory shower run, the repository scripts also expose a shorter
+frequency grid and an axisymmetric source approximation. Prepare and run with
+the **same** frequency settings:
+
+```bash
+python examples/production_cache.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --cache /local/cache/lighthit-bgvd-quick \
+  --kind events --frequencies 41 --omega-max 0.15
+
+python examples/production_shower.py \
+  --bgvd-model /absolute/path/to/bgvd-model-master \
+  --g4 /absolute/path/to/events.h5 --event 5 \
+  --position 11.428243447430553 -249.74053298611113 362.13987569444436 \
+  --direction 0.4 0.2 0.894 --receiver-block 1 \
+  --cache /local/cache/lighthit-bgvd-quick \
+  --frequencies 41 --omega-max 0.15 --azimuthal-degree 0 \
+  --output /local/results/event-5-quick.npz \
+  --viewer /local/results/event-5-quick.html
+```
+
+The shorter frequency range changes time resolution, and `M=0` discards
+azimuthal source channels. For one 100 GeV G4 event on the BGVD array, `M=0`
+reduced transport time from 139 s to 43 s with four Numba threads. With this
+machine's default 14 threads, the same comparison was 106 s to 27 s. Among
+the 27 active OMs, the largest relative integrated-charge change was 2.9% and
+the largest time-bin L1 change was 5.7% of the OM charge. These are
+measurements for that event, not general error bounds. Compare with `M=4` and
+a wider frequency grid before using the quick result in an analysis.
+
+The example pose places the event at the centre of BGVD cluster 1 plus
+`(30, 20, 0)` metres; derive a new pose from `describe_geometry` for another
+detector layout. The default 321-frequency grid was not benchmarked here and
+requires much more memory (approximately
+13 GiB for the two compiled source fields of this event alone).
 
 ## 9. NTSim as a downstream consumer
 

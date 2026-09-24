@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lighthit"
-version = "0.2.0a7"
+version = "0.2.0a8"
 description = "Spectral radiative-transfer response for neutrino-telescope optical modules"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}

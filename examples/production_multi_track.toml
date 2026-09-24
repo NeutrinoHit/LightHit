@@ -1,0 +1,20 @@
+# Copy this file and edit numeric poses, directions and lengths as needed.
+# Coordinates are metres in the BGVD 2021 detector frame.
+
+[[tracks]]
+id = "track-cluster-1"
+label = "Track near cluster 1"
+position_m = [0.0, -250.0, 360.0]
+direction = [0.4, 0.2, 0.89442719]
+length_m = 120.0
+beta = 1.0
+time_ns = 0.0
+
+[[tracks]]
+id = "track-array-centre"
+label = "Track near array centre"
+position_m = [-200.4528, -424.7122, 361.5524]
+direction = [0.7, 0.3, 0.64]
+length_m = 120.0
+beta = 1.0
+time_ns = 50.0

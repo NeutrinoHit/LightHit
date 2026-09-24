@@ -1,20 +1,21 @@
-# Copy this file outside the repository and replace every input and pose.
-# Coordinates are metres in the detector frame; directions are normalized by LightHit.
+# Run from the LightHit repository root with the sample G4 file, or copy this
+# file and replace the input path and numeric poses.
+# Coordinates are metres in the BGVD 2021 frame.
 
 [[events]]
-id = "event-5-down"
-label = "G4 event 5 at pose A"
-file = "/absolute/path/to/events.h5"
+id = "event-5-pose-a"
+label = "G4 event 5 near cluster 1, pose A"
+file = "g4_data/sim_e_100GeV_10.h5"
 event = 5
-position_m = [0.0, 0.0, -750.0]
-direction = [0.0, 0.0, -1.0]
+position_m = [11.428243447430553, -249.74053298611113, 362.13987569444436]
+direction = [0.4, 0.2, 0.894]
 time_ns = 0.0
 
 [[events]]
-id = "event-5-inclined"
-label = "G4 event 5 at pose B"
-file = "/absolute/path/to/events.h5"
+id = "event-5-pose-b"
+label = "G4 event 5 near cluster 1, pose B"
+file = "g4_data/sim_e_100GeV_10.h5"
 event = 5
-position_m = [40.0, -20.0, -700.0]
-direction = [0.60, 0.20, -0.7745966692]
-time_ns = 0.0
+position_m = [-28.571756552569447, -249.74053298611113, 362.13987569444436]
+direction = [0.4, 0.2, 0.894]
+time_ns = 50.0

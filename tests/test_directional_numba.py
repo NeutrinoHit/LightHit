@@ -8,6 +8,7 @@ It is skipped where numba is absent.
 """
 import numpy as np
 import pytest
+from dataclasses import replace
 from scipy.special import eval_legendre
 
 pytest.importorskip("numba")
@@ -57,12 +58,13 @@ def build_source(omega, seed=23, cells=3, azimuthal_degree=2):
 
 
 @pytest.mark.parametrize("radial_phase", ["none", "flight"])
-def test_fused_apply_matches_the_numpy_definition(radial_phase):
+@pytest.mark.parametrize("azimuthal_degree", [0, 2])
+def test_fused_apply_matches_the_numpy_definition(radial_phase, azimuthal_degree):
     omega = np.array([0.0, 0.07])
     grid = CacheGrid(np.geomspace(4.0, 30.0, 14), omega)
     cache = DirectionalCache.build(medium(), settings(), grid, 3,
                                    radial_phase=radial_phase)
-    source = build_source(omega)
+    source = build_source(omega, azimuthal_degree=azimuthal_degree)
     rng = np.random.default_rng(5)
     centre = source.points_m().mean(axis=0)
     receivers = centre[None, :] + np.array([[9.0, 4.0, -7.0], [-6.0, 11.0, 3.0]])
@@ -97,6 +99,29 @@ def test_fused_apply_on_a_frequency_subset():
     assert np.max(np.abs(got - want)) / np.max(np.abs(want)) < 1e-12
 
 
+@pytest.mark.parametrize("azimuthal_degree", [0, 2])
+def test_two_source_fields_share_one_directional_apply(azimuthal_degree):
+    omega = np.array([0.0, 0.07])
+    grid = CacheGrid(np.geomspace(4.0, 30.0, 14), omega)
+    cache = DirectionalCache.build(medium(), settings(), grid, 3,
+                                   radial_phase="flight")
+    first = build_source(omega, azimuthal_degree=azimuthal_degree)
+    second = replace(first, channels=np.ascontiguousarray(
+        first.channels * np.linspace(.8, 1.2, len(first.z_m))[:, None, None]))
+    centre = first.points_m().mean(axis=0)
+    receivers = centre[None, :] + np.array([[9., 4., -7.], [-6., 11., 3.]])
+    looks = np.array([[0., 0., 1.], [0., 1., 0.]])
+    prepared = PreparedDirectionalKernel.from_cache(cache)
+    expected = (.7 * prepared.apply(first, receivers, looks, ALPHA,
+                                    source_omega_per_ns=omega)
+                - .2 * prepared.apply(second, receivers, looks, ALPHA,
+                                      source_omega_per_ns=omega))
+    actual = prepared.apply(first, receivers, looks, ALPHA,
+                            source_omega_per_ns=omega, second_source=second,
+                            first_scale=.7, second_scale=.2)
+    np.testing.assert_allclose(actual, expected, rtol=2e-12, atol=1e-14)
+
+
 def test_fused_ballistic_matches_the_numpy_twin():
     track = lh.CherenkovTrack([0, 0, 0], [0, 0, 1], 3.0, beta=0.999)
     elements = track.to_elements(step_m=0.25).field(0)
@@ -129,3 +154,29 @@ def test_fused_ballistic_reduces_to_the_existing_kernel_for_a_constant_response(
                                            elements.cone_cosine,
                                            np.array([4 * np.pi * constant]))
     np.testing.assert_allclose(scaled, constant * plain, rtol=1e-13, atol=0)
+
+
+def test_fused_apply_accepts_one_contiguous_cell_window_per_receiver():
+    omega = np.array([0.0, 0.07])
+    grid = CacheGrid(np.geomspace(4.0, 30.0, 14), omega)
+    cache = DirectionalCache.build(medium(), settings(), grid, 3,
+                                   radial_phase="flight")
+    source = build_source(omega, seed=41, cells=5, azimuthal_degree=0)
+    centre = source.points_m().mean(axis=0)
+    receivers = centre[None, :] + np.array([[8.0, 3.0, -5.0]])
+    looks = np.array([[0.0, 0.0, 1.0]])
+    begin = np.array([1], dtype=np.int64)
+    end = np.array([4], dtype=np.int64)
+
+    prepared = PreparedDirectionalKernel.from_cache(cache)
+    got = prepared.apply(source, receivers, looks, ALPHA,
+                         source_omega_per_ns=omega,
+                         cell_begin=begin, cell_end=end)
+
+    trimmed = AxialSource(
+        source.frame, source.z_m[1:4], source.transverse_m[1:4],
+        source.channels[1:4], source.kept, source.channel_degree,
+        source.degree, source.azimuthal_degree, source.reference_ns, {})
+    want = directional_response(cache, trimmed, receivers, looks, ALPHA,
+                                source_omega_per_ns=omega)
+    np.testing.assert_allclose(got, want, rtol=1e-12, atol=1e-14)

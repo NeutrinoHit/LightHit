@@ -82,11 +82,26 @@ def test_isotropic_public_api_and_cache_reuse(tmp_path):
     built = sorted(path.name for path in tmp_path.glob("*.npz"))
     first = kernel.transport(source)
     second = kernel.transport(source, method="isotropic")
+    moved = lh.IsotropicFlash.monochromatic([2., 0., 0.], 1e5, 450.)
+    independent_kernel = lh.TransportKernel(
+        spectral_medium(), detector(),
+        replace(config(tmp_path), cache_policy="require"))
+    moved_response = independent_kernel.transport(moved)
     assert sorted(path.name for path in tmp_path.glob("*.npz")) == built
     assert first.charge_components_pe.shape == (2, 3)
     assert first.components_pe.shape == (2, 6, 3)
     assert np.all(first.charge_pe > 0)
     np.testing.assert_allclose(second.charge_components_pe, first.charge_components_pe)
+    np.testing.assert_allclose(first.select("0+1").charge_pe,
+                               first.charge_components_pe[:, :2].sum(axis=1))
+    np.testing.assert_allclose(first.select("0+1").bins_pe,
+                               first.components_pe[:, :, :2].sum(axis=2))
+    np.testing.assert_allclose(first.select(">=2").bins_pe,
+                               first.components_pe[:, :, 2])
+    np.testing.assert_allclose(first.select("all").charge_pe, first.charge_pe)
+    with pytest.raises(ValueError, match="component"):
+        first.select("unknown")
+    assert not np.allclose(moved_response.charge_pe, first.charge_pe)
     # A monochromatic flash reads exactly one table, so exactly one is built
     # and the transport that follows must not add another.
     assert len(list(tmp_path.glob("transport-*.npz"))) == 1
@@ -184,6 +199,23 @@ def test_radial_range_is_never_silently_extrapolated(tmp_path):
         kernel.transport(lh.IsotropicFlash.monochromatic([0, 0, 0], 1e20, 450.))
 
 
+def test_bright_laser_uses_geometry_covered_cache(tmp_path):
+    far = lh.DetectorArray(
+        [[10., 0., 0.], [100., 0., 0.]],
+        [[-1., 0., 0.], [-1., 0., 0.]], .05,
+        lambda x: np.ones_like(np.asarray(x, float)),
+        lambda wavelength: np.ones_like(np.asarray(wavelength, float)) * .2)
+    radial_range = lh.point_source_radial_range(
+        far, [0., 0., 0.], minimum_range_m=(2., 60.))
+    cfg = replace(config(tmp_path, omega=(0., .04), threshold=.01),
+                  radial_range_m=radial_range)
+    source = lh.IsotropicFlash.monochromatic([0., 0., 0.], 1e15, 450.)
+    response = lh.TransportKernel(spectral_medium(), far, cfg).transport(source)
+    assert response.active.tolist() == [True, True]
+    assert np.isfinite(response.charge_components_pe).all()
+    assert response.metadata["omitted_outside_range"] == 0
+
+
 def test_experimental_method_requires_opt_in(tmp_path):
     kernel = lh.TransportKernel(spectral_medium(), detector(), config(tmp_path))
     source = lh.CherenkovTrack([0, 0, 0], [0, 0, 1], 1.)
@@ -236,4 +268,5 @@ def test_small_spectral_track_axial(tmp_path):
     assert response.spectrum_pe.shape == (2, 2, 3)
     assert response.components_pe.shape == (2, 6, 3)
     assert np.isfinite(response.charge_components_pe).all()
-    assert response.metadata["source_fields"] == 2
+    assert response.metadata["source_fields"] == 1
+    assert response.metadata["track_fast_path"] is True

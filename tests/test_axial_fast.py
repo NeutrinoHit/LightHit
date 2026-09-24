@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 pytest.importorskip('numba')
 from scipy.spatial.transform import Rotation
+import lighthit as lh
 from lighthit import Medium,SolverSettings
 from lighthit.cache import ResponseCache,CacheGrid
 from lighthit.experimental.g4_source import LightElements,SourceContract
@@ -67,3 +68,22 @@ def test_frequency_mismatch_is_refused(cache):
     source=compile_axial_source_fast(event(),16,w,azimuthal_degree=2,cell_m=.3)
     with pytest.raises(ValueError,match='frequency'):
         PreparedAxialKernel.from_cache(cache).apply(source,[[18,0,0]],source_omega_per_ns=w+.001)
+
+
+def test_axial_only_drops_transverse_zero_cells_without_changing_the_source():
+    track=lh.CherenkovTrack([0,0,-2],[0,0,1],4.,beta=.99)
+    elements=track.to_elements(step_m=.25).field(0)
+    w=np.array([0.,.12,.45]);frame=AxisFrame.of(elements)
+    kwargs=dict(azimuthal_degree=0,cell_m=.25,frame=frame,element_order=2)
+    full=compile_axial_source_fast(elements,8,w,**kwargs)
+    axial=compile_axial_source_fast(elements,8,w,axial_only=True,**kwargs)
+    full_scale=np.max(np.abs(full.channels))
+    axial_scale=np.max(np.abs(axial.channels))
+    full_live=np.max(np.abs(full.channels),axis=(1,2))>1e-13*full_scale
+    axial_live=np.max(np.abs(axial.channels),axis=(1,2))>1e-13*axial_scale
+    assert len(axial.channels)<len(full.channels)
+    np.testing.assert_allclose(full.points_m()[full_live],axial.points_m()[axial_live],
+                               rtol=0,atol=1e-12)
+    np.testing.assert_allclose(full.channels[full_live],axial.channels[axial_live],
+                               rtol=1e-11,atol=1e-12*full_scale)
+    assert axial.summary["axial_only"] is True

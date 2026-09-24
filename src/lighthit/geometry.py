@@ -101,4 +101,26 @@ def describe_geometry(detector: DetectorArray):
         GeometryRegion.from_positions(detector.positions_m), clusters)
 
 
-__all__ = ["GeometryRegion", "DetectorGeometrySummary", "describe_geometry"]
+def point_source_radial_range(detector: DetectorArray, position_m, *,
+                              minimum_range_m=(3.0, 300.0), margin=1.05):
+    """Return a cache range covering every OM for a point source.
+
+    This is a geometric coverage rule, not a numerical convergence test. It
+    avoids changing which OMs are evaluated when source brightness changes.
+    """
+    position = np.asarray(position_m, float)
+    if position.shape != (3,) or not np.isfinite(position).all():
+        raise ValueError("position_m must be a finite 3-vector")
+    low, high = map(float, minimum_range_m)
+    if not 0 < low < high or not np.isfinite([low, high, margin]).all() or margin <= 1:
+        raise ValueError("require a finite positive radial range and margin > 1")
+    radii = np.linalg.norm(detector.positions_m - position[None, :], axis=1)
+    if np.any(radii < low):
+        raise ValueError(
+            f"point source approaches {int(np.sum(radii < low))} OMs closer "
+            f"than radial minimum {low:g} m")
+    return low, max(high, float(radii.max()) * margin)
+
+
+__all__ = ["GeometryRegion", "DetectorGeometrySummary", "describe_geometry",
+           "point_source_radial_range"]
