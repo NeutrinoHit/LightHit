@@ -1,0 +1,262 @@
+{
+  "schema": "lighthit-scattering-orders-v1",
+  "environment": {
+    "python": "3.11.15",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "numba": null,
+    "lighthit": null,
+    "threads": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    }
+  },
+  "configuration": {
+    "absorption_per_m": 0.04,
+    "scattering_per_m": 0.05,
+    "g": 0.7,
+    "group_index": 1.35,
+    "speed_m_per_ns": 0.2220684874074074,
+    "scattering_degree": 8,
+    "spatial_degree": 12,
+    "k_max_per_m": 3.0,
+    "k_panel_per_m": 0.05,
+    "k_order": 8,
+    "taper": true,
+    "k_nodes": 480,
+    "omega_per_ns": [
+      0.0,
+      0.05
+    ]
+  },
+  "orders": {
+    "k_per_m": 0.2,
+    "omega_per_ns": 0.0,
+    "free_h0": [
+      8.117178559196336,
+      0.0
+    ],
+    "one_h0": [
+      1.6665526190577835,
+      4.2350468696873705e-45
+    ],
+    "two_or_more_h0": [
+      0.2703996056329636,
+      7.195453583468935e-45
+    ],
+    "sum_vs_dense_relative": 4.86753311276263e-14,
+    "one_over_free_h0": 0.20531180962745574,
+    "two_or_more_over_one_h0": 0.1622508659737603
+  },
+  "ballistic": {
+    "radius_m": 20.0,
+    "charge_per_m2": 3.288516893507522e-05,
+    "front_time_ns": 90.06230570350105,
+    "packaged": [
+      [
+        3.288516893507522e-05,
+        0.0
+      ],
+      [
+        -6.831877284857582e-06,
+        -3.216768236371845e-05
+      ]
+    ],
+    "analytic": [
+      [
+        3.288516893507522e-05,
+        0.0
+      ],
+      [
+        -6.831877284857582e-06,
+        -3.216768236371845e-05
+      ]
+    ],
+    "relative_error": 0.0
+  },
+  "spatial_inversion": {
+    "radius_m": 20.0,
+    "cosine": 0.35,
+    "spatial_degree": 12,
+    "k_nodes": 480,
+    "packaged": [
+      [
+        2.0612389309696394e-05,
+        1.8104277519870192e-49
+      ],
+      [
+        5.205566039064928e-06,
+        -7.80983396193111e-06
+      ]
+    ],
+    "rebuilt": [
+      [
+        2.0612389309696417e-05,
+        1.8104277519870192e-49
+      ],
+      [
+        5.205566039064922e-06,
+        -7.809833961931177e-06
+      ]
+    ],
+    "relative_error": 3.303867645423413e-15
+  },
+  "first_order_in_time": {
+    "radius_m": 20.0,
+    "cosine": 0.0,
+    "front_time_ns": 90.06230570350105,
+    "horizon_ns": 1801.2461140700213,
+    "spectrum_at_zero": 2.507193500411188e-06,
+    "spectrum_imaginary_part": 0.0,
+    "time_integral": 2.5071935004535692e-06,
+    "time_integral_estimate": 6.554275325928655e-10,
+    "quadrature_estimate": 2.826212944604088e-19,
+    "relative_difference": 1.6903878184479278e-11
+  },
+  "first_order_convergence": {
+    "geometry": "isotropic flash, isotropic receiver, omega = 0",
+    "degrees": [
+      4,
+      8,
+      16,
+      32
+    ],
+    "rows": [
+      {
+        "radius_m": 10.0,
+        "full_hg": 0.000172371953480346,
+        "ratio": {
+          "4": 0.994022678712885,
+          "8": 0.9999365793896281,
+          "16": 0.999988524836832,
+          "32": 0.9999868509970609
+        }
+      },
+      {
+        "radius_m": 20.0,
+        "full_hg": 3.261811200388191e-05,
+        "ratio": {
+          "4": 1.0003986158881124,
+          "8": 1.0000483149695074,
+          "16": 0.9999994321928062,
+          "32": 0.999999568365261
+        }
+      },
+      {
+        "radius_m": 40.0,
+        "full_hg": 2.44977857380347e-06,
+        "ratio": {
+          "4": 1.0003935883155848,
+          "8": 0.9999925174653767,
+          "16": 0.9999999810218664,
+          "32": 0.9999999834010755
+        }
+      }
+    ],
+    "worst_deviation_at_degree_16": 1.1475163168017666e-05,
+    "note": "the directed point-source/point-receiver first order is not tested this way: it carries an integrable 1/rho singularity at the ballistic root, and the multipole route does not converge for it at practical settings"
+  },
+  "cache": {
+    "moment_orders": [
+      "one_finite_L",
+      "two_or_more"
+    ],
+    "stores_ballistic": false,
+    "grid": {
+      "radii": 16,
+      "range_m": [
+        5.0,
+        60.0
+      ],
+      "spacing": "geometric",
+      "frequencies": [
+        0.0,
+        0.05
+      ],
+      "shape": [
+        2,
+        16,
+        13,
+        2
+      ]
+    },
+    "scale_removed": "exp(-mu_a r) / (4 pi r^2)",
+    "on_grid_relative": {
+      "one_finite_L": 2.0201107071231295e-15,
+      "two_or_more": 2.138093795441003e-15
+    },
+    "off_grid_radius_m": 17.3,
+    "off_grid_relative": {
+      "one_finite_L": 0.0016869143521758055,
+      "two_or_more": 0.0014936591657522952
+    },
+    "extrapolation": {
+      "below": {
+        "radius_m": 2.5,
+        "raised": true,
+        "message": "radii_m outside the cached range [5, 60] m; extrapolation is not provided"
+      },
+      "above": {
+        "radius_m": 120.0,
+        "raised": true,
+        "message": "radii_m outside the cached range [5, 60] m; extrapolation is not provided"
+      }
+    },
+    "interpolation_refinement": [
+      {
+        "radial_nodes": 16,
+        "log_spacing": 0.16566044331920002,
+        "relative_error": 0.0016869143521758055
+      },
+      {
+        "radial_nodes": 32,
+        "log_spacing": 0.08015827902541936,
+        "relative_error": 0.0004651140665432746
+      },
+      {
+        "radial_nodes": 64,
+        "log_spacing": 0.03944296269504762,
+        "relative_error": 2.2560690533952536e-05
+      }
+    ],
+    "first_order_consistency": {
+      "n_points": 12,
+      "max_relative_first_order": 0.047335810215210355,
+      "median_relative_first_order": 9.578652710207803e-05,
+      "max_first_order_error_over_total": 0.010531946706882999,
+      "radius_range_m": [
+        5.5,
+        54.0
+      ]
+    },
+    "all_finite": true
+  },
+  "component_names": [
+    "ballistic",
+    "one_exact_HG",
+    "two_or_more_HG_L"
+  ],
+  "backends": {
+    "numba_available": false,
+    "note": "optional accelerate extra absent; NumPy backend only"
+  },
+  "checks": {
+    "orders_sum_to_dense_reference": true,
+    "ballistic_matches_closed_form": true,
+    "hand_built_inversion_matches_solver": true,
+    "first_order_matches_time_integral": true,
+    "first_order_real_at_zero_frequency": true,
+    "finite_rank_first_order_converges_to_full_hg": true,
+    "cache_reproduces_moments_on_grid": true,
+    "cache_interpolation_improves_with_nodes": true,
+    "cache_interpolates_on_finest_grid": true,
+    "cache_refuses_extrapolation_below": true,
+    "cache_refuses_extrapolation_above": true,
+    "cache_stores_two_orders": true,
+    "component_order_is_stable": true,
+    "everything_finite": true,
+    "backends_agree": true
+  }
+}

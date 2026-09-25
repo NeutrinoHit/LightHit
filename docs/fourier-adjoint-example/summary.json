@@ -1,0 +1,240 @@
+{
+  "schema": "lighthit-fourier-adjoint-v1",
+  "environment": {
+    "python": "3.14.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "numba": "0.66.0",
+    "lighthit": "0.2.0a6",
+    "threads": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    }
+  },
+  "medium": {
+    "absorption_per_m": 0.04,
+    "scattering_per_m": 0.05,
+    "extinction_per_m": 0.09,
+    "g": 0.7,
+    "group_index": 1.35,
+    "speed_m_per_ns": 0.2220684874074074,
+    "wavelength_nm": 450.0,
+    "provenance": "synthetic medium, Fourier-adjoint example"
+  },
+  "transform_point": {
+    "k_per_m": 0.35,
+    "omega_per_ns": 0.08,
+    "d0": [
+      0.09,
+      -0.36024922281400423
+    ],
+    "d0_expected": [
+      0.09,
+      -0.36024922281400423
+    ],
+    "d0_error": 0.0
+  },
+  "quadrature": {
+    "rule": "Gauss-Legendre in cos(theta) x uniform in phi",
+    "polar_nodes": 20,
+    "azimuthal_nodes": 14,
+    "directions": 280,
+    "solid_angle": 12.566370614359172,
+    "solid_angle_error": 0.0,
+    "phase_normalisation_residual": 0.015464443420903473
+  },
+  "symmetry": {
+    "statement": "W L = L^T W for a reciprocal phase kernel",
+    "relative_residual": 1.6805303511979725e-18
+  },
+  "reciprocity": {
+    "detector_axis": [
+      0.6,
+      0.0,
+      0.8
+    ],
+    "source_axis": [
+      0.0,
+      -0.8,
+      0.6
+    ],
+    "acceptance": "0.40 + 0.48 c + 0.12 c^2 about the detector axis",
+    "adjoint_solves": 1,
+    "sources": [
+      "isotropic",
+      "forward_lobe",
+      "discrete_delta",
+      "cosine_lobe"
+    ],
+    "direct": {
+      "isotropic": [
+        1.2299911841222937,
+        2.1806508197256225
+      ],
+      "forward_lobe": [
+        1.2985309923337949,
+        2.8783414127466935
+      ],
+      "discrete_delta": [
+        1.8176723726085284,
+        5.032655373191188
+      ],
+      "cosine_lobe": [
+        7.904617395623766,
+        11.081385915090083
+      ]
+    },
+    "adjoint": {
+      "isotropic": [
+        1.2299911841222935,
+        2.1806508197256225
+      ],
+      "forward_lobe": [
+        1.2985309923337953,
+        2.878341412746694
+      ],
+      "discrete_delta": [
+        1.8176723726085278,
+        5.0326553731911865
+      ],
+      "cosine_lobe": [
+        7.904617395623767,
+        11.081385915090083
+      ]
+    },
+    "relative_error": {
+      "isotropic": 8.868939700764578e-17,
+      "forward_lobe": 1.9889101466839382e-16,
+      "discrete_delta": 3.5455139891111533e-16,
+      "cosine_lobe": 6.525079995064513e-17
+    },
+    "max_relative_error": 3.5455139891111533e-16,
+    "delta_index": 207,
+    "delta_evaluates_adjoint_field_error": 0.0
+  },
+  "coercivity": {
+    "statement": "lambda_min of the Hermitian part of W^1/2 L W^-1/2",
+    "smallest_eigenvalue": 0.03961955011548873,
+    "bound": 0.04,
+    "margin": -0.00038044988451126777,
+    "largest_eigenvalue": 0.08999999895505365
+  },
+  "fourier_signs": {
+    "x0_m": 2.5,
+    "t0_ns": 1.75,
+    "k_per_m": 0.35,
+    "omega_per_ns": 0.08,
+    "grid_nodes": 4001,
+    "grid_half_range": 40.0,
+    "grid_step_m": 0.020000000000003126,
+    "grid_step_ns": 0.020000000000003126,
+    "spatial_phase": [
+      0.6409968581633253,
+      -0.7675435022360271
+    ],
+    "spatial_phase_expected": [
+      0.6409968581633251,
+      -0.7675435022360271
+    ],
+    "spatial_phase_error": 2.220446049250313e-16,
+    "temporal_phase": [
+      0.9902159962126375,
+      0.13954311464423652
+    ],
+    "temporal_phase_expected": [
+      0.9902159962126371,
+      0.1395431146442365
+    ],
+    "temporal_phase_error": 3.3422138886441676e-16,
+    "time_derivative_factor": [
+      4.934049219696351e-19,
+      -0.08
+    ],
+    "time_derivative_expected": [
+      0.0,
+      -0.08
+    ],
+    "time_derivative_error": 4.934049219696351e-19,
+    "space_derivative_factor": [
+      5.101120931141721e-17,
+      0.35000000000000003
+    ],
+    "space_derivative_expected": [
+      0.0,
+      0.35
+    ],
+    "space_derivative_error": 7.538986262378249e-17
+  },
+  "zero_mode": {
+    "absorption_per_m": 0.0,
+    "k_per_m": 0.0,
+    "omega_per_ns": 0.0,
+    "isotropic_residual_norm": 0.0007732221710451698,
+    "relative_isotropic_residual": 0.015464443420903397,
+    "phase_normalisation_residual": 0.015464443420903473,
+    "residual_equals_normalisation_error": 7.632783294297951e-17,
+    "smallest_eigenvalue": -0.0003804498845111932,
+    "second_smallest_eigenvalue": 0.014460830559152503
+  },
+  "quadrature_convergence": {
+    "note": "the coercivity deficit is bounded by mu_s times the phase-function normalisation residual of the grid",
+    "rows": [
+      {
+        "polar_nodes": 12,
+        "azimuthal_nodes": 10,
+        "directions": 120,
+        "phase_normalisation_residual": 0.06543943918068829,
+        "smallest_eigenvalue": 0.038125938143808026,
+        "coercivity_margin": -0.0018740618561919747,
+        "margin_bound": -0.0032719719590344146
+      },
+      {
+        "polar_nodes": 20,
+        "azimuthal_nodes": 14,
+        "directions": 280,
+        "phase_normalisation_residual": 0.015464443420903473,
+        "smallest_eigenvalue": 0.03961955011548873,
+        "coercivity_margin": -0.00038044988451126777,
+        "margin_bound": -0.0007732221710451737
+      },
+      {
+        "polar_nodes": 32,
+        "azimuthal_nodes": 24,
+        "directions": 768,
+        "phase_normalisation_residual": 0.0004374558096560399,
+        "smallest_eigenvalue": 0.03999135161007858,
+        "coercivity_margin": -8.648389921421529e-06,
+        "margin_bound": -2.1872790482801998e-05
+      },
+      {
+        "polar_nodes": 40,
+        "azimuthal_nodes": 32,
+        "directions": 1280,
+        "phase_normalisation_residual": 2.5280974548902435e-05,
+        "smallest_eigenvalue": 0.039999557147834014,
+        "coercivity_margin": -4.428521659868845e-07,
+        "margin_bound": -1.2640487274451219e-06
+      }
+    ],
+    "residual_decreases": true,
+    "finest_residual": 2.5280974548902435e-05
+  },
+  "checks": {
+    "quadrature_covers_sphere": true,
+    "d0_matches_convention": true,
+    "time_derivative_is_minus_i_omega": true,
+    "space_derivative_is_plus_i_k": true,
+    "spatial_shift_phase": true,
+    "temporal_shift_phase": true,
+    "weighted_transpose_symmetry": true,
+    "reciprocity_holds": true,
+    "one_adjoint_solve_reused": true,
+    "delta_source_evaluates_adjoint_field": true,
+    "coercivity_deficit_explained_by_quadrature": true,
+    "zero_mode_residual_is_quadrature_error": true,
+    "quadrature_residual_decreases": true,
+    "finest_grid_normalises_phase": true
+  }
+}

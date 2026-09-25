@@ -1,0 +1,233 @@
+{
+  "schema": "lighthit-optical-module-v1",
+  "environment": {
+    "python": "3.11.15",
+    "lighthit": "0.2.0a5",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "numba": null,
+    "threads": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    }
+  },
+  "configuration": {
+    "quadrature_order": 2048,
+    "probe_degree": 64,
+    "bandwidth_tolerance": 1e-10,
+    "reconstruction_points": 401,
+    "angular_acceptance": "0.40 + 0.48 c + 0.12 c^2",
+    "spectral_efficiency": 0.2,
+    "reference_area_m2": 0.05,
+    "fluence_per_m2": 1000.0
+  },
+  "geometry": {
+    "source_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "labels": [
+      "head-on",
+      "side-on",
+      "back-on"
+    ],
+    "positions_m": [
+      [
+        0.0,
+        0.0,
+        -30.0
+      ],
+      [
+        30.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        30.0
+      ]
+    ],
+    "orientations": [
+      [
+        0.0,
+        0.0,
+        1.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "orientation_norms": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "orientation_norm_error": 0.0,
+    "distance_m": [
+      30.0,
+      30.0,
+      30.0
+    ],
+    "head_on_cosine": [
+      1.0,
+      0.0,
+      -1.0
+    ],
+    "head_on_cosine_error": 0.0
+  },
+  "response": {
+    "fluence_per_m2": 1000.0,
+    "wavelength_nm": 450.0,
+    "reference_area_m2": [
+      0.05,
+      0.05,
+      0.05
+    ],
+    "spectral_efficiency": 0.2,
+    "cosine": [
+      1.0,
+      0.0,
+      -1.0
+    ],
+    "angular_acceptance": [
+      1.0,
+      0.4,
+      0.040000000000000036
+    ],
+    "angular_expected": [
+      1.0,
+      0.4,
+      0.04
+    ],
+    "angular_error": 3.469446951953614e-17,
+    "expected_photoelectrons": [
+      10.000000000000002,
+      4.000000000000001,
+      0.40000000000000047
+    ]
+  },
+  "legendre": {
+    "quadrature_order": 2048,
+    "probe_degree": 64,
+    "tolerance": 1e-10,
+    "alpha": [
+      5.529203070317742,
+      2.010619298296287,
+      0.20106192982788537,
+      -1.779118122477978e-12,
+      -1.933685194885042e-12
+    ],
+    "alpha_exact_to_degree_2": [
+      5.529203070318036,
+      2.0106192982974678,
+      0.20106192982974677
+    ],
+    "peak_alpha": 5.529203070317742,
+    "alpha_error_to_degree_2": 1.8613999230865375e-12,
+    "relative_alpha_error_to_degree_2": 3.3664886230694545e-13,
+    "max_abs_alpha_above_degree_2": 2.044381251034512e-12,
+    "max_relative_alpha_above_degree_2": 3.6974247916653733e-13,
+    "bandwidth": 2,
+    "residual_above_bandwidth": 3.6974247916653733e-13,
+    "reconstruction_points": 401,
+    "reconstruction_max_error": 1.0460521338018225e-12,
+    "isotropic_alpha": [
+      12.566370614359172,
+      0.0,
+      -3.690862444592734e-12,
+      3.487868498008632e-16,
+      -3.718438404905115e-12
+    ],
+    "isotropic_alpha0_error": 0.0,
+    "isotropic_max_abs_alpha_above_0": 3.718438404905115e-12,
+    "isotropic_max_relative_above_0": 2.959039263616958e-13,
+    "measured_equals_alpha": 0.0
+  },
+  "scaling": {
+    "base_pe": [
+      10.000000000000002,
+      4.000000000000001,
+      0.40000000000000047
+    ],
+    "double_area_pe": [
+      20.000000000000004,
+      8.000000000000002,
+      0.8000000000000009
+    ],
+    "half_efficiency_pe": [
+      5.000000000000001,
+      2.0000000000000004,
+      0.20000000000000023
+    ],
+    "area_linearity_error": 0.0,
+    "efficiency_linearity_error": 0.0
+  },
+  "clipped_acceptance": {
+    "definition": "max(0, 0.2 + 0.9 c)",
+    "kink_at_cosine": -0.22222222222222224,
+    "probe_degree": 64,
+    "alpha": [
+      4.223697223130535,
+      2.502931334897095,
+      0.6387687742771209,
+      -0.14194852520366286,
+      -0.06965990221629266
+    ],
+    "relative_alpha_at_degree": {
+      "3": 0.0336076469748589,
+      "8": 0.001408945682121339,
+      "16": 0.0008090039180795993,
+      "32": 9.437596516396546e-05,
+      "64": 9.398126914137593e-06
+    },
+    "max_relative_above_degree_2": 0.0336076469748589,
+    "local_decay_exponent_32_to_64": 3.3279743381335614,
+    "bandwidth_in_probed_range": 64,
+    "reached_probe_degree": true,
+    "residual_above_bandwidth": 0.0,
+    "note": "the probe shows only that the response is not band-limited inside the probed range; it measures no infinite bandwidth"
+  },
+  "contract": {
+    "negative_angular_response": {
+      "rejected": true,
+      "message": "detector response functions must return finite nonnegative arrays"
+    },
+    "negative_spectral_response": {
+      "rejected": true,
+      "message": "detector response functions must return finite nonnegative arrays"
+    },
+    "negative_coefficients": {
+      "rejected": true,
+      "message": "acceptance must be nonnegative"
+    }
+  },
+  "checks": {
+    "orientations_are_unit": true,
+    "head_side_back_cosines": true,
+    "angular_values": true,
+    "quadratic_coefficients_exact": true,
+    "coefficients_terminate_at_two": true,
+    "measured_bandwidth_is_two": true,
+    "reconstruction_matches": true,
+    "isotropic_limit_is_four_pi": true,
+    "isotropic_has_no_higher_terms": true,
+    "linear_in_area": true,
+    "linear_in_efficiency": true,
+    "negative_angular_rejected": true,
+    "negative_spectral_rejected": true,
+    "negative_coefficients_rejected": true,
+    "clipped_has_substantial_tail": true,
+    "clipped_not_band_limited_in_range": true
+  }
+}
