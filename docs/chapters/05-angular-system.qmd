@@ -1,31 +1,582 @@
 # The angular system and the exact free tail {#sec-angular-system}
 
-::: {.callout-important title="Placeholder"}
-This chapter has not been written yet. The list below fixes its scope;
-the text replaces this note in a later pass.
-
-- Spherical harmonics.
-- The $m=0$ block.
-- The tridiagonal system.
-- The minimal solution.
-- Miller's algorithm and the continued fraction.
-- Why hard truncation is wrong.
-:::
-
 ## The physical question {#sec-angular-system-question}
+
+@sec-fourier-adjoint reduced the transport problem, at one wavelength and one
+$(\mathbf k,\omega)$, to a single equation on the sphere of directions:
+$$
+(D-V)h=1,\qquad
+D=d_0+ik\mu,\quad d_0=\mu_t-\frac{i\omega}{v},\quad
+\mu=\hat{\mathbf k}\cdot\hat{\mathbf s}.
+$$ {#eq-angular-starting-point}
+The right-hand side is the isotropic detector functional of
+@sec-optical-module; the source has already left the problem by reciprocity.
+@eq-angular-starting-point is exact and completely useless for computation
+until $h$ is given finitely many numbers.
+
+Expanding in spherical harmonics does that, and it does something better than
+merely discretising: the two operators become as simple as they can be. The
+scattering operator turns diagonal, because the phase function depends only on
+the angle between directions. The streaming multiplier $\mu$ turns
+tridiagonal, because $\mu P_\ell$ is a combination of $P_{\ell-1}$ and
+$P_{\ell+1}$ and nothing else. What is left is a tridiagonal linear system,
+which is the cheapest dense-looking object in numerical linear algebra.
+
+One thing spoils the picture, and this chapter is mostly about it. The system
+is **infinite**. Truncating the scattering operator at degree $L$ is a
+modelling decision with a controllable error; truncating the *system* at degree
+$L$ by declaring $h_{L+1}=0$ is not, because it imposes a boundary condition in
+angular degree that the transfer equation never asked for. The two are
+routinely confused. The resolution is that above $L$ the system is free — no
+scattering, no right-hand side — and a free tail can be eliminated **exactly**,
+in closed form, by one number added to one matrix entry. Getting that number
+reliably is the rest of the chapter, and it turns out to be a question about
+which of two branches of a recurrence the physical solution follows.
 
 ## Assumptions and definitions {#sec-angular-system-assumptions}
 
+One wavelength, one fixed pair $(k,\omega)$, a reciprocal Henyey--Greenstein
+medium, and the isotropic detector functional $a=1$. The medium is homogeneous
+and unbounded, so @eq-angular-starting-point holds independently at each
+$(\mathbf k,\omega)$, and $\mu_a>0$ so that @eq-coercivity applies.
+
+### Why only $m=0$ {#sec-angular-system-m-zero}
+
+Put the polar axis of the spherical-harmonic expansion along
+$\hat{\mathbf k}$. Then three things are invariant under rotations about that
+axis: $D$, because it depends on the direction only through
+$\mu=\hat{\mathbf k}\cdot\hat{\mathbf s}$; the scattering operator $V$, because
+its kernel depends only on $\hat{\mathbf s}\cdot\hat{\mathbf s}'$; and the
+right-hand side, which is the constant $1$. A rotationally invariant equation
+with a rotationally invariant right-hand side has a rotationally invariant
+solution, so
+$$
+h=h(\mu),
+$$
+and in spherical-harmonic language only the $m=0$ coefficients are populated.
+
+Two clarifications, because this is where the reasoning is easy to break.
+The emission direction of the source does **not** spoil the symmetry, for the
+simple reason that the source is not in @eq-angular-starting-point at all:
+reciprocity moved it to a contraction performed afterwards
+(@eq-adjoint-response). A *directional detector* does spoil it, because then
+the right-hand side is a function of the angle to the module axis rather than a
+constant, and the axis need not be along $\hat{\mathbf k}$; the problem then
+splits into fixed-$m$ blocks. That case is @sec-directional-om and no $m\ne0$
+appears in this chapter.
+
+### The orthonormal basis {#sec-angular-system-basis}
+
+Use the Legendre polynomials normalised on $[-1,1]$,
+$$
+p_\ell(\mu)=\sqrt{\frac{2\ell+1}{2}}\,P_\ell(\mu),
+\qquad
+\int_{-1}^{1}p_\ell(\mu)\,p_j(\mu)\,\mathrm d\mu=\delta_{\ell j},
+$$ {#eq-orthonormal-basis}
+and expand
+$$
+h(\mu)=\sum_{\ell=0}^{\infty}h_\ell\,p_\ell(\mu).
+$$ {#eq-h-expansion}
+Three similar-looking symbols are used in this book and they are not the same
+thing: $P_\ell$ is the ordinary Legendre polynomial, $p_\ell$ is the
+orthonormal basis function of @eq-orthonormal-basis, and $p_g$ is the phase
+function @eq-hg. Only $p_\ell$ appears below.
+
+The right-hand side of @eq-angular-starting-point is the constant $1$, whose
+coefficients follow from $\int_{-1}^{1}P_\ell\,\mathrm d\mu=2\delta_{\ell0}$:
+$$
+\int_{-1}^{1}p_\ell(\mu)\,\mathrm d\mu=\sqrt2\,\delta_{\ell0} .
+$$ {#eq-constant-projection}
+The entire forcing of the problem sits in one entry.
+
 ## Derivation {#sec-angular-system-derivation}
+
+**The scattering operator is diagonal.** @eq-hg-eigenvalues already gives the
+Legendre eigenvalues of the Henyey--Greenstein kernel, so for an axially
+symmetric $f$,
+$$
+V\,p_\ell=\gamma_\ell\,p_\ell,\qquad
+\gamma_\ell=\begin{cases}\mu_s\,g^{\ell}, & \ell\le L,\\[2pt] 0, & \ell>L.\end{cases}
+$$ {#eq-gamma}
+Setting $\gamma_\ell=0$ above $L$ is the **only** approximation made to the
+physics in this chapter. It replaces the infinite-rank Henyey--Greenstein
+operator by a finite-rank one, and it is an angular truncation of the
+*medium*, not a truncation of the number of collisions and not a truncation of
+free streaming, both of which remain exact to all degrees.
+
+The $\ell=0$ diagonal deserves its own line. Since $\gamma_0=\mu_s$,
+$$
+d_0-\gamma_0=\mu_t-\frac{i\omega}{v}-\mu_s=\mu_a-\frac{i\omega}{v},
+$$ {#eq-row-zero}
+and the extinction has cancelled down to the absorption. This is exactly the
+angular form of the photon-number balance @eq-spectral-number-balance: the
+$\ell=0$ moment is the photon number, scattering does not change it, and what
+remains is absorption plus a time derivative. An implementation whose first
+diagonal entry still contains $\mu_s$ has lost that cancellation somewhere.
+
+**The streaming operator is tridiagonal.** From the standard recurrence
+$(\ell+1)P_{\ell+1}=(2\ell+1)\mu P_\ell-\ell P_{\ell-1}$, converting to the
+normalised basis gives
+$$
+\mu\,p_\ell=a_\ell\,p_{\ell-1}+a_{\ell+1}\,p_{\ell+1},
+\qquad
+a_\ell=\frac{\ell}{\sqrt{4\ell^2-1}},\quad a_0=0 .
+$$ {#eq-streaming-recurrence}
+Multiplication by $\mu$ therefore couples each degree to its two neighbours and
+to nothing else.
+
+**The system.** Project @eq-angular-starting-point onto $p_\ell$, using
+@eq-gamma, @eq-streaming-recurrence and @eq-constant-projection:
+$$
+ik\,a_\ell\,h_{\ell-1}
++(d_0-\gamma_\ell)\,h_\ell
++ik\,a_{\ell+1}\,h_{\ell+1}
+=\sqrt2\,\delta_{\ell0},
+\qquad \ell=0,1,2,\dots
+$$ {#eq-angular-system}
+Written out, the first three rows are
+$$
+\begin{aligned}
+(d_0-\mu_s)\,h_0&+ik\,a_1h_1&&=\sqrt2,\\
+ik\,a_1h_0+{}&(d_0-\mu_sg)\,h_1+ik\,a_2h_2&&=0,\\
+ik\,a_2h_1+{}&(d_0-\mu_sg^2)\,h_2+ik\,a_3h_3&&=0,
+\end{aligned}
+$$ {#eq-first-rows}
+with $a_1=1/\sqrt3$, $a_2=2/\sqrt{15}$, $a_3=3/\sqrt{35}$. Every entry has a
+single origin: the diagonal is $d_0$ from the multiplier minus the scattering
+eigenvalue of that degree, and the off-diagonals are $ik$ times the coupling
+coefficient of @eq-streaming-recurrence. The matrix is **complex symmetric**,
+$M_{\ell,\ell+1}=M_{\ell+1,\ell}$, which is @eq-complex-symmetric in this
+basis. It is **not** Hermitian as soon as $k\ne0$ or $\omega\ne0$, because the
+off-diagonals are then imaginary and the diagonal is complex.
+
+### Why hard truncation is wrong {#sec-angular-system-hard-truncation}
+
+Keep $\ell=0,\dots,L$ and look at what row $L$ needs:
+$$
+ik\,a_L\,h_{L-1}+(d_0-\gamma_L)\,h_L+ik\,a_{L+1}\,h_{L+1}=0 .
+$$
+It contains $h_{L+1}$, which is outside the retained block. Setting
+$h_{L+1}=0$ closes the system, and that is precisely the problem: it is an
+extra condition, imposed in angular degree, that nothing in the transfer
+equation implies. The transfer equation says $\gamma_{L+1}=0$ — the medium
+does not scatter into that degree — but streaming still populates it, and
+$h_{L+1}$ is not small merely because $\gamma_{L+1}$ is zero.
+
+The consequence is a solution of the wrong problem, and the error does not go
+away quietly: it is worst exactly where $L$ is small and the calculation is
+cheap. @sec-angular-system-example measures it. Hard truncation appears in
+this book only as a named rejected reference, never as an option.
+
+### The exact free tail {#sec-angular-system-tail}
+
+Above $L$ the system is free: $\gamma_\ell=0$ and the right-hand side vanishes,
+so every row $\ell>L$ reads
+$$
+ik\,a_\ell\,h_{\ell-1}+d_0\,h_\ell+ik\,a_{\ell+1}\,h_{\ell+1}=0 .
+$$ {#eq-free-rows}
+A second-order recurrence has a two-dimensional solution space, and the two
+branches behave oppositely: one decays with degree, the other grows. Which one
+the physical solution follows is decided, not chosen. $h$ is a function on
+$[-1,1]$ that is square integrable, so by @eq-h-expansion its coefficients are
+square summable and in particular $h_\ell\to0$. The growing branch is therefore
+excluded, and above $L$ the solution is proportional to the **minimal**,
+decaying branch.
+
+Introduce the free moments, the coefficients of the unscattered multiplier
+alone,
+$$
+b_\ell(k,\omega)=\int_{-1}^{1}\frac{p_\ell(\mu)}{d_0+ik\mu}\,\mathrm d\mu ,
+$$ {#eq-free-moments}
+which satisfy the same homogeneous recurrence @eq-free-rows and are themselves
+the coefficients of a square-integrable function, hence the minimal branch.
+Because a ratio of consecutive terms is independent of how a branch is
+normalised, the solution and the free moments share it:
+$$
+r_\ell=\frac{b_{\ell+1}}{b_\ell}
+\qquad\Longrightarrow\qquad
+h_{L+1}=r_L\,h_L .
+$$ {#eq-tail-ratio}
+Substituting into row $L$ eliminates $h_{L+1}$ and closes the system at size
+$L+1$ with a single modified entry:
+$$
+M_{LL}=d_0-\gamma_L+ik\,a_{L+1}\,r_L,
+$$ {#eq-tail-correction}
+while every other entry is untouched,
+$$
+M_{\ell\ell}=d_0-\gamma_\ell,\qquad
+M_{\ell,\ell-1}=ik\,a_\ell,\qquad
+M_{\ell,\ell+1}=ik\,a_{\ell+1}.
+$$ {#eq-matrix-entries}
+
+@eq-tail-correction is the **exact Schur complement of the free tail**. In
+block form the infinite matrix is $\begin{pmatrix}A&B\\ C&E\end{pmatrix}$ with
+$E$ the free block above $L$; the reduced operator is $A-BE^{-1}C$, and since
+$B$ and $C$ each have a single non-zero entry $ik\,a_{L+1}$, that correction is
+rank one and lands on the last diagonal. No series is truncated and no
+remainder is dropped.
+
+Two qualifications keep the word *exact* honest. It is exact **relative to the
+finite-rank scattering model** @eq-gamma: the tail is free because
+$\gamma_{\ell>L}=0$ was assumed, and it is that assumption, not the elimination,
+that approximates the medium. And it is exact only above the support of both
+the scattering operator and the right-hand side — which here is degree $L$,
+since @eq-constant-projection puts the forcing at $\ell=0$ alone.
+
+### The free moments and the minimal solution {#sec-angular-system-moments}
+
+Work with the unnormalised moments $F_\ell=\int P_\ell/(d_0+ik\mu)\,\mathrm
+d\mu$, so that $b_\ell=\sqrt{(2\ell+1)/2}\,F_\ell$, and set
+$$
+z=\frac{i\,d_0}{k}.
+$$ {#eq-z}
+The first two are elementary:
+$$
+F_0=\frac{2}{k}\arctan\frac{k}{d_0},
+\qquad
+F_1=z\,F_0+\frac{2}{ik},
+$$ {#eq-f0-f1}
+and the rest satisfy the Legendre recurrence in $z$,
+$$
+F_{\ell+1}=\frac{(2\ell+1)\,z\,F_\ell-\ell\,F_{\ell-1}}{\ell+1}.
+$$ {#eq-forward-recurrence}
+
+Naming the two branches makes the instability concrete rather than
+metaphorical. Since $d_0+ik\mu=ik(\mu-z)$, the moments are
+$F_\ell=-2Q_\ell(z)/(ik)$, where $Q_\ell$ is the Legendre function of the
+second kind. @eq-forward-recurrence is satisfied by both $P_\ell(z)$ and
+$Q_\ell(z)$; off the cut, $Q_\ell(z)$ decays with degree and $P_\ell(z)$ grows.
+The physical moments are the $Q$ branch. Round-off in a forward sweep injects a
+small amount of the $P$ branch at every step, and that contamination grows
+while the wanted solution shrinks, so the computed $F_\ell$ eventually consists
+almost entirely of the branch that should not be there. This is not a statement
+that "the physical solution decays" — it is a statement about which of two
+named, explicit solutions of the same recurrence the arithmetic drifts towards.
+
+### Miller's backward ratios {#sec-angular-system-miller}
+
+Run the recurrence in the direction in which the wanted branch *grows* and the
+unwanted one shrinks. For
+$$
+R_\ell=\frac{F_{\ell+1}}{F_\ell}
+$$
+dividing @eq-forward-recurrence by $F_\ell$ and rearranging gives
+$$
+R_{\ell-1}=\frac{\ell}{(2\ell+1)\,z-(\ell+1)\,R_\ell},
+$$ {#eq-backward-ratio}
+a backward recurrence, and the ratio in the normalised basis is
+$$
+r_\ell=\sqrt{\frac{2\ell+3}{2\ell+1}}\;R_\ell .
+$$ {#eq-normalised-ratio}
+Started from an inaccurate value at a sufficiently deep degree,
+@eq-backward-ratio forgets the seed: each step damps the contribution of the
+dominant branch, so the error decays as the sweep descends. The depth needed is
+set by how fast the minimal branch decays. Writing $\rho$ for the asymptotic
+per-degree ratio of the minimal branch, the decay rate is
+$$
+\eta=-\ln\lvert\rho\rvert,
+$$ {#eq-decay-rate}
+and the implementation chooses per wavenumber:
+
+- **forward** when $\eta\,(N+3)<3$ — the decay over the degrees of interest is
+  too weak for contamination to matter, and @eq-forward-recurrence is used
+  directly, the ratio being formed by dividing two moments that are both of
+  ordinary size;
+- **Miller** otherwise, seeded at depth $N+1+\max\!\bigl(32,\lceil
+  28/\eta\rceil\bigr)$ and swept down with @eq-backward-ratio. Here the ratios
+  are produced *before* any moment is formed, precisely because at these
+  depths the moments themselves underflow; the moments are then rebuilt from
+  $F_0$ by taking a running product of the ratios.
+
+The constants $3$, $32$ and $28$ are implementation safety choices validated
+for the present double-precision code. They are not physical parameters, they
+are not claimed optimal, and a change of precision or of the degree range would
+require revalidating them rather than reusing them.
+
+### The special case $k=0$ {#sec-angular-system-zero-k}
+
+At $k=0$ the multiplier loses its direction dependence, $D=d_0$, and
+@eq-free-moments becomes $\int p_\ell/d_0$, so by
+@eq-constant-projection
+$$
+b_0=\frac{\sqrt2}{d_0},\qquad b_{\ell>0}=0 .
+$$ {#eq-zero-k}
+Once two consecutive moments are both zero their literal quotient is $0/0$,
+not a defined ratio. The implementation never forms that quotient: on the
+$k=0$ branch it stores every continuation ratio as zero, the value that safely
+propagates the exact zero coefficients and makes the tail correction vanish.
+The off-diagonals vanish, and the matrix is diagonal with entries
+$d_0-\gamma_\ell$; the solution is
+$h_0=\sqrt2/(d_0-\mu_s)$ and nothing else. This is a separate branch in the
+code, not a limit reached by dividing by a small $k$: @eq-z and
+@eq-f0-f1 both divide by $k$, and evaluating them at $k=10^{-15}$ instead of
+taking the branch would be arithmetic on the edge of the representable range
+for no reason.
+
+### Output degree and scattering degree {#sec-angular-system-degrees}
+
+Two degrees appear and they are not interchangeable. $L$ is the **scattering
+degree**: it truncates @eq-gamma and fixes the size $L+1$ of the solve. $J$ is
+the **output degree**: how many angular coefficients the later inversion in
+space will ask for. Increasing $J$ must not increase the solve, and it does
+not — above $L$ the coefficients are continued by the same exact free ratios of
+@eq-tail-ratio, which are already available. @sec-scattering-orders is where
+$J$ acquires its meaning; here it is only a length.
+
+Neither $L$ nor $J$ is a number of collisions. Nothing in this chapter counts
+collisions at all.
+
+### Invertibility after the elimination {#sec-angular-system-coercivity}
+
+@eq-coercivity applies to the infinite problem with the finite-rank scattering
+operator, since the eigenvalues @eq-gamma satisfy
+$\lvert\gamma_\ell\rvert\le\mu_s$ exactly as the untruncated ones do, and the
+bound used only that. The finite matrix of @eq-matrix-entries and
+@eq-tail-correction is the Schur complement of that same invertible operator
+with respect to an invertible free block, and a Schur complement of an
+invertible operator taken over an invertible block is invertible. The tail term
+is therefore part of the exact reduction, not an empirical stabilisation added
+to make a solve behave.
+
+One transitional remark closes the chapter. The system @eq-angular-system as
+solved here gives the total angular response; splitting it by the number of
+scattering events, which the implementation does for reasons of numerical
+conditioning, is @sec-scattering-orders, and replacing the constant right-hand
+side by a directional module's acceptance, which populates $m\ne0$, is
+@sec-directional-om.
 
 ## The discrete algorithm {#sec-angular-system-algorithm}
 
+1. **Validate** $L$, $J$, the wavenumbers $k\ge0$, and $d_0$ with
+   $\operatorname{Re}d_0>0$.
+2. **Compute** the free moments and the successive ratios up to
+   $N=\max(L,J)$.
+3. **Choose the branch** per wavenumber: forward when $\eta(N+3)<3$, Miller
+   otherwise, at that node's own depth.
+4. **Take** the terminal ratio $r_L$.
+5. **Build** the diagonal $d_0-\gamma_\ell$ from @eq-gamma.
+6. **Build** the off-diagonals $ik\,a_\ell$ from @eq-streaming-recurrence.
+7. **Add** the tail correction @eq-tail-correction to the last diagonal entry.
+8. **Solve** the tridiagonal system, one per wavenumber.
+9. **Continue** the coefficients above $L$ up to $J$ with the exact free
+   ratios.
+10. **Check** that every value is finite, and fail loudly rather than
+    returning a silent `nan`.
+
+Step 3 is per wavenumber and not per batch: a single batch-wide depth would
+charge every node the margin demanded by the slowest-decaying one.
+
 ## Correspondence with the code {#sec-angular-system-code}
+
+| Mathematics | Symbol |
+|:--|:--|
+| Degree validation | `lighthit.angular._degree` |
+| Free moments and ratios, @eq-free-moments and @eq-normalised-ratio | `lighthit.angular._free_moments_and_ratios_numpy` |
+| Backend selection | `lighthit.angular._free_moments_and_ratios` |
+| Public free moments and the terminal ratio $r_N$ | `lighthit.angular.free_moments_and_tail` |
+| The tridiagonal solve with @eq-tail-correction | `lighthit.angular.solve_tail_system` |
+| The assembled angular coefficients | `lighthit.angular.angular_components` |
+| Independent dense control | `lighthit.angular.dense_finite_rank_reference` |
+| Compiled per-node recurrences | `lighthit._angular_numba.free_moments_and_ratios` |
+| $L$ and $J$ | `lighthit.green.SolverSettings` |
+
+Symbols beginning with an underscore are implementation details. They are named
+here because this chapter is about how the calculation is done, and the reader
+should be able to find it; they are not part of the stable interface and may
+change without the book changing.
+
+`angular_components` returns its result in parts. Their separate meaning is
+@sec-scattering-orders; everything in this chapter uses only their sum, which
+is the solution of @eq-angular-system.
 
 ## A worked number {#sec-angular-system-example}
 
+Every object in this chapter is rebuilt from its definition in the example --
+the basis, the coupling coefficients, the matrix, the tail correction -- and
+then compared against the package. Public synthetic medium only, no spatial
+cache, and Numba is used when present but never required.
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+NUMBA_NUM_THREADS=1 \
+  python scripts/run_angular_system_example.py --output .build/angular-system-example
+```
+
+The stored output is `docs/angular-system-example/summary.json`, which carries
+the configuration, the library versions, the thread settings and the exact
+value of every residual quoted below as a bound.
+
+**Configuration.** $\mu_a=0.04\ \mathrm m^{-1}$, $\mu_s=0.05\ \mathrm m^{-1}$,
+$g=0.7$, $n_g=1.35$; $k=0.2\ \mathrm m^{-1}$, $\omega=0$, $L=8$. Then
+$d_0=\mu_t=0.09\ \mathrm m^{-1}$, real because $\omega=0$.
+
+**The matrix, entry by entry.** The first three diagonal entries come out as
+$0.0400$, $0.0550$, $0.0655\ \mathrm m^{-1}$, which are
+$\mu_t-\mu_sg^\ell$ for $\ell=0,1,2$; the first is $\mu_a$ exactly, as
+@eq-row-zero requires. The first two off-diagonals are $0.11547\,i$ and
+$0.10328\,i\ \mathrm m^{-1}$, which are $ik\,a_1$ and $ik\,a_2$ with
+$a_1=1/\sqrt3$ and $a_2=2/\sqrt{15}$. The terminal ratio is
+$r_8=-0.6470815\,i$, and the corrected last entry is
+$$
+M_{88}=\underbrace{0.0871176}_{d_0-\mu_sg^8}
++\underbrace{ik\,a_9\,r_8}_{0.0648082}
+=0.1519258\ \mathrm m^{-1},
+$$
+which can be checked on paper from $a_9=9/\sqrt{323}$. The matrix is exactly
+symmetric and exactly tridiagonal, and its distance from its own conjugate
+transpose is $0.23\ \mathrm m^{-1}$ — it is not Hermitian, and the example
+records that as a positive statement rather than an absence.
+
+**Hard truncation against the exact tail.** Both are compared against
+`dense_finite_rank_reference`, an independent dense solve that builds the
+angular operator by Gauss quadrature and inverts it directly, at the same
+scattering degree:
+
+| $L$ | exact tail | hard truncation |
+|--:|--:|--:|
+| 3 | $<3\times10^{-13}$ | $1.9\times10^{-1}$ |
+| 8 | $<3\times10^{-13}$ | $2.7\times10^{-2}$ |
+| 16 | $<3\times10^{-13}$ | $8.3\times10^{-4}$ |
+| 32 | $<3\times10^{-13}$ | $7.8\times10^{-7}$ |
+
+Read the two columns differently. The first column gives one conservative
+bound for all four measured residuals; their environment-specific values are
+kept in the stored JSON rather than frozen into the prose. It is flat at the
+level of round-off: the elimination introduces no error of its own, so what is
+left is arithmetic, and it does not improve with $L$ because there is nothing
+to improve. The hard-truncation column is a convergence study of a *different*
+problem: it does converge, from $19\%$ at $L=3$ to $8\times10^{-7}$ at $L=32$,
+but it buys with degrees what costs nothing at all when the tail is eliminated.
+At the deliberately small illustrative value $L=8$, hard truncation is wrong in
+the second decimal place. Current production presets use larger degrees, but
+that does not make hard truncation the equation being solved: the exact closure
+removes this separate error at every $L$.
+
+**Independent controls.** The package's tridiagonal solve agrees with a dense
+solve of the same matrix, and the assembled coefficients agree with the dense
+reference, both to better than $10^{-12}$. The terminal ratio $r_8$ agrees with
+an independent continued fraction started $400$ degrees deeper with a
+deliberately different seed, to better than $10^{-12}$; that both routes agree
+so sharply is the point of @eq-backward-ratio — the seed is forgotten.
+
+**The branch decision.** Over 61 wavenumbers spanning $10^{-3}$ to
+$40\ \mathrm m^{-1}$ at this $d_0$, the decay rate $\eta$ ranges from
+$2.2\times10^{-3}$ to $5.2$. The rule of @sec-angular-system-miller sends the
+large-$k$ end forward and the small-$k$ end to Miller. In this diagnostic the
+output degree is set equal to the scattering degree, so the table varies the
+combined recurrence length $N=\max(L,J)=L$:
+
+| $N=L=J$ | forward nodes | Miller nodes | deepest start |
+|--:|--:|--:|--:|
+| 3 | 31 | 30 | 59 |
+| 8 | 28 | 33 | 100 |
+| 16 | 25 | 36 | 169 |
+| 32 | 21 | 40 | 339 |
+
+Increasing $N$ tightens the forward criterion, so more nodes take the backward
+route and the deepest start grows roughly with the required recurrence length.
+In production $J$ can exceed $L$, and then it is $J$, not $L$, that sets this
+branch decision and depth.
+
+**$k=0$.** The branch returns $b_0=\sqrt2/d_0$ exactly, every higher moment
+identically zero, and every ratio identically zero, so the matrix is diagonal.
+These are exact zeros and not small numbers.
+
+**Independence of the output degree.** Solving with $J=L$ and with $J=3L$
+leaves the first $L+1$ coefficients unchanged to a relative $10^{-12}$; the
+longer run returns more coefficients and does not solve a larger system.
+
 ## Checks {#sec-angular-system-checks}
+
+Twenty checks are recorded as booleans in the stored summary, and the script
+exits with a failure if any is false.
+
+**The basis.** Orthonormality of $p_\ell$ over a 1024-node Gauss rule,
+@eq-streaming-recurrence verified both pointwise and by projection, and
+@eq-constant-projection verified against $\sqrt2\,\delta_{\ell0}$ — all below
+$10^{-12}$.
+
+**The matrix.** Exactly symmetric; exactly tridiagonal, with every entry
+outside the three bands identically zero; not Hermitian; and row zero equal to
+$\mu_a-i\omega/v$ to round-off.
+
+**The solves.** The package's tridiagonal routine against a dense solve of the
+same matrix, and the assembled coefficients against both that direct solve and
+the independent dense reference, all below $10^{-12}$ — with the dense
+reference held to $10^{-10}$, since it carries its own angular quadrature
+error.
+
+**The tail.** The terminal ratio against a deep independent continued fraction;
+the exact-tail solution against the dense reference at four degrees; and hard
+truncation required to be at least a thousand times worse at $L=3$, which it is
+by twelve orders.
+
+**The special cases and the backends.** The $k=0$ branch returning exact zeros;
+independence of the output degree; finiteness everywhere; and NumPy against
+Numba below $10^{-12}$ when the optional dependency is installed. When it is
+absent the run records that and passes, rather than failing on a missing
+optional package.
+
+Nothing here validates the transport chain. What is checked is that the
+tridiagonal system is the one derived above, that the tail elimination is exact
+to arithmetic, and that hard truncation is not.
 
 ## Range of validity {#sec-angular-system-validity}
 
+- **The $m=0$ adjoint problem only**, with an isotropic detector functional and
+  a rotationally invariant medium. A directional module breaks the symmetry and
+  is @sec-directional-om.
+- **Finite-rank scattering.** @eq-gamma is the one approximation; its error is
+  controlled by $L$ and is measured in @sec-validation.
+- **The free tail is exact only above the support** of both the scattering
+  operator and the right-hand side. A right-hand side with content above $L$
+  would invalidate @eq-tail-correction as written.
+- **$\mu_a>0$**, so that @eq-coercivity holds uniformly and the tridiagonal
+  system is invertible for every $(k,\omega)$.
+- **Real $k$ and $\omega$**, with $\operatorname{Re}d_0>0$, which the
+  implementation requires explicitly.
+- **Double precision.** The branch rule and its constants
+  $3$, $32$, $28$ were validated for this implementation at this precision and
+  carry no guarantee outside it.
+- **$J$ is not $L$, and neither is a collision count.** The solve is of size
+  $L+1$ whatever $J$ is.
+- **Scattering orders are deferred** to @sec-scattering-orders; nothing here
+  separates them.
+
 ## Exercises {#sec-angular-system-exercises}
+
+1. Derive the normalisation constant of @eq-orthonormal-basis from
+   $\int_{-1}^1P_\ell^2\,\mathrm d\mu=2/(2\ell+1)$, and then obtain
+   @eq-constant-projection.
+2. Derive @eq-streaming-recurrence from the standard Legendre recurrence, and
+   verify $a_1=1/\sqrt3$, $a_2=2/\sqrt{15}$, $a_3=3/\sqrt{35}$.
+3. Write out rows $0$, $1$ and $2$ of @eq-angular-system explicitly and
+   identify the origin of every entry. Then evaluate them for the
+   configuration of @sec-angular-system-example and compare with the numbers
+   quoted there.
+4. Show that $\gamma_0=\mu_s$ makes the first diagonal entry $\mu_a-i\omega/v$,
+   and relate the result to @eq-spectral-number-balance. What would a residual
+   $\mu_s$ in that entry mean physically?
+5. Derive @eq-tail-correction as a Schur complement, starting from the block
+   form of the infinite matrix, and show that the correction is rank one.
+6. Explain, in terms of @eq-free-rows, why $h_{L+1}=0$ is an extra boundary
+   condition. Then estimate from the table in @sec-angular-system-example how
+   many extra degrees hard truncation needs to match the exact tail at
+   $L=8$.
+7. Derive @eq-backward-ratio from @eq-forward-recurrence, and show that an
+   error in the seed is damped by a factor of order $\lvert\rho\rvert^2$ per
+   step down.
+8. Identify the two solutions of @eq-forward-recurrence as $P_\ell(z)$ and
+   $Q_\ell(z)$, say which the moments follow, and explain why a forward sweep
+   drifts towards the other one.
+9. Derive @eq-zero-k directly from @eq-free-moments, and say what goes wrong
+   numerically if @eq-f0-f1 is evaluated at $k=10^{-15}$ instead.
+10. Show from @eq-tail-ratio that continuing the coefficients above $L$ needs
+    no further solve, and hence that the cost of the solve is independent of
+    $J$.
+11. Suppose the right-hand side is $a(\hat{\mathbf s})$ for a module whose axis
+    is not along $\hat{\mathbf k}$. Say which step of the derivation fails
+    first, and what replaces @eq-angular-system.
+12. Propose a test that would decide whether the Miller constants $32$ and
+    $28$ are adequate at a given precision. State what quantity it measures and
+    what result would count as a failure.

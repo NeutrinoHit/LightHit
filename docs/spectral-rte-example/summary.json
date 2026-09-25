@@ -1,0 +1,191 @@
+{
+  "schema": "lighthit-spectral-rte-v1",
+  "environment": {
+    "python": "3.11.15",
+    "lighthit": "0.2.0a5",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "numba": null,
+    "threads": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    }
+  },
+  "medium_table": {
+    "wavelength_nm": [
+      400.0,
+      450.0,
+      500.0,
+      550.0
+    ],
+    "absorption_per_m": [
+      0.03,
+      0.021,
+      0.038,
+      0.09
+    ],
+    "scattering_per_m": [
+      0.03,
+      0.022,
+      0.017,
+      0.013
+    ],
+    "phase_index": [
+      1.3435,
+      1.339,
+      1.336,
+      1.334
+    ],
+    "group_index": [
+      1.386,
+      1.374,
+      1.367,
+      1.363
+    ],
+    "g": 0.9,
+    "provenance": "synthetic spectral medium, transfer-equation example, not a calibration"
+  },
+  "probe": {
+    "wavelength_nm": 462.5,
+    "bracket_nm": [
+      450.0,
+      500.0
+    ],
+    "interpolation_weight": 0.25,
+    "absorption_per_m": 0.02525,
+    "scattering_per_m": 0.020749999999999998,
+    "extinction_per_m": 0.046,
+    "phase_index": 1.33825,
+    "group_index": 1.3722500000000002,
+    "group_speed_m_per_ns": 0.2184678141738021,
+    "absorption_length_m": 39.603960396039604,
+    "scattering_length_m": 48.19277108433735,
+    "extinction_length_m": 21.73913043478261,
+    "single_scattering_albedo": 0.4510869565217391,
+    "band_extinction_per_m": 0.046,
+    "band_extinction_error": 0.0,
+    "linear_interpolation_max_error": 0.0
+  },
+  "monochromatic_band": {
+    "dataclass_fields": [
+      "absorption_per_m",
+      "g",
+      "group_index",
+      "provenance",
+      "scattering_per_m",
+      "wavelength_nm"
+    ],
+    "has_group_index": true,
+    "has_phase_index": false,
+    "group_index": 1.3722500000000002,
+    "speed_m_per_ns": 0.2184678141738021,
+    "speed_error": 0.0
+  },
+  "flight_time": {
+    "distance_m": 100.0,
+    "group_index": 1.3722500000000002,
+    "phase_index": 1.33825,
+    "time_with_group_index_ns": 457.73332963566423,
+    "time_with_phase_index_ns": 446.39215039892696,
+    "difference_ns": 11.341179236737275,
+    "relative_difference": 0.02477682638003302
+  },
+  "henyey_greenstein": {
+    "g": 0.9,
+    "quadrature": {
+      "rule": "Gauss-Legendre in cos(theta)",
+      "order": 512
+    },
+    "normalisation": 1.0000000000005311,
+    "normalisation_error": 5.311306949806749e-13,
+    "mean_cosine": 0.9000000000005314,
+    "mean_cosine_error": 5.313527395855999e-13,
+    "legendre": [
+      {
+        "degree": 0,
+        "measured": 1.0000000000005311,
+        "expected": 1.0,
+        "absolute_error": 5.311306949806749e-13
+      },
+      {
+        "degree": 1,
+        "measured": 0.9000000000005314,
+        "expected": 0.9,
+        "absolute_error": 5.313527395855999e-13
+      },
+      {
+        "degree": 2,
+        "measured": 0.8100000000005323,
+        "expected": 0.81,
+        "absolute_error": 5.322409180053e-13
+      },
+      {
+        "degree": 3,
+        "measured": 0.7290000000005329,
+        "expected": 0.7290000000000001,
+        "absolute_error": 5.327960295176126e-13
+      },
+      {
+        "degree": 4,
+        "measured": 0.6561000000005337,
+        "expected": 0.6561,
+        "absolute_error": 5.336842079373127e-13
+      },
+      {
+        "degree": 5,
+        "measured": 0.5904900000005342,
+        "expected": 0.5904900000000001,
+        "absolute_error": 5.341282971471628e-13
+      },
+      {
+        "degree": 6,
+        "measured": 0.5314410000005347,
+        "expected": 0.531441,
+        "absolute_error": 5.346834086594754e-13
+      },
+      {
+        "degree": 7,
+        "measured": 0.47829690000053465,
+        "expected": 0.4782969000000001,
+        "absolute_error": 5.345723863570129e-13
+      },
+      {
+        "degree": 8,
+        "measured": 0.4304672100005345,
+        "expected": 0.4304672100000001,
+        "absolute_error": 5.344058529033191e-13
+      }
+    ],
+    "legendre_max_error": 5.346834086594754e-13
+  },
+  "wavelength_range_guard": {
+    "range_nm": [
+      400.0,
+      550.0
+    ],
+    "below": {
+      "wavelength_nm": 399.0,
+      "raised": true,
+      "message": "wavelength outside medium range [400, 550] nm"
+    },
+    "above": {
+      "wavelength_nm": 551.0,
+      "raised": true,
+      "message": "wavelength outside medium range [400, 550] nm"
+    }
+  },
+  "checks": {
+    "interpolation_is_linear": true,
+    "band_matches_sample": true,
+    "band_has_group_index": true,
+    "band_omits_phase_index": true,
+    "group_speed_matches_index": true,
+    "hg_normalised": true,
+    "hg_mean_cosine": true,
+    "hg_legendre_eigenvalues": true,
+    "range_guard_rejects_below": true,
+    "range_guard_rejects_above": true
+  }
+}

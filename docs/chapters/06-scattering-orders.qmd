@@ -1,31 +1,552 @@
 # Scattering orders and the spatial inversion {#sec-scattering-orders}
 
-::: {.callout-important title="Placeholder"}
-This chapter has not been written yet. The list below fixes its scope;
-the text replaces this note in a later pass.
-
-- Ballistic light.
-- Exactly one scattering.
-- Two and more.
-- Spherical Bessel functions.
-- The radial cache.
-- Independent reference solutions.
-:::
-
 ## The physical question {#sec-scattering-orders-question}
+
+@sec-angular-system solves a tridiagonal system and returns angular
+coefficients $h_\ell(k,\omega)$. Two things stand between that and a response
+at a point.
+
+The first is that the answer should not be one opaque number. Light that
+reaches the module without scattering, light that scattered exactly once, and
+light that scattered twice or more behave differently in time, are singular in
+different ways, and are accurate for different reasons. Separating them is not
+cosmetic: two of the three are computed by routes that do not go through
+@eq-angular-system at all, because those routes are better.
+
+The second is that $h_\ell(k,\omega)$ lives in wavenumber space. Getting back
+to a displacement $\mathbf r$ means an inverse Fourier transform, and in a
+medium whose response depends only on $r=\lvert\mathbf r\rvert$ and on the
+angle to the source axis that transform collapses onto one radial integral per
+angular degree, against a spherical Bessel function. That integral is where the
+finiteness of the calculation finally bites: it runs over $0\le k<\infty$ and
+the code evaluates it on a finite grid.
+
+Four quantities are easy to conflate and are independent throughout this
+chapter. The **number of collisions** is a physical index, $0$, $1$, $\ge2$.
+The **scattering degree** $L$ truncates the angular rank of the medium
+operator, @eq-gamma. The **spatial degree** $J$ is how many angular
+coefficients the inversion keeps. The **wavenumber range** $k_{\max}$ and its
+quadrature are a separate numerical approximation again. A statement about one
+is not a statement about another.
 
 ## Assumptions and definitions {#sec-scattering-orders-assumptions}
 
+One wavelength; the medium homogeneous, unbounded and reciprocal; $\mu_a>0$.
+The geometry of this chapter is a **point** source and a **point** isotropic
+receiver, so the angular problem is the $m=0$ problem of
+@sec-angular-system-m-zero. Displacement $\mathbf r$ points from the emission
+point to the observation point, $r=\lvert\mathbf r\rvert$, and for a directed
+source of emission direction $\hat{\mathbf s}_0$,
+$$
+\nu=\hat{\mathbf r}\cdot\hat{\mathbf s}_0 .
+$$ {#eq-orders-nu}
+
+Write $G_0=D^{-1}$ for the **free resolvent** — multiplication by
+$1/(d_0+ik\mu)$, the operator that propagates without scattering — and
+$\Gamma$ for the scattering operator, diagonal in the basis of
+@sec-angular-system-basis with entries $\gamma_\ell$ from @eq-gamma. The
+response per unit effective area at the observation point is written
+$$
+K=K^{(0)}+K^{(1)}+K^{(\ge2)},
+$$ {#eq-orders-split}
+with units $\mathrm m^{-2}$ per unit frequency content, the units of
+`GreenResult`.
+
 ## Derivation {#sec-scattering-orders-derivation}
+
+### Splitting the solve by collisions {#sec-scattering-orders-split}
+
+@eq-angular-starting-point is $(D-\Gamma)h=1$ in this notation. Expanding the
+resolvent,
+$$
+h=(D-\Gamma)^{-1}\mathbf 1
+=G_0\mathbf 1+G_0\Gamma G_0\mathbf 1+G_0\Gamma G_0\Gamma G_0\mathbf 1+\cdots,
+$$
+each term carrying one more factor of $\Gamma$, that is one more collision.
+Grouping the first two terms and everything else:
+$$
+h^{(0)}=G_0\mathbf 1,
+$$ {#eq-order-zero}
+$$
+h^{(1)}=G_0\,\Gamma\,h^{(0)},
+$$ {#eq-order-one}
+$$
+h^{(\ge2)}=(D-\Gamma)^{-1}\,\Gamma\,h^{(1)} .
+$$ {#eq-order-two-plus}
+
+@eq-order-two-plus deserves a sentence, because it looks like a single
+scattering event and is not. The operator in front is the **full** resolvent,
+not the free one, so expanding it gives
+$$
+(D-\Gamma)^{-1}\Gamma h^{(1)}
+=\bigl(G_0+G_0\Gamma G_0+G_0\Gamma G_0\Gamma G_0+\cdots\bigr)\Gamma h^{(1)},
+$$
+whose terms carry two, three, four collisions and so on without limit. One
+solve of the same tridiagonal system sums every order from the second upwards.
+The identity that makes @eq-order-zero, @eq-order-one and @eq-order-two-plus add up to $h$ is
+the resolvent identity $M^{-1}=M_0^{-1}+M^{-1}\Gamma M_0^{-1}$ with
+$M=M_0-\Gamma$, applied once.
+
+What matters numerically is what the third piece is **not**. It is not the
+total minus the first two. A difference of nearly equal numbers loses the
+digits that distinguish them, and at large $L$ or small scattering the
+multiply-scattered part is precisely the small difference of two larger
+quantities. @eq-order-two-plus computes it from its own right-hand side
+$\Gamma h^{(1)}$, so its accuracy is set by its own size and not by the size of
+what it was subtracted from.
+
+In the code these three are the three arrays returned by
+`lighthit.angular.angular_components`: `b` is @eq-order-zero, `first_low` is
+@eq-order-one — exactly one scattering **in the finite-rank model** of degree
+$L$ — and `multiple_low` is @eq-order-two-plus, the sum of all orders from two
+upwards in that same model. Both of the latter are obtained by
+`solve_tail_system` with the exact free tail of @eq-tail-correction: the
+elimination is a property of the matrix and applies whatever the right-hand
+side is.
+
+### What the production solver actually composes {#sec-scattering-orders-production}
+
+`PointGreenSolver` does **not** use all three. It composes
+$$
+K=\underbrace{K^{(0)}_{\text{analytic}}}_{\text{closed form}}
++\underbrace{K^{(1)}_{\text{full HG}}}_{\text{coordinate quadrature}}
++\underbrace{K^{(\ge2)}_{L}}_{\text{finite-rank, spatially inverted}} ,
+$$ {#eq-production-composition}
+and each term is computed by a different route for a reason.
+
+The ballistic term has a closed form (@sec-scattering-orders-ballistic) and
+needs no numerics at all. The first order is computed in coordinate space by
+`lighthit.single`, with the **full** Henyey--Greenstein phase function and no
+Legendre truncation. Two reasons, and the second is the stronger one. At first
+order the integral is low-dimensional enough to do directly, and the forward
+peak that $L$ struggles with is exactly where first-order light comes from. And
+for a *directed* point source read by a point receiver, the first-order
+response carries an integrable $1/\rho$ singularity at the ballistic root; a
+singular function of $\mathbf r$ has a wavenumber content that falls off
+slowly, so the multipole route of @sec-scattering-orders-inversion does not
+converge for it at any practical $L$, $J$ and $k_{\max}$.
+@sec-scattering-orders-example measures both statements.
+
+Only the multiply-scattered part is taken from the angular system and inverted
+in space, and it is the part for which the finite-rank model is least
+demanding, because multiple scattering has already smoothed the angular
+distribution.
+
+The consequence is worth stating plainly, because it is easy to assume
+otherwise: **the production point solver never spatially inverts the finite-$L$
+first order**. It computes `multiple` from `angular_components` and discards
+`b` and `first_low`, replacing the latter with `single_spectrum`.
+
+The cache route is not identical, and the difference matters for later
+chapters. `ResponseCache` stores two order axes, named in `MOMENT_ORDERS`:
+`one_finite_L` and `two_or_more`. The ballistic term is **not** stored, because
+it is a closed form that costs nothing to evaluate and a delta in time that a
+smooth radial table would misrepresent. For a directed flash read by an
+isotropic receiver, `directed_spectrum` replaces the stored first order by the
+exact full-HG quadrature, reproducing @eq-production-composition. For an
+isotropic flash read by a detector with acceptance coefficients,
+`acceptance_spectrum` uses the stored `one_finite_L` by default; it will
+substitute the exact quadrature only when asked with `exact_first_order` **and
+only for an isotropic acceptance**, and it raises otherwise. The reason is
+structural rather than incidental: `single_spectrum` returns one scalar
+function of $(r,\nu)$, and folding an arbitrary directional acceptance into the
+first order needs the angular distribution of arrival directions, not a single
+number. Replacing the first order exactly for a general directional module is
+therefore not available, and @sec-directional-om computes it from the angular
+route instead.
+
+### The ballistic term {#sec-scattering-orders-ballistic}
+
+For an isotropic instantaneous flash of one photon, the unscattered light at
+distance $r$ is the inverse-square law times the survival probability, arriving
+at one instant:
+$$
+K^{(0)}(r,t)=\frac{e^{-\mu_t r}}{4\pi r^2}\,\delta\!\left(t-\frac{r}{v}\right),
+\qquad
+\tilde K^{(0)}(r,\omega)=\frac{e^{-\mu_t r}}{4\pi r^2}\,e^{i\omega r/v}.
+$$ {#eq-ballistic}
+The extinction $\mu_t$, not $\mu_a$, appears: a scattered photon has left this
+term, whether or not it survives. The phase is $e^{+i\omega r/v}$ by
+@eq-transform-forward — the transform of a delta at $t=r/v$ — and it is the
+same sign as the emission-time phase of @eq-shift-theorem.
+
+For a **directed** delta flash the situation is different and the code is
+explicit about it. Off the forward ray no straight line carries light from the
+source to the receiver, so $K^{(0)}=0$. Exactly on the forward ray, a point
+source and a point receiver give a distribution and not a function, and
+`PointGreenSolver.solve` refuses that geometry rather than returning a large
+number; it also warns when the cosine approaches one, where the angular and
+radial resolutions must be refined independently. A finite aperture removes the
+singularity, and that is not this chapter.
+
+### The spatial inversion {#sec-scattering-orders-inversion}
+
+The response at displacement $\mathbf r$ is the inverse transform
+@eq-transform-inverse of the solution in wavenumber space,
+$$
+K(\mathbf r,\omega)=\int\frac{\mathrm d^3k}{(2\pi)^3}\,
+e^{i\mathbf k\cdot\mathbf r}\;h(\mathbf k,\omega),
+$$
+where $h$ depends on the direction of $\mathbf k$ only through
+$\mu=\hat{\mathbf k}\cdot\hat{\mathbf s}_0$ and is expanded as
+$h=\sum_\ell h_\ell\,p_\ell(\mu)$. Insert the plane-wave expansion
+$$
+e^{i\mathbf k\cdot\mathbf r}
+=\sum_{\lambda}i^{\lambda}(2\lambda+1)\,j_\lambda(kr)\,
+P_\lambda(\hat{\mathbf k}\cdot\hat{\mathbf r}),
+$$ {#eq-plane-wave}
+and do the angular integral over $\hat{\mathbf k}$ with the addition theorem,
+$$
+\int\mathrm d\Omega_k\,P_\lambda(\hat{\mathbf k}\cdot\hat{\mathbf r})\,
+P_\ell(\hat{\mathbf k}\cdot\hat{\mathbf s}_0)
+=\frac{4\pi}{2\ell+1}\,\delta_{\lambda\ell}\,P_\ell(\nu).
+$$
+The factors $4\pi/(2\pi)^3=1/2\pi^2$ collect, and what is left is one radial
+integral per degree:
+$$
+M_\ell(r,\omega)=i^{\ell}\sqrt{\frac{2\ell+1}{2}}
+\int_0^{\infty}\frac{k^2\,\mathrm dk}{2\pi^2}\,j_\ell(kr)\,h_\ell(k,\omega),
+$$ {#eq-multipole}
+$$
+K(r,\nu,\omega)=\sum_{\ell=0}^{J}M_\ell(r,\omega)\,P_\ell(\nu).
+$$ {#eq-multipole-sum}
+
+The division of labour is clean. $j_\ell(kr)$ performs the radial inversion:
+it is what turns a wavenumber into a distance. $P_\ell(\nu)$ restores the
+angular dependence on the emission direction, and it is evaluated after the
+integral, which is why one table of $M_\ell$ serves every $\nu$.
+
+How large $J$ must be depends on what angular structure has to be resolved. For
+an isotropic flash read by an isotropic receiver there is no $\nu$ dependence
+at all and $J=0$ suffices. For a directed source the answer varies with $\nu$,
+and the number of degrees needed grows with how sharply it varies — in practice
+with $k_{\max}r$, since $j_\ell(kr)$ is negligible until $\ell\lesssim kr$. No
+formula for choosing $J$ is offered here, because none has been established by
+measurement; @sec-validation treats it as one line of the error budget.
+
+### The wavenumber quadrature {#sec-scattering-orders-quadrature}
+
+@eq-multipole runs to infinity and the code does not. `SolverSettings.quadrature`
+builds the rule that replaces it: a finite cutoff $k_{\max}$; the interval
+$[0,k_{\max}]$ divided into panels of width $k_{\rm panel}$; a Gauss--Legendre
+rule of order $k_{\rm order}$ inside each panel; and, optionally, a smooth
+taper that takes the weights to zero at the top of the range instead of cutting
+them off abruptly.
+
+This is a numerical approximation, and it is a different one from everything in
+@sec-angular-system. The free angular tail there is eliminated exactly; that
+exactness says nothing about @eq-multipole, whose truncation at $k_{\max}$
+discards real content. Six error sources are present in the route so far and
+they are independent of each other:
+
+| Source | Controlled by |
+|:--|:--|
+| Angular rank of the medium | $L$ |
+| Retained angular degrees of the output | $J$ |
+| Truncation of the radial integral | $k_{\max}$ |
+| Resolution of the oscillations of $j_\ell(kr)$ | panel width |
+| Accuracy inside a panel | quadrature order |
+| Smoothing at the cutoff | taper |
+
+A convergence study over all six belongs to @sec-validation. What this chapter
+establishes is that they are six knobs and not one.
+
+### The radial cache {#sec-scattering-orders-cache}
+
+@eq-multipole depends on the medium, on $\omega$ and on $r$ — and on nothing
+about the event. That is what makes a table worth building. `CacheGrid` fixes
+the radii and frequencies, and `ResponseCache.build` evaluates @eq-multipole on
+that grid; `ResponseCache.moments_at` interpolates between nodes. The stored
+object is $M_\ell(r,\omega)$, **not** a finished answer for a particular module:
+the contraction @eq-multipole-sum with $P_\ell(\nu)$, or with a detector's
+acceptance coefficients, happens at query time.
+
+Four properties of the table are mathematical rather than operational.
+
+The radii are **geometric**, not uniform, because the response varies on a
+relative scale: near and far are separated by orders of magnitude in amplitude
+and by a fixed factor in every derivative that matters.
+
+The interpolation is **cubic in $\log r$**, and before it runs the moments are
+divided by a smooth positive reference,
+$$
+\text{scale}(r)=\frac{e^{-\mu_a r}}{4\pi r^{2}},
+$$ {#eq-cache-scale}
+which is restored afterwards. @eq-cache-scale removes most of the dynamic
+range, so the spline interpolates a function of order unity instead of one that
+falls by many decades across the table. Note the **absorption** coefficient in
+@eq-cache-scale, not the extinction: the scattered orders do not decay at
+$e^{-\mu_t r}$, because scattering removes light from a direction without
+removing it from the medium.
+
+With `radial_phase="flight"` the rapidly rotating factor $e^{i\omega r/v}$ is
+also removed before interpolation and restored after it. That phase is the
+arrival-time carrier; interpolating through it would force the spline to
+resolve an oscillation in $r$ whose period shrinks as $\omega$ grows, and
+removing it leaves a slowly varying envelope.
+
+**Extrapolation is refused.** A query outside the cached radius range raises,
+naming the range. A cubic spline extrapolates confidently and wrongly, and a
+table that silently did so would turn an out-of-range geometry into a plausible
+number.
+
+The memory layout, the blocking of the Bessel table, the compiled backends and
+the cost of a build are @sec-cache-and-memory. Nothing in this section is about
+performance.
 
 ## The discrete algorithm {#sec-scattering-orders-algorithm}
 
+1. **Build the wavenumber rule** from $k_{\max}$, the panel width, the
+   quadrature order and the taper.
+2. **Solve the angular system** at every wavenumber for this frequency,
+   obtaining the three pieces of @eq-order-zero, @eq-order-one and @eq-order-two-plus.
+3. **Tabulate** $j_\ell(kr)$ for the degrees $\ell\le J$ and the radii wanted,
+   with the factor $i^\ell\sqrt{(2\ell+1)/2}\;k^2w_k/2\pi^2$ of
+   @eq-multipole folded in.
+4. **Contract** over wavenumbers to obtain $M_\ell(r,\omega)$, once per stored
+   order.
+5. **Store or contract.** Either keep $M_\ell$ on a radial grid, or contract
+   immediately with $P_\ell(\nu)$ for the geometry at hand.
+6. **Replace the first order** with the coordinate-space full-HG quadrature
+   where the geometry allows it.
+7. **Add the ballistic term** from @eq-ballistic, for an isotropic flash, or
+   leave it at zero off the forward ray of a directed one.
+8. **Keep the three orders separate** in the returned object, in the order
+   `ballistic`, `one_exact_HG`, `two_or_more_HG_L`.
+
+The inverse transform from $\omega$ back to time bins is @sec-time-and-bins and
+is not part of this list.
+
 ## Correspondence with the code {#sec-scattering-orders-code}
+
+| Mathematics | Symbol |
+|:--|:--|
+| @eq-order-zero, @eq-order-one, @eq-order-two-plus | `lighthit.angular.angular_components` |
+| The wavenumber rule of @sec-scattering-orders-quadrature | `lighthit.green.SolverSettings.quadrature` |
+| @eq-production-composition | `lighthit.green.PointGreenSolver.solve` |
+| The three orders, kept separate | `lighthit.green.GreenResult.components` |
+| First order in physical time, full HG | `lighthit.single.single_scattering_rate` |
+| First order as a spectrum, full HG | `lighthit.single.single_spectrum` |
+| The radial and frequency grid | `lighthit.cache.CacheGrid` |
+| @eq-multipole on that grid | `lighthit.cache.ResponseCache.build` |
+| Interpolated lookup, @eq-cache-scale | `lighthit.cache.ResponseCache.moments_at` |
+| Directed flash, isotropic receiver | `lighthit.cache.ResponseCache.directed_spectrum` |
+| Isotropic flash, detector acceptance | `lighthit.cache.ResponseCache.acceptance_spectrum` |
+| The two first-order routes compared | `lighthit.cache.first_order_consistency` |
+
+The stored order names are `lighthit.cache.MOMENT_ORDERS`, and the component
+names of a saved `GreenResult` are `ballistic`, `one_exact_HG`,
+`two_or_more_HG_L`. Both are part of the contract and are checked in
+@sec-scattering-orders-checks.
 
 ## A worked number {#sec-scattering-orders-example}
 
+Public synthetic medium only; the inversion is rebuilt from @eq-multipole in
+the example rather than taken from the package, and the first order is checked
+against a direct integration in physical time.
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+NUMBA_NUM_THREADS=1 \
+  python scripts/run_scattering_orders_example.py --output .build/scattering-orders-example
+```
+
+The stored output is `docs/scattering-orders-example/summary.json`, with the
+configuration, the library versions, the thread settings and the exact value of
+every residual quoted below as a bound.
+
+**Configuration.** $\mu_a=0.04$, $\mu_s=0.05\ \mathrm m^{-1}$, $g=0.7$,
+$n_g=1.35$; $L=8$, $J=12$, $k_{\max}=3\ \mathrm m^{-1}$ with panels of
+$0.05\ \mathrm m^{-1}$ and an eighth-order rule inside each, tapered — 480
+wavenumber nodes in all. These are deliberately small teaching values, not a
+production preset.
+
+**The three orders.** At $k=0.2\ \mathrm m^{-1}$ and $\omega=0$ the $\ell=0$
+coefficients come out in the ratios
+$$
+\frac{\lvert h^{(1)}_0\rvert}{\lvert h^{(0)}_0\rvert}=0.205,
+\qquad
+\frac{\lvert h^{(\ge2)}_0\rvert}{\lvert h^{(1)}_0\rvert}=0.162,
+$$
+so each further collision costs roughly a factor of five here, and their sum
+matches `dense_finite_rank_reference` to better than $10^{-10}$. That the
+$\ge2$ piece is six times smaller than the free piece is exactly why computing
+it as a difference would be a mistake: it would be the fifth digit of a
+subtraction.
+
+**The ballistic term.** At $r=20$ m the closed form @eq-ballistic gives a
+charge of $3.2885\times10^{-5}\ \mathrm m^{-2}$ and a front time of
+$90.06$ ns, and the solver's ballistic component matches it exactly — to zero
+error, since both evaluate the same expression.
+
+**The spatial inversion.** Rebuilding @eq-multipole by hand with
+`spherical_jn`, contracting with $P_\ell(\nu)$ at $\nu=0.35$, and comparing
+against the solver's multiply-scattered component at $r=20$ m agrees to better
+than $10^{-12}$. This is the check that the normalisation $1/2\pi^2$, the
+factor $\sqrt{(2\ell+1)/2}$ and the phase $i^{\ell}$ of @eq-multipole are the
+ones the code uses; a missing $i^\ell$ would leave the magnitude nearly right
+and the phase wrong.
+
+**The first order against physical time.** `single_spectrum` at $\omega=0$ is,
+by definition, the time integral of `single_scattering_rate`. Integrating the
+rate numerically from the front to a horizon of $36/\mu_t v$ reproduces the
+spectrum to better than $10^{-6}$ — in this run to $2\times10^{-11}$ — and the
+spectrum at zero frequency is exactly real. The two routes share no quadrature:
+one integrates over excess path length adaptively, the other over time.
+
+**Does the finite-rank first order agree with the full one?** In the isotropic
+geometry — isotropic flash, isotropic receiver, where only $\ell=0$ survives
+and the comparison isolates the angular rank of the medium from the angular
+resolution of the output — it does, and quickly:
+
+| $r$, m | $L=4$ | $L=8$ | $L=16$ | $L=32$ |
+|--:|--:|--:|--:|--:|
+| 10 | $0.9940$ | $0.9999$ | $1.0000$ | $1.0000$ |
+| 20 | $1.0004$ | $1.0000$ | $1.0000$ | $1.0000$ |
+| 40 | $1.0004$ | $1.0000$ | $1.0000$ | $1.0000$ |
+
+each entry being the finite-rank multipole first order divided by
+`single_spectrum`. By $L=16$ the two agree to better than $10^{-4}$ everywhere
+tested. The finite-rank model is not the problem here.
+
+The directed geometry is a different matter, and it is worth seeing the failure
+rather than being told about it. At $r=20$ m and $\nu=0.35$ with $L=8$, $J=12$,
+the multipole first order comes out about six times the full-HG value, and
+raising $L$, $J$ and $k_{\max}$ together does not fix it: the ratio moves
+through $0.86$, $2.7$, $-0.85$, $-1.6$, $0.44$ without settling, changing sign
+as it goes. That is the signature of expanding a singular function in a
+truncated basis, not of a wrong constant. It is the reason
+@eq-production-composition replaces the first order rather than computing it
+from the angular route, and it is why the substitution is worth its extra code
+path.
+
+**The cache.** On its own grid nodes the stored moments reproduce the hand-built
+@eq-multipole to better than $10^{-12}$ for both stored orders — the build is
+the formula and nothing else. Between nodes, the interpolation is a genuine
+approximation and behaves like one:
+
+| radial nodes | spacing in $\log r$ | relative error at 17.3 m |
+|--:|--:|--:|
+| 16 | 0.166 | $1.7\times10^{-3}$ |
+| 32 | 0.080 | $4.7\times10^{-4}$ |
+| 64 | 0.039 | $2.3\times10^{-5}$ |
+
+This is an interpolation check and nothing more: it measures the distance
+between the spline and @eq-multipole evaluated at the same $L$, $J$ and
+wavenumber rule, so it says nothing about how close either is to the true
+transport. The error is not yet asymptotic at 16 nodes and approaches
+fourth-order behaviour between 32 and 64, as a cubic spline should. Queries at
+half the minimum radius and twice the maximum both raise, naming the range.
+
+**The two first-order routes.** `first_order_consistency` compares the stored
+finite-$L$ first order against the full-HG quadrature over twelve radii from
+$5.5$ to $54$ m. The median relative difference in the first-order charge is
+about $10^{-4}$ and the worst is about $5\times10^{-2}$, which is about $1\%$
+of the total charge at that radius. The worst case sits at the short-distance
+end, where the forward peak dominates and $L=8$ resolves it least well. Its own
+documentation is careful about the attribution, and so is this text: the
+residual contains the angular truncation, the radial integration and the
+interpolation together, and it is not a measurement of $L$ alone.
+
 ## Checks {#sec-scattering-orders-checks}
+
+Fourteen checks are recorded as booleans in the stored summary and the script
+exits with a failure if any is false.
+
+**The orders.** Their sum against `dense_finite_rank_reference` below
+$10^{-10}$.
+
+**The ballistic term** against @eq-ballistic evaluated by hand.
+
+**The inversion.** A hand-built @eq-multipole against the solver's own
+component, below $10^{-12}$.
+
+**The first order.** `single_spectrum` at $\omega=0$ against a direct
+integration of `single_scattering_rate` over time, below $10^{-6}$; the
+spectrum at zero frequency required to be exactly real; and the finite-rank
+multipole first order required to agree with the full-HG one to better than
+$10^{-3}$ at $L=16$ in the isotropic geometry.
+
+**The cache.** Stored moments against the hand-built formula on grid nodes,
+below $10^{-12}$; interpolation error required to fall monotonically as the
+grid is refined and to be below $10^{-4}$ on the finest; extrapolation required
+to raise both below and above the range.
+
+**The contract.** `MOMENT_ORDERS` equal to `("one_finite_L", "two_or_more")`,
+so that the cache demonstrably does not store the ballistic term; and the saved
+component names equal to `ballistic`, `one_exact_HG`, `two_or_more_HG_L`, in
+that order. A silent reordering of either would corrupt every downstream sum.
+
+**Everything else.** All arrays finite; NumPy against Numba below $10^{-12}$
+when the optional dependency is installed, and recorded as absent when it is
+not.
+
+None of this validates the transport against an external result. It validates
+that the decomposition sums correctly, that the inversion is the transform it
+claims to be, that the first order agrees between two independent quadratures,
+and that the cache reproduces the formula it was built from.
 
 ## Range of validity {#sec-scattering-orders-validity}
 
+- **Point source, point isotropic receiver.** The $m=0$ problem only; a
+  directional module is @sec-directional-om.
+- **$K^{(0)}$ for a directed flash is a distribution on the forward ray** and
+  the solver refuses that geometry; a finite aperture is needed there.
+- **The exact first-order replacement is limited to an isotropic acceptance.**
+  A single scalar function of $(r,\nu)$ cannot carry the arrival-direction
+  distribution that a directional acceptance needs.
+- **The multipole first order is usable in the isotropic geometry and not for a
+  directed point source.** In the latter it does not converge, for the reason
+  given in @sec-scattering-orders-production, and no setting of $L$, $J$ or
+  $k_{\max}$ repairs it.
+- **The spatial inversion is a numerical approximation** even though the
+  angular tail of @sec-angular-system is exact: $k_{\max}$, the panel width,
+  the quadrature order and the taper all enter.
+- **$J$ must resolve the angular structure** of the geometry at hand. No rule
+  for choosing it is asserted here.
+- **The cache is interpolation, not extrapolation**, and is valid only inside
+  its radius range and only for the medium, $L$, $J$ and wavenumber rule it was
+  built with. Nothing in the stored table records the geometry it will be asked
+  about, and nothing in it is specific to a module.
+- **The ballistic term is not in the cache**, so any route that reads only the
+  cache must add it separately.
+- **Time is still a frequency axis.** Nothing here returns a time bin; that is
+  @sec-time-and-bins.
+
 ## Exercises {#sec-scattering-orders-exercises}
+
+1. Derive @eq-order-two-plus from the resolvent identity and show that
+   @eq-order-zero, @eq-order-one and @eq-order-two-plus sum to $h$ exactly. Then expand the full
+   resolvent and identify the term with exactly three collisions.
+2. Estimate, from the ratios measured in @sec-scattering-orders-example, how
+   many significant digits would be lost by computing $h^{(\ge2)}$ as
+   $h-h^{(0)}-h^{(1)}$ in double precision at that wavenumber. Repeat for a
+   medium ten times less scattering.
+3. Derive @eq-ballistic for an isotropic flash from the survival probability
+   and the inverse-square law, and confirm the phase by transforming a delta at
+   $t=r/v$ with @eq-transform-forward. Why does $\mu_t$ appear rather than
+   $\mu_a$?
+4. Carry out the angular integral in @sec-scattering-orders-inversion in full,
+   including the addition theorem, and verify the constant $1/2\pi^2$ and the
+   factor $\sqrt{(2\ell+1)/2}$ of @eq-multipole.
+5. Show that for an isotropic flash and an isotropic receiver only $\ell=0$
+   survives in @eq-multipole-sum, and evaluate $M_0$ for a non-scattering
+   medium to recover @eq-ballistic.
+6. Take the four independent quantities named in
+   @sec-scattering-orders-question and, for each, give a configuration change
+   that alters it while leaving the other three fixed.
+7. Explain why @eq-cache-scale carries $\mu_a$ and not $\mu_t$, and predict
+   what would happen to the interpolation error if $\mu_t$ were used instead.
+8. Explain why `radial_phase="flight"` helps more at large $\omega$ than at
+   small, and estimate the radial spacing at which interpolating through
+   $e^{i\omega r/v}$ directly would start to fail.
+9. State why the exact first-order replacement cannot be applied to a
+   directional acceptance, in terms of what `single_spectrum` returns and what
+   the contraction would need.
+10. Design a test that would separate the $L$ contribution from the
+    interpolation contribution in the `first_order_consistency` residual. Say
+    which parameter you would vary and what you would hold fixed.
+11. The multipole first order converges in the isotropic geometry and not in
+    the directed one. Explain the difference in terms of the singularity at the
+    ballistic root, and predict what a finite source aperture would do to the
+    wavenumber content and hence to the convergence.

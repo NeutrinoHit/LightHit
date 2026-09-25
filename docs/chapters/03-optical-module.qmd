@@ -1,30 +1,465 @@
 # The optical module and the observable {#sec-optical-module}
 
-::: {.callout-important title="Placeholder"}
-This chapter has not been written yet. The list below fixes its scope;
-the text replaces this note in a later pass.
-
-- Geometrical area.
-- $\mathrm{efficiency}(\lambda)$ and $\mathrm{transmission}(\lambda)$.
-- Angular acceptance.
-- Module orientation and the sign conventions that go with it.
-- From flux to expected photoelectrons.
-:::
-
 ## The physical question {#sec-optical-module-question}
+
+@sec-spectral-rte gives the spectral intensity $I_\lambda(\mathbf x,\hat s,t)$
+everywhere. A module sits at one of those points. That is not yet a signal, and
+the gap between the two is what this chapter closes.
+
+Four things stand between the field and the count. Light arrives at the module
+from many directions at once, and a module is not equally sensitive to all of
+them: a photon that comes in along the axis and one that comes in from behind
+are not worth the same. Sensitivity also depends on wavelength, through the
+quantum efficiency of the photocathode and through the transmission of
+everything the light crosses on the way in. An intensity is a flux per unit
+area, so an area is needed to turn it into a number of photons at all. And the
+answer is a count of *photoelectrons*, not of photons, because only a fraction
+of the arriving light is converted.
+
+The output of this chapter is therefore a definite number for each module and
+each time bin, together with an honest statement of what has been modelled and
+what has been left out. What is left out is everything downstream of the
+photocathode: there is no trigger here, no single-photoelectron charge
+distribution, no saturation and no noise. The quantity computed is an
+expectation, the mean over photon histories, and a readout simulation is what
+turns such an expectation into counts with fluctuations.
 
 ## Assumptions and definitions {#sec-optical-module-assumptions}
 
+A module in LightHit is a **point** carrying three response factors. It has no
+surface, so no photon is traced to a spot on a glass sphere and no ray is
+refracted at the glass. For module $d$:
+
+| Symbol | Meaning | Units |
+|:--|:--|:--|
+| $\mathbf x_d$ | position of the module | $\mathrm m$ |
+| $S_d$ | reference collecting area | $\mathrm m^2$ |
+| $\epsilon(\lambda)$ | spectral efficiency | dimensionless |
+| $\mathcal A(c)$ | angular acceptance | dimensionless |
+| $\hat{\mathbf o}_d$ | stored orientation | dimensionless |
+| $\hat{\mathbf n}_d=-\hat{\mathbf o}_d$ | travel direction of a head-on photon | dimensionless |
+| $\hat{\mathbf s}$ | direction in which an incident photon travels | dimensionless |
+| $c=\hat{\mathbf s}\cdot\hat{\mathbf n}_d$ | acceptance argument | dimensionless |
+
+The phrase *arrival direction* is avoided throughout, because it is ambiguous:
+it can mean the direction a photon travels or the direction from the module
+towards where the photon came from, and those differ by a sign. This chapter
+says **travel direction** for $\hat{\mathbf s}$ and **direction towards the
+source** for its negative, and never abbreviates either.
+
+The response is modelled as a product of three independent factors,
+$$
+\text{response}=S_d\times\epsilon(\lambda)\times\mathcal A(c),
+$$ {#eq-module-factorisation}
+and each factor is worth a paragraph of its own, because the contract that the
+code enforces on each one is different.
+
+**The area.** $S_d$ is a reference collecting area in square metres, stored per
+module, and it may differ between modules of one array. It is the factor that
+carries the dimension; the other two are pure numbers. It is *not* the surface
+area of a sphere and no geometrical projection is applied to it: a point
+detector has no cross-section that varies with incidence angle, and whatever
+angular variation a real module has belongs in $\mathcal A$.
+
+**The spectral efficiency.** $\epsilon(\lambda)$ collects every dimensionless
+wavelength-dependent factor the user wants to apply --- quantum efficiency, the
+transmission of the glass, the transmission of the gel, anything else. The
+package fixes no value for it. The contract requires only that it return finite
+non-negative numbers; it is **not** constrained to lie in $[0,1]$, so it is not
+a probability unless the user chose to make it one. A calibration scale folded
+into $\epsilon$ is legitimate and the code will not object.
+
+**The angular acceptance.** $\mathcal A(c)$ is finite and non-negative and
+depends on the direction only through the single cosine $c$, so the module is
+axially symmetric about $\hat{\mathbf n}_d$. The convention recommended here is
+$$
+\mathcal A(+1)=1,
+$$ {#eq-acceptance-normalisation}
+with the absolute scale kept in $S_d\epsilon$. The code does not impose this.
+Nothing stops a user from putting the same factor of two into $S_d$ and into
+the peak of $\mathcal A$, and the result will be four times the intended
+signal with no error raised anywhere. @eq-module-factorisation is a product of
+three numbers, and which of them carries the overall normalisation is a
+decision the user must make once and keep.
+
+### Orientation and the sign {#sec-optical-module-orientation}
+
+`DetectorArray` stores $\hat{\mathbf o}_d$, the direction pointing **from** the
+module **towards** the hemisphere it accepts: a module aimed at a source has
+$\hat{\mathbf o}_d$ pointing at the source. A photon from that source travels
+the other way, from the source to the module, so its travel direction is
+$$
+\hat{\mathbf n}_d=-\,\hat{\mathbf o}_d,
+$$ {#eq-module-orientation}
+and the acceptance argument for a photon travelling along $\hat{\mathbf s}$ is
+$$
+c=\hat{\mathbf s}\cdot\hat{\mathbf n}_d=-\,\hat{\mathbf s}\cdot\hat{\mathbf o}_d .
+$$ {#eq-module-cosine}
+For a point source at $\mathbf x_{\rm src}$ the photon that reaches the module
+without scattering travels along
+$\hat{\mathbf s}=(\mathbf x_d-\mathbf x_{\rm src})/|\mathbf x_d-\mathbf x_{\rm src}|$,
+and substituting into @eq-module-cosine gives the equivalent form
+$$
+c=\hat{\mathbf o}_d\cdot
+\frac{\mathbf x_{\rm src}-\mathbf x_d}{|\mathbf x_{\rm src}-\mathbf x_d|},
+$$ {#eq-module-head-on-cosine}
+which is what `DetectorArray.head_on_cosine` computes: the cosine between the
+stored orientation and the direction from the module towards the source. The
+two minus signs cancel, and that cancellation is the entire content of the
+convention.
+
+Three cases fix it beyond argument. A module looking straight at the source has
+$c=+1$ and sees $\mathcal A(+1)$. A module whose axis is perpendicular to the
+line joining it to the source has $c=0$. A module looking directly away has
+$c=-1$. @sec-optical-module-example measures all three.
+
 ## Derivation {#sec-optical-module-derivation}
+
+The rate at which module $d$ produces photoelectrons is
+@eq-module-factorisation applied to the incident intensity and integrated over
+everything the module cannot distinguish --- direction and wavelength:
+$$
+R_d(t)=S_d\int\mathrm d\lambda\;\epsilon(\lambda)
+\int_{S^2}\mathrm d\hat{\mathbf s}\;
+\mathcal A(\hat{\mathbf s}\cdot\hat{\mathbf n}_d)\,
+I_\lambda(\mathbf x_d,\hat{\mathbf s},t).
+$$ {#eq-module-rate}
+The units cancel as they must: $\mathrm m^2$ from $S_d$, $\mathrm{nm}$ from
+$\mathrm d\lambda$ and $\mathrm{sr}$ from $\mathrm d\hat{\mathbf s}$ consume
+three of the four units of $I_\lambda$, leaving $\mathrm{ns}^{-1}$, and the two
+dimensionless factors change nothing. $R_d$ is a rate of photoelectrons per
+nanosecond, and it is an expectation, not a realisation.
+
+Integrating over a bin gives the observable of @eq-overview-pe,
+$$
+N_{db}=\int_{t_b}^{t_{b+1}}R_d(t)\,\mathrm dt ,
+$$ {#eq-module-bin}
+and over all time the integrated charge
+$$
+Q_d=\int_{-\infty}^{+\infty}R_d(t)\,\mathrm dt .
+$$ {#eq-module-charge}
+
+The distinction drawn at @eq-overview-charge is worth repeating here in the
+module's own terms, because this is the chapter where both quantities are
+defined. `TransportResponse.charge_pe` is @eq-module-charge, evaluated at zero
+frequency; `TransportResponse.bins_pe` is @eq-module-bin for a finite list of
+bins. The sum of the bins is **not** required to equal the charge, and in
+general does not: the window is finite, and the inversion that produces the
+bins is not exact. Where a total is wanted, @eq-module-charge is the quantity
+to read.
+
+### The acceptance as a Legendre series {#sec-optical-module-legendre}
+
+Because $\mathcal A$ depends on one cosine only, it has a Legendre expansion,
+and the coefficients
+$$
+\alpha_\ell=2\pi\int_{-1}^{1}\mathcal A(c)\,P_\ell(c)\,\mathrm dc
+$$ {#eq-acceptance-coefficients}
+reconstruct it through
+$$
+\mathcal A(c)=\sum_{\ell=0}^{\infty}\frac{2\ell+1}{4\pi}\,
+\alpha_\ell P_\ell(c).
+$$ {#eq-acceptance-series}
+The normalisation is fixed by the isotropic limit. A module that accepts every
+direction with unit efficiency has $\mathcal A\equiv1$, and then
+$$
+\alpha_0=2\pi\int_{-1}^{1}\mathrm dc=4\pi,\qquad \alpha_{\ell>0}=0 ,
+$$ {#eq-acceptance-isotropic}
+which is the convention the package uses: $\alpha_0=4\pi$ for a perfectly
+isotropic, fully efficient receiver, so that the directional module reduces to
+the isotropic one by a single coefficient.
+
+The **acceptance bandwidth** $L_A$ is the largest degree whose coefficient is
+still significant. Three cases behave differently and all three occur in
+practice. A polynomial acceptance of degree $p$ has $\alpha_\ell=0$ exactly for
+$\ell>p$, so $L_A=p$ and the series is a finite sum. A smooth but
+non-polynomial acceptance has an infinite tail whose coefficients decay fast,
+so a truncation is an approximation with a measurable error. A response built
+by clipping at zero *inside* the interval --- the common `max(..., 0)` idiom ---
+has a kink, and the coefficients of a function with a discontinuous derivative
+decay only algebraically: the series never terminates, and no finite degree
+represents it exactly.
+
+The package measures which case it is in rather than assuming. It never
+declares a clipped response band-limited: it reports the largest degree still
+above tolerance inside a probed range, and when that degree saturates the
+range, that is the answer --- the response is not band-limited there, and a
+truncation has to be chosen deliberately and its residual read. One caution
+about reading the report: when the bandwidth saturates the probe there is
+nothing above it left to measure, so the reported residual is zero and means
+nothing at all. The number to look at in that case is the size of the
+coefficients themselves at high degree.
+
+Why the bandwidth matters at all belongs to @sec-directional-om, where the
+acceptance enters the angular contraction for scattered light and $L_A$ sets
+how much of that contraction has to be carried. Nothing about that machinery is
+needed here.
+
+### The centroid cosine is not a directional response {#sec-optical-module-centroid}
+
+`DetectorArray.angular_weight(source_position)` evaluates $\mathcal A$ at the
+single cosine @eq-module-head-on-cosine. It is exact for what it describes: a
+photon that travels in a straight line from that point to the module. It is the
+right quantity for the unscattered term, and it is a legitimate quick geometric
+estimate.
+
+It is **not** the response of a module to scattered light. Scattered light
+arrives at the module from a distribution of travel directions, and
+@eq-module-rate keeps $\mathcal A$ *inside* the integral over
+$\hat{\mathbf s}$ for exactly that reason. Replacing the integral by
+$\mathcal A$ evaluated at one direction --- the direction of the source, or of
+the centroid of an extended event --- is an approximation whose error is not
+controlled by anything in this chapter. It is not how the production route
+computes a directional module; @sec-directional-om is.
+
+### What the array shares {#sec-optical-module-shared}
+
+`DetectorArray` lets every module differ in position, in orientation, in
+reference area and in its identifiers. It does not let them differ in the
+*shape* of the response: `angular_acceptance` and `spectral_efficiency` are one
+callable each, shared by every module in the array. An array of modules with
+genuinely different angular shapes or different photocathode efficiencies
+cannot be expressed as a single `DetectorArray` today. It has to be split into
+several arrays, or the contract has to be extended to accept per-module
+callables or a per-module index into a table. This is a property of the
+software contract and not of the physics, and it is listed again in
+@sec-optical-module-validity so that it is not mistaken for one.
 
 ## The discrete algorithm {#sec-optical-module-algorithm}
 
+What `DetectorArray` does on construction and on use:
+
+1. **Check the shapes.** `positions_m` and `orientations` must both be finite
+   $(N,3)$ arrays with $N\ge1$ and matching shapes.
+2. **Normalise the orientations.** Non-zero vectors are divided by their norms,
+   so $\hat{\mathbf o}_d$ is a unit vector whatever the user supplied. A zero
+   orientation is rejected.
+3. **Broadcast the area.** A scalar `effective_area_m2` is expanded to one
+   value per module; an array must have one value per module.
+4. **Check the area.** Every value must be finite and strictly positive.
+5. **Check the identifiers.** Each identifier array must carry exactly one
+   entry per module.
+6. **Probe the angular response** on a set of cosines spanning $[-1,1]$ and
+   require the returned values to be finite, non-negative, and of the same
+   shape as the input.
+7. **Probe the spectral response** at a few wavelengths with the same
+   requirements.
+8. **Re-check on use.** `spectral_weight` verifies finiteness and
+   non-negativity again at every call, because the probe at construction sampled
+   a handful of points and the real call may ask for others.
+9. **Measure the bandwidth only when needed.** The Legendre coefficients and
+   $L_A$ are computed when a transport kernel asks for them, not at
+   construction. `acceptance_coefficients` evaluates the angular callable again
+   on its quadrature nodes and rejects negative or non-finite values there; the
+   result is cached on the kernel because the shape is common to the whole
+   array. The convenience method `angular_weight` itself performs no such
+   second validation, so a caller using it directly remains responsible for the
+   values returned away from the construction probe.
+
+Steps 6 and 7 deserve a caveat rather than confidence. A probe on a fixed grid
+of cosines and a few wavelengths is a smoke test: it catches a sign error or a
+function that returns the wrong shape, and it cannot prove that a user callable
+is finite and non-negative everywhere on its domain. The spectral route checks
+again at every use; the transport route checks the angular function again when
+it constructs its Legendre coefficients. A direct call to `angular_weight`
+does not.
+
 ## Correspondence with the code {#sec-optical-module-code}
+
+| Mathematics | Symbol |
+|:--|:--|
+| $\mathbf x_d$, $\hat{\mathbf o}_d$, $S_d$, $\mathcal A$, $\epsilon$ | `lighthit.model.DetectorArray` |
+| $c$ for a point source, @eq-module-head-on-cosine | `lighthit.model.DetectorArray.head_on_cosine` |
+| $\mathcal A(c)$ for a point source | `lighthit.model.DetectorArray.angular_weight` |
+| $\epsilon(\lambda)$, re-checked at the call | `lighthit.model.DetectorArray.spectral_weight` |
+| $\alpha_\ell$, @eq-acceptance-coefficients | `lighthit.cache.acceptance_coefficients` |
+| $\mathcal A\equiv1$, @eq-acceptance-isotropic | `lighthit.cache.isotropic_acceptance` |
+| $L_A$ and the residual above it | `lighthit.directional.acceptance_bandwidth` |
+| The module model chosen for a run | `lighthit.transport.TransportKernel.acceptance` |
+| $N_{db}$ and $Q_d$ | `lighthit.transport.TransportResponse` |
+
+One remark. `TransportKernel.acceptance` is where the refusal described in
+@sec-optical-module-legendre actually happens: it measures the bandwidth, and
+if the coefficients are still above tolerance at the top of the probed range it
+stops with an error naming the clipped-response case, unless the configuration
+states a truncation degree explicitly. The measurement is cached on the kernel
+because @eq-acceptance-coefficients depends on the shape of $\mathcal A$ and on
+nothing else --- not on the module, not on its orientation, not on the
+wavelength.
 
 ## A worked number {#sec-optical-module-example}
 
+Public synthetic parameters only, no transport solve and no cache. Reproduce
+with
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+NUMBA_NUM_THREADS=1 \
+  python scripts/run_optical_module_example.py --output .build/optical-module-example
+```
+
+The stored output is `docs/optical-module-example/summary.json`, which carries
+the configuration, the library versions, the thread settings and every boolean
+check beside the numbers below.
+
+**Geometry.** A point source at the origin and three identical modules 30 m
+away, differing only in where they look.
+
+| Module | position, m | $\hat{\mathbf o}_d$ | $c$ | $\mathcal A(c)$ |
+|:--|:--|:--|--:|--:|
+| head-on | $(0,0,-30)$ | $(0,0,1)$ | $+1$ | $1.00$ |
+| side-on | $(30,0,0)$ | $(0,1,0)$ | $0$ | $0.40$ |
+| back-on | $(0,0,30)$ | $(0,0,1)$ | $-1$ | $0.04$ |
+
+The acceptance is the quadratic $\mathcal A(c)=0.40+0.48c+0.12c^2$, which is
+positive on the whole interval --- $\mathcal A(-1)=0.04$, not zero --- so it
+needs no clipping and is band-limited exactly at degree 2. The three cosines
+come out as $+1$, $0$, $-1$ to within $10^{-15}$.
+
+**Expected photoelectrons.** Take a known monochromatic fluence of
+$F=1000$ photons per square metre at 450 nm incident along the line from the
+source, a reference area $S_d=0.05\ \mathrm m^2$ and a flat
+$\epsilon=0.2$. These are choices of this example: the package fixes no value
+for either, and where $F$ comes from is the business of @sec-scattering-orders
+and @sec-time-and-bins. Then $N_d=S_d\,\epsilon\,\mathcal A(c_d)\,F$ gives
+
+| Module | $N_d$, p.e. |
+|:--|--:|
+| head-on | $10.0$ |
+| side-on | $4.0$ |
+| back-on | $0.4$ |
+
+A factor of 25 between the head-on and back-on module, from the acceptance
+alone, at the same distance and with the same area and efficiency.
+
+**The Legendre coefficients.** Measured with a 2048-node rule,
+$$
+\alpha_0=5.5292031,\quad \alpha_1=2.0106193,\quad \alpha_2=0.2010619,
+$$
+which analytically equal $2\pi\cdot0.88$, $2\pi\cdot0.32$ and
+$2\pi\cdot0.032$. The script requires their relative error, every coefficient
+above degree 2 relative to the peak, and the reconstruction error on 401 points
+all to stay below $10^{-10}$. It measures $L_A=2$. The isotropic acceptance is
+checked against $\alpha_0=4\pi$ with the same $10^{-10}$ bound on every higher
+coefficient. Exact floating-point residuals are recorded only in the JSON,
+because they change with the quadrature implementation and library version.
+
+**A response that is not band-limited.** Replace the quadratic by
+$\max(0,\,0.2+0.9c)$, which is clipped below $c=-2/9$. Its coefficients do not
+terminate:
+
+| $\ell$ | 3 | 8 | 16 | 32 | 64 |
+|:--|--:|--:|--:|--:|--:|
+| $\lvert\alpha_\ell\rvert/\alpha_{\rm peak}$ | $3.4\times10^{-2}$ | $1.4\times10^{-3}$ | $8.1\times10^{-4}$ | $9.4\times10^{-5}$ | $9.4\times10^{-6}$ |
+
+They fall off, but algebraically: between degree 32 and degree 64 the envelope
+drops by a factor of ten, a local exponent of $3.3$. The coefficients also
+oscillate, so a slope read between two degrees indicates the envelope and
+proves no power law. Probed to degree 64 the measured bandwidth comes back as
+64 --- the top of the range --- which says only that the response is **not**
+band-limited inside the range probed. It does not measure an infinite
+bandwidth, and no probe of finite extent could.
+
 ## Checks {#sec-optical-module-checks}
+
+Sixteen checks are recorded as booleans in the stored summary and the script
+exits with a failure if any is false.
+
+**Geometry and sign.** The stored orientations are unit vectors to
+$10^{-15}$, and the head-on, side-on and back-on cosines are $+1$, $0$, $-1$ to
+the same level. This is the check that the sign convention of
+@eq-module-orientation is the one the code implements; an inverted convention
+would return $-1$, $0$, $+1$ and the acceptance values would swap.
+
+**Response values.** $\mathcal A$ at those three cosines is $1$, $0.4$, $0.04$
+to $10^{-15}$, matching the quadratic evaluated by hand.
+
+**Coefficients against the analytic values.** $\alpha_0,\alpha_1,\alpha_2$
+are compared with $2\pi(0.88,\,0.32,\,0.032)$, computed by hand from the
+quadratic, and everything above degree 2 is compared with zero relative to the
+peak. The script requires both errors to stay below $10^{-10}$. The stored JSON
+keeps the actual residuals together with the environment that produced them;
+the prose does not promote those backend-dependent last digits to physical
+results.
+
+**Reconstruction.** @eq-acceptance-series truncated at $L_A=2$ must reproduce
+$\mathcal A$ across $[-1,1]$ with maximum error below $10^{-10}$, which tests
+the normalisation $(2\ell+1)/4\pi$ and not only the coefficients.
+
+**The isotropic limit.** $\mathcal A\equiv1$ is required to give
+$\alpha_0=4\pi$ and every higher coefficient below $10^{-10}$ of the peak.
+
+**Linearity.** Doubling $S_d$ doubles every $N_d$ and halving $\epsilon$ halves
+every $N_d$, both to zero error. @eq-module-factorisation is a product, and
+this is what makes the scale degeneracy of
+@sec-optical-module-assumptions real rather than hypothetical: these three
+checks cannot tell which factor carries the normalisation.
+
+**The contract refuses bad responses.** An angular response that goes negative
+and a spectral response that goes negative are both rejected at construction
+with `detector response functions must return finite nonnegative arrays`, and
+@eq-acceptance-coefficients refuses a negative acceptance separately with
+`acceptance must be nonnegative`.
+
+**The clipped response is caught.** Its largest relative coefficient above
+degree 2 is $3.4\times10^{-2}$, four orders above the corresponding number for
+the quadratic, and the bandwidth probe saturates. Nothing here is silent.
+
+Every number above is a check of this chapter's model against arithmetic or
+against a hand calculation. None of it validates the *transport* that supplies
+$I_\lambda$ to @eq-module-rate; that is the business of later chapters.
 
 ## Range of validity {#sec-optical-module-validity}
 
+- **The module is a point.** It has a reference area but no surface, no
+  extent and no orientation-dependent geometrical cross-section.
+- **The acceptance is axially symmetric.** $\mathcal A$ depends on one cosine,
+  so a module with an azimuthal structure about its own axis is not
+  representable.
+- **The response shape is shared.** One `angular_acceptance` and one
+  `spectral_efficiency` per `DetectorArray`; modules with different shapes need
+  separate arrays or an extended contract (@sec-optical-module-shared).
+- **No glass and no ray tracing.** There is no sphere to intersect, no
+  refraction at an interface and no photon path inside the module. Transmission
+  and reflection enter only through the numbers the user puts into
+  $\epsilon(\lambda)$ and $\mathcal A(c)$.
+- **No shadowing.** A string, a cable, a neighbouring module or any other
+  structure between the light and the module is not modelled.
+- **No readout.** No saturation, no transit-time spread beyond an optional
+  Gaussian smearing applied afterwards, no electronics, no trigger, no noise.
+- **The response is linear and returns an expectation.** Doubling the incident
+  light doubles $N_{db}$; nothing here carries a fluctuation.
+- **The absolute normalisation is the user's to keep consistent.** It is spread
+  across $S_d$, $\epsilon$ and $\mathcal A$, and the package checks none of the
+  three against the others.
+
 ## Exercises {#sec-optical-module-exercises}
+
+1. Verify the units of @eq-module-rate and @eq-module-bin term by term,
+   starting from the definition of $I_\lambda$ in @eq-spectral-intensity, and
+   state where the photon-to-photoelectron conversion enters.
+2. Derive the three cosines of @sec-optical-module-example directly from
+   @eq-module-cosine, using the travel direction of the unscattered photon, and
+   confirm that @eq-module-head-on-cosine gives the same three numbers.
+3. Compute $\alpha_0$, $\alpha_1$ and $\alpha_2$ by hand for
+   $\mathcal A(c)=0.40+0.48c+0.12c^2$ and show that every higher coefficient
+   vanishes identically.
+4. Prove @eq-acceptance-isotropic from @eq-acceptance-coefficients using the
+   orthogonality of the Legendre polynomials, and say why $4\pi$ rather than
+   $1$ is the natural normalisation for $\alpha_0$.
+5. Show that $(S_d,\epsilon,\mathcal A)\to(kS_d,\epsilon/k,\mathcal A)$ and
+   $(S_d,\epsilon,\mathcal A)\to(S_d,k\epsilon,\mathcal A/k)$ leave every
+   $N_{db}$ unchanged. Then say which of the three factors you would fix by
+   convention, and what the other two must then mean.
+6. Explain why $\max(0,\,0.2+0.9c)$ has coefficients that fall off
+   algebraically rather than terminating, in terms of the smoothness of the
+   function at $c=-2/9$. Predict how the exponent changes if the clipping is
+   replaced by a smooth roll-off with a continuous first derivative, and test
+   the prediction numerically.
+7. Explain why the centroid cosine is exact for the unscattered term and
+   insufficient for scattered light. Construct an intensity field at a module
+   for which the two differ by more than a factor of two.
+8. Propose an extension of the `DetectorArray` contract that admits modules
+   with different angular shapes in one array. Say what it costs: which
+   quantities that are now computed once per array would have to be computed
+   once per shape, and which per module.

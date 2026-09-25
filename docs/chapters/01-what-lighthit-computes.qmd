@@ -362,10 +362,13 @@ numbers, so a difference would mean a genuine defect and not noise.
 
 **Band limit of the acceptance.** The measured Legendre coefficients of
 $A(x)$ are $\alpha_0=5.52920$, $\alpha_1=2.01062$, $\alpha_2=0.20106$, with a
-residual of $3.7\times10^{-13}$ above degree 2 --- consistent with the exact
+residual of $2.9\times10^{-14}$ above degree 2 --- consistent with the exact
 values $2\pi\cdot0.88$, $2\pi\cdot0.32$ and $2\pi\cdot0.032$ obtained by hand
 from a quadratic. The bandwidth is measured by the code and reported as
-`detector_acceptance_degree = 2`, not assumed (@sec-directional-om).
+`detector_acceptance_degree = 2`, not assumed (@sec-directional-om). The
+residual is at the level of the arithmetic that measures it and moves by an
+order of magnitude between backends, which is the expected behaviour of a
+quantity whose true value is zero.
 
 **Charge against the time window.** For module 3 the bins sum to $0.9447$
 photoelectrons against an integrated charge @eq-overview-charge of $0.9324$,

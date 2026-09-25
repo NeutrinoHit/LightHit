@@ -1,30 +1,582 @@
 # The spectral transfer equation {#sec-spectral-rte}
 
-::: {.callout-important title="Placeholder"}
-This chapter has not been written yet. The list below fixes its scope;
-the text replaces this note in a later pass.
-
-- The photon balance in a small volume.
-- Absorption, scattering and the source term.
-- Henyey-Greenstein scattering with an explicit $g$.
-- Phase and group refractive index, and which one enters where.
-- Normalisations and units, fixed once for the whole book.
-:::
-
 ## The physical question {#sec-spectral-rte-question}
+
+@sec-overview defined the observable as an integral of the spectral angular
+intensity $I_\lambda(\mathbf x,\hat s,t)$ over the arrival direction, the
+wavelength and a time bin. This chapter answers the question that leaves open:
+what equation does $I_\lambda$ obey?
+
+The unknown is a function of seven arguments --- three of position, two of
+direction, one of time, one of wavelength --- and the direction is the argument
+that cannot be dropped. It would be enough to track the photon density if the
+observable were the amount of light at a point. It is not: a module accepts
+light from some directions and rejects it from others, and the fraction of
+arriving light that it accepts depends on how the arrival directions are
+distributed. Two fields with the same photon density at the module and
+different angular shapes give different counts. The angular argument is carried
+because the detector reads it.
+
+The mechanisms acting on the photons divide in two, and the division organises
+everything that follows. Absorption *removes* photons; a source *creates*
+them; these change the total number. Scattering does neither: it moves a photon
+from one direction to another at the same place and the same instant. Writing
+the loss from a direction and the gain into it as two separate terms, which
+must cancel when integrated over all directions, is what makes the equation a
+conservation law with absorption --- and it gives the sharpest check available
+on any implementation of it (@sec-spectral-rte-checks).
+
+Each wavelength is solved on its own because scattering in water is elastic on
+the scale that matters here: a photon changes direction without changing
+wavelength, so no term in the equation couples $\lambda$ to $\lambda'$. The
+wavelengths meet only in the source that creates them and in the final integral
+over $\lambda$ that produces the observable.
+
+Finally, $I_\lambda$ is an expectation. It describes the mean photon
+distribution of an ensemble of events, not one realisation of a random walk.
+Nothing below is a statement about an individual photon history; what is
+computed is the average that such histories would approach.
 
 ## Assumptions and definitions {#sec-spectral-rte-assumptions}
 
+The medium is homogeneous, unbounded and stationary; its optical coefficients
+are given and are not modified by the light itself. Between interactions
+photons travel in straight lines at constant speed. Intensities add, and
+coherent interference is neglected --- the kinetic description applies at
+scales where this holds [see e.g. Arridge & Schotland, *Inverse Problems*
+**25**, 123010 (2009)].
+
+The notation is the one fixed in @sec-overview. Position $\mathbf x$, time $t$,
+wavelength $\lambda$, and the unit vector $\hat s$ giving the direction in
+which a photon *travels*. On the sphere of directions
+$\mathrm d\Omega=\sin\theta\,\mathrm d\theta\,\mathrm d\varphi$ and
+$\int_{S^2}\mathrm d\Omega=4\pi$. The spectral angular intensity is defined by
+$$
+\mathrm dN=\frac{I_\lambda(\mathbf x,\hat s,t)}{v_g(\lambda)}\,
+\mathrm d^3x\,\mathrm d\Omega\,\mathrm d\lambda ,
+$$ {#eq-spectral-intensity}
+repeating @eq-overview-intensity: the expected number of photons in the spatial
+volume $\mathrm d^3x$, travelling into the solid angle $\mathrm d\Omega$ about
+$\hat s$, with wavelength in $\mathrm d\lambda$ about $\lambda$. The factor
+$1/v_g$ is what distinguishes the intensity from the phase-space density
+$f_\lambda=I_\lambda/v_g$; @sec-spectral-rte-exercises asks for both forms of
+the equation.
+
+| Symbol | Meaning | Units |
+|:--|:--|:--|
+| $I_\lambda$ | spectral angular intensity | photon $\mathrm m^{-2}\mathrm{ns}^{-1}\mathrm{sr}^{-1}\mathrm{nm}^{-1}$ |
+| $f_\lambda=I_\lambda/v_g$ | spectral angular photon density | photon $\mathrm m^{-3}\mathrm{sr}^{-1}\mathrm{nm}^{-1}$ |
+| $\mu_a(\lambda)$ | absorption coefficient | $\mathrm m^{-1}$ |
+| $\mu_s(\lambda)$ | scattering coefficient | $\mathrm m^{-1}$ |
+| $\mu_t=\mu_a+\mu_s$ | extinction coefficient | $\mathrm m^{-1}$ |
+| $n_{\rm ph}(\lambda)$ | phase refractive index | dimensionless |
+| $n_g(\lambda)$ | group refractive index | dimensionless |
+| $v_g=c_0/n_g$ | group speed | $\mathrm m\,\mathrm{ns}^{-1}$ |
+| $c_0=0.299792458$ | vacuum speed of light | $\mathrm m\,\mathrm{ns}^{-1}$ |
+| $q_\lambda$ | spectral volumetric creation rate per direction | photon $\mathrm m^{-3}\mathrm{ns}^{-1}\mathrm{sr}^{-1}\mathrm{nm}^{-1}$ |
+| $p_g(\hat s,\hat s')$ | density of the outgoing direction given the incoming one | $\mathrm{sr}^{-1}$ |
+| $g$ | mean cosine of scattering | dimensionless |
+
+Over a short path $\mathrm d\ell$ the probabilities of absorption and of
+scattering are $\mu_a\,\mathrm d\ell+o(\mathrm d\ell)$ and
+$\mu_s\,\mathrm d\ell+o(\mathrm d\ell)$. The reciprocals $1/\mu_a$ and
+$1/\mu_s$ are the absorption and scattering lengths of the two processes taken
+separately; $1/\mu_t$ is the mean free path to the first interaction of either
+kind.
+
+**The order of the arguments of the phase function is a convention and it is
+fixed here.** In $p_g(\hat s,\hat s')$ the *first* argument is the outgoing
+direction and the *second* is the incoming one, and the normalisation is on the
+outgoing direction:
+$$
+p_g(\hat s,\hat s')\ge0,\qquad
+\int_{S^2}p_g(\hat s,\hat s')\,\mathrm d\Omega=1
+\quad\text{for every }\hat s' .
+$$ {#eq-phase-normalisation}
+With this convention $p_g$ is a conditional probability density: given that a
+photon travelling along $\hat s'$ scatters, @eq-phase-normalisation says it
+must leave in *some* direction. Every cancellation in
+@sec-spectral-rte-checks rests on it.
+
+### The two refractive indices {#sec-spectral-rte-indices}
+
+Water is dispersive, and the two refractive indices that follow from that enter
+two different parts of the calculation. Keeping them apart is not pedantry: at
+the distances of a neutrino telescope, confusing them costs more than a time
+bin (@sec-spectral-rte-example).
+
+The transport operator contains **only** the group index. A pulse travels at
+the group speed, so the coefficient of the time derivative is
+$$
+\frac{1}{v_g(\lambda)}=\frac{n_g(\lambda)}{c_0},
+$$ {#eq-group-speed}
+and $n_{\rm ph}$ appears nowhere in @eq-spectral-rte below. The phase index
+governs the *emission*: the Cherenkov condition $\beta n_{\rm ph}(\lambda)>1$,
+the cone half-angle $\cos\theta_C=1/(\beta n_{\rm ph})$ and the spectral yield
+all carry $n_{\rm ph}$ and no $n_g$. The derivation of that source is
+@sec-cherenkov-source; what matters here is that the two indices belong to two
+different operators.
+
+The code states the same split structurally rather than by comment. The
+spectral medium tabulates all four wavelength-dependent quantities, but
+`SpectralMedium.band(lambda)` --- the call that produces the monochromatic
+medium the transport solver actually receives --- constructs a
+`lighthit.medium.Medium` whose fields are
+$$
+(\mu_a,\ \mu_s,\ g,\ n_g,\ \lambda,\ \text{provenance}),
+$$
+with **no** phase index among them. A solver holding a `Medium` therefore
+cannot use $n_{\rm ph}$ even by accident: it does not have it. The phase index
+is carried separately, on the source side, and reaches the arithmetic through
+`SpectralLightElements.photon_density_per_nm`, which takes it as an explicit
+argument. @sec-spectral-rte-example measures that the band really does omit it.
+
 ## Derivation {#sec-spectral-rte-derivation}
+
+Fix a wavelength and a direction. Take a volume $W$ at rest with outward normal
+$\hat n$, and count the photons inside it whose direction lies in a narrow
+element $\mathrm d\Omega$ about $\hat s$. Six contributions change that number,
+and the equation is their sum. Every term below has units
+$\text{photon}\,\mathrm m^{-3}\mathrm{ns}^{-1}\mathrm{sr}^{-1}\mathrm{nm}^{-1}$;
+that is the dimensional check, and it is worth repeating at each line.
+
+**1. Accumulation.** The number in $W$ within $\mathrm d\Omega$ is
+$\mathrm d\Omega\int_W(I_\lambda/v_g)\,\mathrm d^3x$ by
+@eq-spectral-intensity, so the rate at which it grows is
+$$
+\frac{1}{v_g}\,\partial_tI_\lambda
+$$
+per unit volume. Units: $(\mathrm m^{-1}\mathrm{ns})\times$
+$\text{photon}\,\mathrm m^{-2}\mathrm{ns}^{-2}\mathrm{sr}^{-1}\mathrm{nm}^{-1}$,
+as required.
+
+**2. Streaming across the boundary.** In time $\mathrm dt$ the photons crossing
+an area element $\mathrm dA$ with normal $\hat n$ come from a cylinder of
+volume $v_g\,\mathrm dt\,\mathrm dA\,(\hat s\cdot\hat n)$, so the signed
+outward flow is $I_\lambda\,\hat s\cdot\hat n$ per unit area and time. The net
+loss from $W$ is the closed surface integral of that, and the divergence
+theorem at fixed $\hat s$ turns it into a volume integral of
+$$
+\hat s\cdot\nabla I_\lambda .
+$$
+The two terms so far are not two mechanisms but one: together they say that,
+left alone, the intensity is constant along a ray.
+
+**3. Absorption.** In time $\mathrm dt$ a photon covers $v_g\,\mathrm dt$, and
+the absorption probability over that path is $\mu_a v_g\,\mathrm dt$. Out of
+the phase volume $\mathrm d^3x\,\mathrm d\Omega$ absorption therefore removes
+$\mu_a v_gf_\lambda=\mu_aI_\lambda$ photons per unit volume, direction and
+time:
+$$
+-\,\mu_aI_\lambda .
+$$
+An absorbed photon leaves the field being modelled and does not come back.
+
+**4. Scattering out of the chosen direction.** By the same counting, photons
+scatter out of $\hat s$ at the rate
+$$
+-\,\mu_sI_\lambda .
+$$
+A scattered photon does **not** disappear. It is removed from $\hat s$ here and
+returned in another direction by the next term; for a continuous phase function
+the probability of scattering into exactly the original direction is zero, and
+the finite angular bin that a detector integrates over is handled correctly by
+the gain term.
+
+**5. Scattering into the chosen direction.** Out of the incoming element
+$\mathrm d\Omega'$, photons scatter at the rate
+$\mu_sI_\lambda(\hat s')\,\mathrm d\Omega'$ per unit volume, and a fraction
+$p_g(\hat s,\hat s')\,\mathrm d\Omega$ of them leaves into the outgoing element
+under consideration. Summing over all incoming directions,
+$$
++\,\mu_s\int_{S^2}p_g(\hat s,\hat s')\,
+I_\lambda(\mathbf x,\hat s',t)\,\mathrm d\Omega' .
+$$
+Position and time are the same on both sides of this integral: scattering
+changes direction locally, and the displacement between collisions is already
+carried by the streaming term.
+
+**6. Creation.** The source $q_\lambda$ is defined so that
+$q_\lambda\,\mathrm d^3x\,\mathrm d\Omega\,\mathrm d\lambda\,\mathrm dt$
+photons are created in that volume, direction, wavelength and time interval. It
+carries no separate factor of $v_g$, because it is already a rate per unit
+volume and time. Isotropic emission at total directional rate $q_{0,\lambda}$
+means $q_\lambda=q_{0,\lambda}/4\pi$.
+
+Collecting the six,
+$$
+\frac{1}{v_g}\partial_tI_\lambda+\hat s\cdot\nabla I_\lambda
+=-\mu_tI_\lambda+\mu_s\mathcal K_gI_\lambda+q_\lambda ,
+$$ {#eq-spectral-rte-balance}
+where the direction-changing operator is
+$$
+(\mathcal K_gI_\lambda)(\hat s)
+=\int_{S^2}p_g(\hat s,\hat s')\,I_\lambda(\hat s')\,\mathrm d\Omega' .
+$$ {#eq-scattering-operator}
+Moving everything that acts on $I_\lambda$ to the left,
+$$
+\left[\frac{1}{v_g(\lambda)}\partial_t+\hat s\cdot\nabla
++\mu_a(\lambda)+\mu_s(\lambda)-\mu_s(\lambda)\,\mathcal K_g\right]
+I_\lambda=q_\lambda .
+$$ {#eq-spectral-rte}
+This is the equation LightHit solves. $\mathcal K_g$ is dimensionless as an
+operator --- $p_g$ carries $\mathrm{sr}^{-1}$ and $\mathrm d\Omega'$ carries
+$\mathrm{sr}$ --- so $\mu_s\mathcal K_g$ has the units of $\mu_s$, and every
+bracketed term reduces to $\mathrm m^{-1}$ acting on $I_\lambda$.
+
+The same equation follows along a short ray segment without any volume at all:
+$$
+I_\lambda(\mathbf x+\hat s\,\mathrm d\ell,\hat s,t+\mathrm d\ell/v_g)
+-I_\lambda(\mathbf x,\hat s,t)
+=\bigl[-\mu_tI_\lambda+\mu_s\mathcal K_gI_\lambda+q_\lambda\bigr]
+\mathrm d\ell+o(\mathrm d\ell),
+$$
+whose left-hand side expanded to first order returns
+@eq-spectral-rte-balance. The two derivations disagree nowhere, and the second
+makes it plain that the left-hand side is a derivative taken *moving with the
+photons*.
+
+### The Henyey--Greenstein kernel {#sec-spectral-rte-hg}
+
+@eq-spectral-rte holds for any normalised phase function. The model used
+throughout is Henyey--Greenstein, which depends on the directions only through
+$c=\hat s\cdot\hat s'$:
+$$
+p_g(c)=\frac{1-g^2}{4\pi\,(1+g^2-2gc)^{3/2}},\qquad -1<g<1 .
+$$ {#eq-hg}
+Two properties are used constantly and both are verified numerically in
+@sec-spectral-rte-checks:
+$$
+\int_{S^2}p_g\,\mathrm d\Omega=1,\qquad
+\int_{S^2}c\;p_g\,\mathrm d\Omega=g .
+$$ {#eq-hg-moments}
+The first is @eq-phase-normalisation; the second is what makes $g$ *the* mean
+cosine rather than a shape parameter with a suggestive name. Water in a lake is
+strongly forward-peaked, and the production model uses $g=0.9$: a scattered
+photon keeps most of its original direction, and it takes many scatterings to
+forget where it came from.
+
+Beyond these two, the property that decides the numerical scheme is that
+@eq-hg has Legendre eigenvalues $g^\ell$:
+$$
+2\pi\int_{-1}^{1}p_g(c)\,P_\ell(c)\,\mathrm dc=g^\ell .
+$$ {#eq-hg-eigenvalues}
+In words, $\mathcal K_g$ is diagonal in the angular index with eigenvalue
+$g^\ell$, which is why the scattering operator never has to be stored as a
+matrix and why its truncation is controlled by a geometric sequence. The
+harmonic machinery that turns @eq-hg-eigenvalues into a tridiagonal linear
+system belongs to @sec-angular-system and is not anticipated here;
+@sec-spectral-rte-checks only measures that the eigenvalues are what they are
+claimed to be.
+
+One limitation of the current contract belongs in this chapter rather than
+later. `SpectralMedium` tabulates $\mu_a$, $\mu_s$, $n_{\rm ph}$ and $n_g$
+against wavelength, but takes $g$ as a **single scalar** shared by the whole
+band. A measured phase function that is not of the form @eq-hg, or an
+asymmetry that varies across the band, cannot be expressed in the present model
+(@sec-spectral-rte-validity).
+
+### Why the wavelengths do not mix {#sec-spectral-rte-elastic}
+
+Every term of @eq-spectral-rte is evaluated at one wavelength. There is no
+integral over $\lambda'$ anywhere, because scattering is taken to be elastic:
+the direction changes, the wavelength does not. The coefficients depend on
+$\lambda$, so the equation is a *different* equation for each wavelength, but
+the equations are independent, and solving nine of them is solving nine
+separate monochromatic problems rather than one coupled spectral problem.
+
+The wavelengths meet in exactly two places, and neither is inside
+@eq-spectral-rte. They meet in the source, because one emitting element
+radiates a continuous spectrum, and they meet in the final integral over
+$\lambda$ that assembles the observable @eq-overview-pe. The quadrature used
+for that integral --- how many nodes, where, with what weights --- is a
+property of the observable and is chosen in @sec-rte-to-pe. It has nothing to
+do with the interpolation of the medium table discussed in the next section,
+which is a way of *evaluating coefficients* at a requested wavelength. Reading
+them as one thing is a common confusion and the two never appear in the same
+formula.
+
+One transitional remark closes the derivation. @eq-spectral-rte as it stands
+is a differential equation in $\mathbf x$ and $t$ and an integral equation in
+$\hat s$, which is not yet something to compute with. Because the medium is
+homogeneous and unbounded, transforming in $\mathbf x$ and $t$ turns the
+streaming operator into multiplication, leaving an algebraic problem on the
+sphere at each $(\mathbf k,\omega)$, and the detector functional can be carried
+to the right-hand side by reciprocity. That is the subject of
+@sec-fourier-adjoint; nothing about it is needed here.
 
 ## The discrete algorithm {#sec-spectral-rte-algorithm}
 
+Nothing in @eq-spectral-rte is discretised yet: the angular truncation, the
+wavenumber quadrature and the frequency grid all belong to later chapters. What
+*is* an algorithm at this stage is the step that turns a tabulated medium into
+the monochromatic coefficients of a single spectral node --- step 2 of the map
+in @sec-overview-algorithm.
+
+1. **Validate the table.** Wavelengths must be finite, positive, strictly
+   increasing and at least two of them; the four coefficient arrays must match
+   them in shape; $\mu_a>0$, $\mu_s\ge0$, $n_{\rm ph}>0$ and $n_g>0$; and
+   $-1<g<1$. The two refractive indices are required to be strictly positive
+   for the same reason as the absorption: a zero or negative index would make
+   @eq-group-speed meaningless rather than merely extreme. A table that fails
+   any of these is rejected at construction, not at first use.
+2. **Reject out-of-range requests.** A wavelength outside
+   $[\lambda_{\min},\lambda_{\max}]$ raises, *before* any interpolation is
+   attempted. There is no extrapolation of optical coefficients anywhere in the
+   package.
+3. **Interpolate linearly.** Inside the range, each of $\mu_a$, $\mu_s$,
+   $n_{\rm ph}$, $n_g$ is interpolated linearly in $\lambda$ between the two
+   bracketing nodes. Linear interpolation is a modelling choice: it introduces
+   no oscillation between nodes and no coefficient outside the range of the
+   tabulated ones, at the price of a kink at each node.
+4. **Build the monochromatic medium.** Assemble
+   $(\mu_a,\mu_s,g,n_g,\lambda)$ into a `Medium`, dropping $n_{\rm ph}$, and
+   derive $\mu_t=\mu_a+\mu_s$ and $v_g=c_0/n_g$ from it.
+
+Steps 2 and 4 are the two places where this chapter's physics is enforced
+rather than described: no extrapolated coefficient can enter the solver, and no
+phase index can.
+
 ## Correspondence with the code {#sec-spectral-rte-code}
+
+| Mathematics | Symbol |
+|:--|:--|
+| Tabulated $\mu_a(\lambda),\mu_s(\lambda),n_{\rm ph}(\lambda),n_g(\lambda),g$ | `lighthit.model.SpectralMedium` |
+| Range check and linear interpolation | `lighthit.model.SpectralMedium.sample` |
+| Monochromatic medium of one node | `lighthit.model.SpectralMedium.band` |
+| $(\mu_a,\mu_s,g,n_g,\lambda)$, with no phase index | `lighthit.medium.Medium` |
+| $\mu_t=\mu_a+\mu_s$ | `lighthit.medium.Medium.extinction_per_m` |
+| $v_g=c_0/n_g$, @eq-group-speed | `lighthit.medium.Medium.speed_m_per_ns` |
+| $c_0$ | `lighthit.medium.C_VACUUM_M_PER_NS` |
+| $p_g(c)$, @eq-hg | `lighthit.single.hg_phase` |
+| The eigenvalue $\mu_sg^\ell$ of $\mu_s\mathcal K_g$ | `lighthit.angular.angular_components`, `lighthit.angular.resolvent_rows` |
+| $n_{\rm ph}$ in the emission, not in the transport | `lighthit.sources.SpectralLightElements.photon_density_per_nm` |
+
+Two remarks on the table. First, the interpolation in `sample` is `np.interp`,
+which clamps rather than extrapolates outside the data range --- so the range
+check that precedes it is not a convenience but the thing that makes the
+absence of extrapolation true. Removing the check would silently return the
+endpoint value for any wavelength beyond the table.
+
+Second, the angular solve never evaluates @eq-hg. What it builds is the vector
+of eigenvalues
+$$
+\gamma_\ell=\mu_s\,g^{\ell},\qquad \ell=0,\dots,L,
+$$ {#eq-hg-gamma}
+an array of $L+1$ numbers, and that vector enters the linear system only
+through its diagonal, as $d_0-\gamma_\ell$. The saving is not that nothing is
+stored --- an array is --- but that a general scattering kernel would need an
+$(L+1)\times(L+1)$ matrix and a matrix product at every wavenumber, while a
+kernel diagonal in the angular index needs $L+1$ numbers and a subtraction.
+@eq-hg itself is evaluated where the phase function proper is wanted: in the
+once-scattered term of `lighthit.single`, and in the checks below.
 
 ## A worked number {#sec-spectral-rte-example}
 
+The example uses public synthetic parameters: the same four-node table that
+@sec-overview-example uses, so that the two chapters describe one medium. It
+builds no cache, needs no compiled backend, and runs in a fraction of a second.
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+NUMBA_NUM_THREADS=1 \
+  python scripts/run_spectral_rte_example.py --output .build/spectral-rte-example
+```
+
+The stored output is `docs/spectral-rte-example/summary.json`, which carries the
+configuration, the library versions and the thread settings alongside every
+number below.
+
+The table is $\lambda=400,450,500,550$ nm with
+$\mu_a=0.030,0.021,0.038,0.090\ \mathrm m^{-1}$,
+$\mu_s=0.030,0.022,0.017,0.013\ \mathrm m^{-1}$,
+$n_{\rm ph}=1.3435,1.3390,1.3360,1.3340$,
+$n_g=1.3860,1.3740,1.3670,1.3630$ and $g=0.9$. The probe wavelength is
+$462.5$ nm, chosen strictly inside the interval $[450,500]$ so that the
+interpolation is exercised rather than a node being returned; it sits a
+quarter of the way along.
+
+| Quantity | Value at 462.5 nm |
+|:--|--:|
+| $\mu_a$ | $0.025250\ \mathrm m^{-1}$ |
+| $\mu_s$ | $0.020750\ \mathrm m^{-1}$ |
+| $\mu_t$ | $0.046000\ \mathrm m^{-1}$ |
+| $n_{\rm ph}$ | $1.338250$ |
+| $n_g$ | $1.372250$ |
+| $v_g$ | $0.2184678\ \mathrm m\,\mathrm{ns}^{-1}$ |
+| $1/\mu_a$ | $39.604\ \mathrm m$ |
+| $1/\mu_s$ | $48.193\ \mathrm m$ |
+| $1/\mu_t$ | $21.739\ \mathrm m$ |
+| $\mu_s/\mu_t$ | $0.4511$ |
+
+The single-scattering albedo $\mu_s/\mu_t=0.45$ says that slightly fewer than
+half of all first interactions are scatterings, and the scattering length of
+48 m is comparable with the module spacing of a telescope, so a photon is
+neither certain to arrive unscattered nor certain to be scattered on the way.
+
+What these lengths do **not** determine is how much of the signal at a given
+module is scattered light. That ratio depends on the geometry as well ---
+above all on whether the module lies on the Cherenkov cone of the event, and
+on how far it is compared with $1/\mu_a$ --- and it varies by orders of
+magnitude between modules of one array. @sec-overview-example shows both
+extremes in a single run: one module whose charge is $56\%$ unscattered light,
+and three that receive no unscattered light whatever. Neither figure can be
+read off $1/\mu_s$.
+
+The cost of confusing the two refractive indices is now a number. Over a
+straight path of 100 m at this wavelength,
+$$
+t_g=\frac{100\,n_g}{c_0}=457.733\ \mathrm{ns},\qquad
+t_{\rm ph}=\frac{100\,n_{\rm ph}}{c_0}=446.392\ \mathrm{ns},
+$$
+a difference of $11.341$ ns, or $2.48\%$. The production time bins of
+@sec-overview-example are 20 ns wide, so substituting $n_{\rm ph}$ for $n_g$
+would move the arrival by more than half a bin at 100 m and by a full bin at
+200 m. This is the error that the structure described in
+@sec-spectral-rte-indices exists to make impossible: the monochromatic medium
+handed to the solver reports the six fields
+$(\mu_a,\ \mu_s,\ g,\ n_g,\ \lambda,\ \text{provenance})$ and no phase index,
+which the example asserts rather than assumes.
+
 ## Checks {#sec-spectral-rte-checks}
+
+**Photon number is conserved by scattering.** This is the chapter's main
+independent check, and it is a check on the equation rather than on the code.
+Define the spectral photon-number density, flux vector and directional source
+rate
+$$
+n_{\gamma,\lambda}=\frac{1}{v_g}\int_{S^2}I_\lambda\,\mathrm d\Omega,\qquad
+\mathbf J_\lambda=\int_{S^2}\hat s\,I_\lambda\,\mathrm d\Omega,\qquad
+q_{0,\lambda}=\int_{S^2}q_\lambda\,\mathrm d\Omega .
+$$ {#eq-spectral-moments}
+Integrate @eq-spectral-rte-balance over the outgoing direction. The first term
+gives $\partial_tn_{\gamma,\lambda}$; the second gives
+$\nabla\cdot\mathbf J_\lambda$; absorption gives
+$-\mu_a\int I_\lambda\,\mathrm d\Omega=-v_g\mu_an_{\gamma,\lambda}$. The two
+scattering terms are where the argument lives. The loss integrates to
+$-\mu_s\int I_\lambda(\hat s)\,\mathrm d\Omega$. The gain is a double
+integral, and exchanging the order,
+$$
+\mu_s\int_{S^2}\!\mathrm d\Omega\int_{S^2}\!\mathrm d\Omega'\,
+p_g(\hat s,\hat s')I_\lambda(\hat s')
+=\mu_s\int_{S^2}\!\mathrm d\Omega'\,I_\lambda(\hat s')
+\underbrace{\int_{S^2}p_g(\hat s,\hat s')\,\mathrm d\Omega}_{=\,1
+\ \text{by @eq-phase-normalisation}}
+=\mu_s\int_{S^2}I_\lambda(\hat s')\,\mathrm d\Omega' ,
+$$
+which is the loss with the opposite sign. The two cancel identically --- for
+*any* normalised phase function, not only for @eq-hg --- and what remains is
+$$
+\partial_tn_{\gamma,\lambda}+\nabla\cdot\mathbf J_\lambda
+=-v_g\mu_a\,n_{\gamma,\lambda}+q_{0,\lambda} .
+$$ {#eq-spectral-number-balance}
+Every term has units
+$\text{photon}\,\mathrm m^{-3}\mathrm{ns}^{-1}\mathrm{nm}^{-1}$.
+@eq-spectral-number-balance is local photon-number conservation with
+absorption and a source, and $\mu_s$ has disappeared from it completely. That
+is the diagnostic: a residual $\mu_s$ in an angular integral that should have
+cancelled points at a phase-function normalisation or a quadrature weight, and
+it points there before anything else.
+
+**The Henyey--Greenstein moments.** Evaluated with a 512-node Gauss--Legendre
+rule in $\cos\theta$ at $g=0.9$, @eq-hg-moments returns $1$ and $g$, and the
+eigenvalues @eq-hg-eigenvalues return $g^\ell$ for $\ell=0,\dots,8$ --- $1$,
+$0.9$, $0.81$, $0.729$, $0.6561$, $0.59049$, $0.531441$, $0.4782969$,
+$0.43046721$. The script asserts $10^{-10}$ on the two moments and $10^{-9}$ on
+the eigenvalues and fails if either is exceeded; in practice the residual comes
+out near $10^{-12}$.
+
+That residual is quoted as a bound rather than as a value on purpose. It is a
+property of the quadrature and of the library that evaluates it, not of
+@eq-hg, and it moves between environments; the stored summary records what the
+run that produced it obtained, and a rerun elsewhere is expected to differ. It
+also grows with $g$ --- at $g=0$ it sits at the level of machine precision ---
+because what the rule has to resolve is a kernel that becomes sharply peaked as
+$g\to1$. The companion notebook measures that trend directly.
+
+**The interpolation is linear and is not extrapolated.** The coefficients
+returned at 462.5 nm agree with a hand-written linear interpolation between the
+bracketing nodes to $0$ --- bitwise, since both evaluate the same arithmetic ---
+and the extinction of the monochromatic band agrees with
+$\mu_a+\mu_s$ from the sample to $0$. Requesting 399 nm or 551 nm raises with
+the message `wavelength outside medium range [400, 550] nm` in both directions.
+
+**The band omits the phase index.** The fields of the monochromatic medium are
+read from the object itself and checked to contain `group_index` and not
+`phase_index`; the reported speed agrees with $c_0/n_g$ exactly.
+
+All ten checks are recorded as booleans in the stored summary, and the script
+exits with a failure if any of them is false, so a silent regression is not
+possible.
 
 ## Range of validity {#sec-spectral-rte-validity}
 
+@eq-spectral-rte rests on assumptions that are physical, and they are listed
+separately from the numerical truncations --- the angular degree $L$, the
+wavenumber cut $k_{\max}$, the frequency range $\omega_{\max}$ --- which are
+not approximations of the physics but of its solution, and which belong to
+@sec-angular-system, @sec-scattering-orders and @sec-validation.
+
+- **Homogeneous and stationary medium.** The coefficients do not depend on
+  position or time. A layered or time-varying medium needs a different
+  treatment; the independence of the transformed problem across wavenumbers,
+  used from @sec-fourier-adjoint onward, requires homogeneity specifically.
+- **Straight-line propagation between collisions.** A spatially varying
+  refractive index bends rays and changes the free-streaming operator.
+- **Elastic scattering.** No term couples $\lambda$ to $\lambda'$. Raman
+  scattering and fluorescence are outside the model.
+- **Scalar intensity.** Polarisation correlations and coherent interference are
+  not represented. The equation transports an intensity, not an amplitude.
+- **No boundaries.** The medium is unbounded, so no boundary condition on
+  incoming directions is imposed and no reflection law couples incoming to
+  outgoing directions. Shadowing by the detector structure is likewise absent.
+- **Coefficients independent of the intensity.** The medium does not respond to
+  the light passing through it; the equation is linear in $I_\lambda$.
+- **Henyey--Greenstein scattering.** The production model admits @eq-hg with a
+  single scalar $g$ for the whole band. An arbitrary measured phase function,
+  or a wavelength-dependent asymmetry, is not representable in the present
+  contract.
+- **Positive absorption, non-negative scattering.** `Medium` requires
+  $\mu_a>0$ and $\mu_s\ge0$. The transfer equation itself is perfectly well
+  defined at $\mu_a=0$; the strict inequality is a software contract, and a
+  purely scattering medium cannot currently be expressed.
+- **$-1<g<1$.** The endpoints are excluded: @eq-hg degenerates into a delta
+  function as $|g|\to1$.
+
+Outside any of these the equation is not wrong so much as inapplicable, and no
+amount of numerical accuracy in solving it repairs that.
+
 ## Exercises {#sec-spectral-rte-exercises}
+
+1. Verify the dimensions of every term of @eq-spectral-rte separately,
+   starting from @eq-spectral-intensity, and confirm that $\mathcal K_g$ is
+   dimensionless. Then state what changes in each term if wavelength is
+   measured in metres rather than nanometres.
+2. Derive the equation obeyed by the phase-space density
+   $f_\lambda=I_\lambda/v_g$ from @eq-spectral-rte-balance, and explain why
+   the $1/v_g$ in front of the time derivative is present in one form and
+   absent in the other. Both forms count the same photons.
+3. Show that in an unbounded medium with $\mu_a=0$ and no source the total
+   number of photons $\int f_\lambda\,\mathrm d^3x\,\mathrm d\Omega$ is
+   constant in time, given no flux at infinity. Then show for $\mu_a>0$ that it
+   obeys $\mathrm dN/\mathrm dt=-v_g\mu_aN$, and say why $\mu_s$ cannot appear
+   in that answer.
+4. Take the limit $g\to0$ in @eq-hg and confirm that $p_0=1/4\pi$. Using
+   @eq-hg-eigenvalues, say which Legendre eigenvalues survive, and explain why
+   an isotropic *scattering law* does not make the intensity field isotropic:
+   construct a field with $p=1/4\pi$ in which $I_\lambda$ still depends on
+   $\hat s$.
+5. A photon travels 200 m at 462.5 nm in the medium of
+   @sec-spectral-rte-example. Compute the arrival time with $n_g$ and with
+   $n_{\rm ph}$, express the difference in units of the 20 ns production time
+   bin, and say at what distance the error reaches one full bin.
+6. Interpolate $\mu_a$ at 462.5 nm by hand from the table of
+   @sec-spectral-rte-example and confirm the value quoted there. Then explain
+   what a cubic interpolation of the same table could produce that a linear one
+   cannot, and why that matters for a quantity required to stay positive.
+
+The companion notebook is `notebooks/course/01_balance.ipynb`, which draws
+@eq-hg for several $g$, measures @eq-hg-moments and
+@eq-hg-eigenvalues interactively, and plots the flight-time difference of
+@sec-spectral-rte-example against distance. It illustrates; it is not the
+source of any number quoted above.

@@ -1,29 +1,513 @@
 # The Fourier-adjoint formulation {#sec-fourier-adjoint}
 
-::: {.callout-important title="Placeholder"}
-This chapter has not been written yet. The list below fixes its scope;
-the text replaces this note in a later pass.
-
-- The space and time transforms, with the sign convention fixed.
-- Reciprocity.
-- Source and detector as the right- and left-hand sides.
-- Why one solve serves many geometries.
-:::
-
 ## The physical question {#sec-fourier-adjoint-question}
+
+@sec-spectral-rte left a differential equation in position and time and an
+integral equation in direction. At one wavelength, with the index $\lambda$
+dropped for the rest of this chapter,
+$$
+\left[\frac{1}{v}\partial_t+\hat{\mathbf s}\cdot\nabla
++\mu_t-\mu_s\mathcal K_g\right]I=q .
+$$ {#eq-adjoint-starting-point}
+Nothing about @eq-adjoint-starting-point says how to compute with it, and the
+obvious reading is discouraging: $I$ has seven arguments, an event has
+$10^5$–$10^6$ emitting elements, and an array has thousands of modules.
+
+Two properties of the medium make the problem far smaller than it looks, and
+this chapter is about extracting both. The medium is homogeneous and
+stationary, so transforming in position and time turns streaming into
+multiplication and leaves an *independent* algebraic problem on the sphere of
+directions for each $(\mathbf k,\omega)$ — nothing couples one wavenumber to
+another, or one frequency to another. And the operator that remains is
+symmetric in the right pairing, so the roles of source and detector can be
+exchanged: one solve whose right-hand side is the *detector* answers for a
+whole family of sources, instead of one solve per source.
+
+That second point is the one worth stating plainly, because it is what the
+package is built on. A direct solve answers one source. An adjoint solve
+answers one detector functional. After a single adjoint solve, the response to
+any angular source shape is an integral against the field already computed.
 
 ## Assumptions and definitions {#sec-fourier-adjoint-assumptions}
 
+The medium is homogeneous, stationary and unbounded, as in
+@sec-spectral-rte; the solution is the causal one, with no light before the
+source turns on, and boundary terms at infinity vanish. The source $q$ and the
+detector functional $a$ of @sec-optical-module are both linear in the field.
+
+The transform used throughout the book is
+$$
+\tilde u(\mathbf k,\omega)=\int_{\mathbb R^3}\!\mathrm d^3x
+\int_{-\infty}^{+\infty}\!\mathrm dt\;u(\mathbf x,t)\,
+e^{-i\mathbf k\cdot\mathbf x+i\omega t},
+$$ {#eq-transform-forward}
+with the inverse
+$$
+u(\mathbf x,t)=\frac{1}{(2\pi)^4}\int\!\mathrm d^3k\,\mathrm d\omega\;
+\tilde u(\mathbf k,\omega)\,e^{+i\mathbf k\cdot\mathbf x-i\omega t}.
+$$ {#eq-transform-inverse}
+Note the opposite signs in space and in time: this is the convention the code
+uses, and every phase in the package follows from it. A tilde always means
+@eq-transform-forward and nothing else; a hat always means a unit vector, never
+a transform.
+
+| Symbol | Meaning | Units |
+|:--|:--|:--|
+| $\mathbf k$ | spatial wavenumber | $\mathrm m^{-1}$ |
+| $k=\lvert\mathbf k\rvert$, $\hat{\mathbf k}=\mathbf k/k$ | magnitude and direction | $\mathrm m^{-1}$, — |
+| $\omega$ | angular frequency | $\mathrm{rad}\,\mathrm{ns}^{-1}$ |
+| $\mu=\hat{\mathbf k}\cdot\hat{\mathbf s}$ | streaming cosine | dimensionless |
+| $d_0=\mu_t-i\omega/v$ | frequency-dependent part of the multiplier | $\mathrm m^{-1}$ |
+| $h$ | adjoint field, $Lh=a$ | $\mathrm m$ |
+
+### The shift theorem {#sec-fourier-adjoint-shift}
+
+Substituting $\mathbf x'=\mathbf x-\mathbf x_0$ and $t'=t-t_0$ in
+@eq-transform-forward gives, immediately,
+$$
+q(\mathbf x-\mathbf x_0,\;t-t_0)\;\longrightarrow\;
+e^{-i\mathbf k\cdot\mathbf x_0+i\omega t_0}\,\tilde q(\mathbf k,\omega).
+$$ {#eq-shift-theorem}
+Three consequences run through the whole package. Where an emitting element
+sits and when it fires do not change the medium operator: translations multiply
+the transformed source by a phase. Angular source shape, source orientation and
+the detector functional still enter the angular contraction and are not encoded
+by @eq-shift-theorem. What is reused is the transformed medium response, not one
+geometry-specific final answer. The time phase carries a **plus** sign,
+$e^{+i\omega t_0}$, which is the opposite of the spatial one; a solver written
+with the other time convention would produce a pulse running backwards and
+would still pass any check that looks only at the charge.
+
 ## Derivation {#sec-fourier-adjoint-derivation}
+
+Apply @eq-transform-forward to @eq-adjoint-starting-point term by term. For
+the time derivative, integrating by parts and discarding the boundary term for
+a field that vanishes at large $\lvert t\rvert$,
+$$
+\int\partial_tu\;e^{i\omega t}\,\mathrm dt
+=-\int u\,\partial_t\!\left(e^{i\omega t}\right)\mathrm dt
+=-i\omega\,\tilde u,
+$$
+and for the gradient, in the same way,
+$$
+\int\nabla u\;e^{-i\mathbf k\cdot\mathbf x}\,\mathrm d^3x
+=-\int u\,\nabla\!\left(e^{-i\mathbf k\cdot\mathbf x}\right)\mathrm d^3x
+=+i\mathbf k\,\tilde u .
+$$
+So
+$$
+\partial_t\;\longrightarrow\;-i\omega,\qquad
+\nabla\;\longrightarrow\;+i\mathbf k,
+$$ {#eq-derivative-signs}
+and the two streaming terms become
+$-i\omega/v$ and $i\mathbf k\cdot\hat{\mathbf s}=ik\mu$.
+
+The direction argument is untouched by the transform, because
+@eq-transform-forward integrates over position and time only. What remains at
+each $(\mathbf k,\omega)$ is an equation on the sphere,
+$$
+(D-V)\,\tilde I=\tilde q ,
+$$ {#eq-adjoint-system}
+with
+$$
+D(\hat{\mathbf s})=d_0+ik\mu,\qquad d_0=\mu_t-\frac{i\omega}{v},
+$$ {#eq-multiplier}
+$$
+(Vf)(\hat{\mathbf s})=\mu_s\int_{S^2}p_g(\hat{\mathbf s},\hat{\mathbf s}')\,
+f(\hat{\mathbf s}')\,\mathrm d\Omega' .
+$$ {#eq-scattering-V}
+
+Four properties of @eq-adjoint-system are the whole point of having written
+it. In the homogeneous, stationary model, $D$ is a **multiplication** operator:
+it multiplies the field at each direction by a complex number and mixes no
+directions. $V$ acts on the direction argument alone, at fixed $\mathbf k$ and
+$\omega$. Different $\mathbf k$ are not coupled, and different $\omega$ are not
+coupled. The derivative mappings themselves are general, but spatially or
+temporally varying optical coefficients would become convolutions and would
+destroy this decoupling. Homogeneity and stationarity are therefore what make
+$10^{5}$ source elements and $10^{3}$ modules share one family of solves indexed
+by $(\mathbf k,\omega)$ alone.
+
+Write $L=D-V$ for the operator of @eq-adjoint-system. It acts on functions on
+the sphere, it has units of $\mathrm m^{-1}$, and it depends on
+$(\mathbf k,\omega)$ but on nothing else about the problem.
+
+### Two pairings, and why they must not be mixed {#sec-fourier-adjoint-pairings}
+
+$L$ is complex. Two different pairings are used with it, for two different
+purposes, and confusing them is the easiest mistake available here.
+
+**The Hermitian product, for invertibility.** Let
+$$
+(f,g)_H=\int_{S^2}f^{*}(\hat{\mathbf s})\,g(\hat{\mathbf s})\,\mathrm d\Omega,
+\qquad \|f\|^2=(f,f)_H .
+$$ {#eq-hermitian-pairing}
+Take $h$ and compute the real part of $(h,Lh)_H$. The multiplier contributes
+$$
+\operatorname{Re}\int|h|^2\left(\mu_t-\frac{i\omega}{v}+ik\mu\right)\mathrm d\Omega
+=\mu_t\,\|h\|^2 ,
+$$
+because $-i\omega/v$ and $ik\mu$ multiply the non-negative real quantity
+$|h|^2$ by something purely imaginary: **streaming contributes nothing to the
+real part**, whatever $k$ and $\omega$ are. The scattering term is bounded by
+$$
+\left|(h,Vh)_H\right|\le\mu_s\|h\|^2 ,
+$$
+because $V/\mu_s$ is an integral operator with a real symmetric non-negative
+kernel normalised by @eq-phase-normalisation, so its spectral radius is at most
+one. Subtracting,
+$$
+\operatorname{Re}\,(h,Lh)_H\ \ge\ (\mu_t-\mu_s)\,\|h\|^2=\mu_a\,\|h\|^2 .
+$$ {#eq-coercivity}
+This is the statement that makes the whole scheme well posed, and it is worth
+reading carefully for what it does *not* say. It is not enough that $\mu_t>0$:
+the scattering term can cancel almost all of it, and what survives is exactly
+the absorption. With $\mu_a>0$ the operator is invertible uniformly in
+$\mathbf k$ and $\omega$, with $\|L^{-1}\|\le1/\mu_a$. With $\mu_a=0$ the bound
+collapses, and at $k=0$, $\omega=0$ it collapses completely: there
+$L=\mu_s(1-\mathcal K_g)$, and a direction-independent $h$ satisfies
+$\mathcal K_gh=h$, so $Lh=0$. A purely scattering medium has an isotropic zero
+mode at zero wavenumber and zero frequency, which is nothing more than the
+statement that photons are then conserved and a uniform photon gas is a steady
+state.
+
+**The bilinear pairing, for reciprocity.** Now define, *without* conjugation,
+$$
+\langle f,g\rangle_B=\int_{S^2}f(\hat{\mathbf s})\,g(\hat{\mathbf s})\,
+\mathrm d\Omega .
+$$ {#eq-bilinear-pairing}
+Because $D$ is a multiplication operator, moving it from one factor to the
+other is trivial for any complex multiplier at all:
+$$
+\langle f,Dg\rangle_B=\int fDg\,\mathrm d\Omega=\int (Df)g\,\mathrm d\Omega
+=\langle Df,g\rangle_B .
+$$
+For $V$ it follows from one property of the medium, that the phase function is
+reciprocal,
+$$
+p_g(\hat{\mathbf s},\hat{\mathbf s}')=p_g(\hat{\mathbf s}',\hat{\mathbf s}),
+$$ {#eq-phase-reciprocity}
+which Henyey--Greenstein satisfies because it depends on the directions only
+through $\hat{\mathbf s}\cdot\hat{\mathbf s}'$. Then, renaming the integration
+variables,
+$$
+\langle f,Vg\rangle_B=\mu_s\iint f(\hat{\mathbf s})\,
+p_g(\hat{\mathbf s},\hat{\mathbf s}')\,g(\hat{\mathbf s}')
+=\langle Vf,g\rangle_B ,
+$$
+and therefore
+$$
+L^{T}=L,\qquad (L^{-1})^{T}=L^{-1}
+$$ {#eq-complex-symmetric}
+in the bilinear pairing.
+
+The distinction is worth one more sentence because it is not a technicality.
+$L$ is **complex symmetric**: $L^T=L$. It is **not** Hermitian: $L^\dagger\ne L$
+whenever $\omega\ne0$ or $k\ne0$, since $D$ then has an imaginary part.
+@eq-coercivity needs the Hermitian product and says nothing about transposes;
+@eq-complex-symmetric needs the bilinear pairing and says nothing about norms.
+A derivation that conjugates halfway through gets $L^\dagger$ where it wanted
+$L^T$ and arrives at a reciprocity relation with a spurious complex
+conjugate — which is invisible at $\omega=0$ and wrong everywhere else.
+
+### Source and detector change places {#sec-fourier-adjoint-swap}
+
+Let $q(\hat{\mathbf s})$ be the transformed angular source at this
+$(\mathbf k,\omega)$ and $a(\hat{\mathbf s})$ the detector functional of
+@sec-optical-module, so that the transformed response is
+$$
+\tilde R=\langle a,\,L^{-1}q\rangle_B .
+$$ {#eq-direct-response}
+Define the **adjoint field** as the solution of
+$$
+Lh=a .
+$$ {#eq-adjoint-equation}
+Then, by @eq-complex-symmetric,
+$$
+\tilde R=\langle a,L^{-1}q\rangle_B
+=\langle (L^{-1})^{T}a,\,q\rangle_B
+=\langle L^{-1}a,\,q\rangle_B
+=\langle h,\,q\rangle_B .
+$$ {#eq-adjoint-response}
+@eq-adjoint-response is the result this chapter exists to produce. The source
+has left the solve entirely: it appears only under an integral against a field
+that was computed without knowing it. With $[a]$ dimensionless and
+$[L]=\mathrm m^{-1}$, the adjoint field has units of metres.
+
+Four cases show what that buys.
+
+**An isotropic detector.** $a(\hat{\mathbf s})=1$, so $Lh=1$: one right-hand
+side, no angular structure, one solve per $(\mathbf k,\omega)$.
+
+**A directed point source.** $q(\hat{\mathbf s})
+=\delta_{S^2}(\hat{\mathbf s}-\hat{\mathbf s}_0)$ gives
+$$
+\tilde R=h(\hat{\mathbf s}_0),
+$$ {#eq-directed-evaluation}
+a *evaluation* of the adjoint field. Every emission direction
+$\hat{\mathbf s}_0$ is answered by reading off one value of the same $h$. This
+is the sharpest form of the saving: one solve, all directions.
+
+**An isotropic source.** $q=1/4\pi$ gives
+$$
+\tilde R=\frac{1}{4\pi}\int_{S^2}h\,\mathrm d\Omega ,
+$$
+one average of the same field.
+
+**A directional module.** For a general $a(\hat{\mathbf s})$
+@eq-adjoint-response is still exact, but it is one solve per right-hand side,
+and a module that can point in an arbitrary direction does not present one
+fixed $a$: rotating the module rotates the right-hand side. What makes that
+affordable is expanding $a$ in a basis whose size is set by the angular
+bandwidth $L_A$ measured in @sec-optical-module, and solving once per basis
+function rather than once per orientation. **One solve does not serve arbitrary
+module orientations by itself**; @sec-directional-om is where that expansion is
+constructed and counted.
+
+### Real signals and half the frequency axis {#sec-fourier-adjoint-real}
+
+A physical response is a real function of position and time. Conjugating
+@eq-transform-forward for real $u$ gives
+$$
+\tilde R(-\mathbf k,-\omega)=\tilde R(\mathbf k,\omega)^{*} ,
+$$ {#eq-conjugate-symmetry}
+so the negative frequencies carry no information the positive ones do not. This
+is why the interface stores a non-negative, strictly increasing frequency axis
+and why a solve is asked for $\omega\ge0$ only. The corresponding half-axis
+inversion back to time bins is @sec-time-and-bins and is not derived here.
+
+One transitional remark. @eq-adjoint-equation is an equation on the sphere and
+has not been made finite: choosing an angular basis, discovering that the
+operator is tridiagonal in it, and closing the infinite tail exactly are the
+subject of @sec-angular-system. Everything in the present chapter is basis-free
+and holds whatever that choice turns out to be.
 
 ## The discrete algorithm {#sec-fourier-adjoint-algorithm}
 
+At the level of this chapter, one $(\mathbf k,\omega)$ is processed as follows.
+
+1. **Fix a wavelength** and take its monochromatic coefficients
+   $\mu_a,\mu_s,g,n_g$ from @sec-spectral-rte.
+2. **Choose a point** $(\mathbf k,\omega)$ of the transform.
+3. **Build the frequency part** $d_0=\mu_t-i\omega/v$, one complex number.
+4. **Build the multiplier** $D(\hat{\mathbf s})=d_0+ik\mu$, diagonal in
+   direction.
+5. **Set the right-hand side** to the angular detector functional $a$.
+6. **Solve** $(D-V)h=a$ for the adjoint field.
+7. **Contract** with each angular source in turn,
+   $\tilde R_j=\langle h,q_j\rangle_B$; every source after the first costs an
+   integral and not a solve.
+8. **Store** the resulting spectrum for the later inversion in space and time.
+
+Steps 5 and 6 are where the choice of angular basis enters, and that choice is
+@sec-angular-system. Step 7 is where the event geometry enters, through
+@eq-shift-theorem, and nothing before step 7 knows anything about it.
+
 ## Correspondence with the code {#sec-fourier-adjoint-code}
+
+| Mathematics | Symbol |
+|:--|:--|
+| $\mu_t$ | `lighthit.medium.Medium.extinction_per_m` |
+| $v=c_0/n_g$ | `lighthit.medium.Medium.speed_m_per_ns` |
+| $d_0=\mu_t-i\omega/v$, @eq-multiplier | `lighthit.angular.angular_components`, `lighthit.angular.resolvent_rows` |
+| Eigenvalues of the scattering operator $V$ | `lighthit.angular.angular_components`, `lighthit.angular.resolvent_rows` |
+| The solve for a point source | `lighthit.green.PointGreenSolver.solve` |
+| Directed or isotropic source, @eq-directed-evaluation | `lighthit.green.PointGreenSolver.solve(direction=...)` |
+| The transformed result $\tilde R$ | `lighthit.green.GreenResult.spectrum` |
+| The frequency axis, @eq-conjugate-symmetry | `lighthit.green.GreenResult.omega_per_ns` |
+| The emission-time phase $e^{+i\omega t_0}$, @eq-shift-theorem | `lighthit.green.PointGreenSolver.solve` |
+| The later half-axis inversion | `lighthit.readout.inverse_bins` |
+
+Two things this table implies are worth saying outright. `direction=None`
+selects the isotropic source and a unit vector selects a directed one; the
+choice changes the contraction of step 7 and not the solve of step 6, which is
+exactly @eq-adjoint-response at work. And the code never allocates
+$I(\mathbf x,\hat{\mathbf s},t)$ on a grid: there is no array over three
+spatial coordinates, two angles and time anywhere in the package. What is
+stored is a spectrum indexed by frequency and by observation point, and that
+is a direct consequence of @eq-adjoint-response and @eq-shift-theorem rather
+than a memory optimisation.
 
 ## A worked number {#sec-fourier-adjoint-example}
 
+The example builds an independent dense angular discretisation — a product
+quadrature on the sphere, Gauss--Legendre in $\cos\theta$ with the polar axis
+along $\hat{\mathbf k}$, uniform in $\varphi$ — assembles $L$ as a matrix, and
+checks the chapter's three claims against it. It is a reference for the
+derivation and not the production solver, which uses a different and far
+smaller representation. Public synthetic parameters only; no cache, no
+compiled backend.
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+NUMBA_NUM_THREADS=1 \
+  python scripts/run_fourier_adjoint_example.py --output .build/fourier-adjoint-example
+```
+
+The stored output is `docs/fourier-adjoint-example/summary.json`, which carries
+the configuration, the library versions, the thread settings and the exact
+value of every residual quoted below as a bound.
+
+**Configuration.** $\mu_a=0.04\ \mathrm m^{-1}$, $\mu_s=0.05\ \mathrm m^{-1}$,
+$g=0.7$, $n_g=1.35$, so $\mu_t=0.09\ \mathrm m^{-1}$ and
+$v=0.2220685\ \mathrm m\,\mathrm{ns}^{-1}$. The transform point is
+$k=0.35\ \mathrm m^{-1}$, $\omega=0.08\ \mathrm{rad}\,\mathrm{ns}^{-1}$, giving
+$$
+d_0=0.090000-0.360249\,i\ \ \mathrm m^{-1},
+$$
+which is @eq-multiplier evaluated by hand. The grid is 20 polar by 14
+azimuthal nodes, 280 directions, and it integrates the sphere to $4\pi$
+exactly.
+
+**The matrix is symmetric in the weighted sense.** On a quadrature with
+weights $w_i$ the bilinear pairing @eq-bilinear-pairing is $f^{T}Wg$ with
+$W=\operatorname{diag}(w_i)$, and @eq-complex-symmetric becomes $WL=L^{T}W$.
+The relative residual of that identity is below $10^{-14}$ — it is an algebraic
+consequence of $p_g$ being symmetric, so nothing but round-off can appear in
+it.
+
+**Reciprocity, with one adjoint solve.** One detector functional --- the
+quadratic acceptance of @sec-optical-module about an axis tilted away from
+$\hat{\mathbf k}$, so that no azimuthal symmetry is left to hide an error ---
+and four angular sources: isotropic; a forward lobe; a discrete delta at one
+quadrature node; and a cosine lobe. The direct route solves $LI=q$ once per
+source and contracts with $a$; the adjoint route solves $Lh=a$ **once** and
+contracts with each source. The two agree to a relative error below $10^{-11}$
+for every source — in this run at the level of machine precision. The discrete
+delta additionally reproduces @eq-directed-evaluation: contracting it with $h$
+returns the value of $h$ at that node, to the same precision.
+
+**Coercivity.** In the weighted orthonormal representation
+$B=W^{1/2}LW^{-1/2}$, the Hermitian part $H=(B+B^\dagger)/2$ has
+$$
+\lambda_{\min}(H)=0.0396196\ \mathrm m^{-1}
+\quad\text{against}\quad \mu_a=0.04\ \mathrm m^{-1},
+$$
+and $\lambda_{\max}(H)=0.09\ \mathrm m^{-1}=\mu_t$. The continuous operator is
+bounded below by $\mu_a$; this finite quadrature falls below that target by
+$3.8\times10^{-4}$. The deficit is not a failure of the continuous bound: it is
+the quadrature. The
+grid does not integrate $\int p_g\,\mathrm d\Omega=1$ exactly, and the largest
+residual of that normalisation on this grid is $1.5\times10^{-2}$, which caps
+the deficit at $\mu_s\times1.5\times10^{-2}=7.7\times10^{-4}$. Refining the
+grid confirms it:
+
+| directions | normalisation residual | coercivity deficit | $\mu_s\times$ residual |
+|--:|--:|--:|--:|
+| 120 | $7\times10^{-2}$ | $1.9\times10^{-3}$ | $3.3\times10^{-3}$ |
+| 280 | $2\times10^{-2}$ | $3.8\times10^{-4}$ | $7.7\times10^{-4}$ |
+| 768 | $4\times10^{-4}$ | $8.7\times10^{-6}$ | $2.2\times10^{-5}$ |
+| 1280 | $3\times10^{-5}$ | $4.4\times10^{-7}$ | $1.3\times10^{-6}$ |
+
+Note which statements depend on the grid and which do not. Reciprocity and the
+weighted symmetry are algebraic identities of the discrete matrix and hold to
+round-off on every grid, including the coarsest. The coercivity bound is a
+statement about the continuous operator, and the discretisation approaches it
+from below at the rate its quadrature normalises the phase function.
+
+**The signs of the transform.** On a Gaussian in $x$ and a Gaussian in $t$,
+with the derivatives taken analytically so that no finite-difference error
+enters, @eq-derivative-signs returns $+ik$ in space and $-i\omega$ in time,
+and @eq-shift-theorem returns $e^{-ikx_0}$ and $e^{+i\omega t_0}$ for a shift
+of $x_0=2.5$ m and $t_0=1.75$ ns. All four errors are below $10^{-9}$; in this
+run they are at round-off. The two phases are checked separately, because a
+single combined test would pass with both signs flipped.
+
+**The zero mode.** Setting $\mu_a=0$, $k=0$, $\omega=0$ --- built directly
+rather than through `Medium`, whose contract requires strictly positive
+absorption --- the direction-independent vector is annihilated up to exactly
+the grid's normalisation error, an identity the run confirms to round-off. The
+next eigenvalue is $0.01446\ \mathrm m^{-1}$, against the analytic
+$\mu_s(1-g)=0.015\ \mathrm m^{-1}$: the gap above the zero mode is set by how
+much the first anisotropic moment is damped, which is what will make the
+truncated problem in @sec-angular-system well conditioned away from that
+corner.
+
 ## Checks {#sec-fourier-adjoint-checks}
+
+Fourteen checks are recorded as booleans in the stored summary, and the script
+exits with a failure if any is false. They fall into three groups.
+
+**Conventions.** $\partial_t\to-i\omega$ and $\nabla\to+ik$ are verified
+separately; the source shift reproduces $e^{-ikx_0+i\omega t_0}$ with the
+spatial and temporal phases checked apart; and $d_0$ assembled from the medium
+agrees with $\mu_t-i\omega/v$ exactly.
+
+**Algebra.** The quadrature integrates the sphere to $4\pi$ exactly; $WL=L^TW$
+holds to round-off; reciprocity holds for four different sources from a single
+adjoint solve; and the discrete delta evaluates the adjoint field at its node.
+
+**Analysis.** The Hermitian part of the similarity-transformed operator has
+$\lambda_{\min}\ge\mu_a$ up to the quadrature deficit, and that deficit is
+required to lie inside $\mu_s$ times the measured normalisation residual of the
+grid; the residual falls as the grid is refined, reaching below $10^{-3}$ on
+the finest; and at $\mu_a=k=\omega=0$ the isotropic residual is *equal* to the
+grid's normalisation error, which is the discrete form of the analytic
+statement that the mode is exactly annihilated.
+
+Nothing in this chapter validates the production solver. What is checked is
+that the formulation is consistent and that the operator has the properties the
+later chapters will assume of it.
 
 ## Range of validity {#sec-fourier-adjoint-validity}
 
+- **Homogeneous and stationary medium.** Without it the transform does not
+  decouple the wavenumbers, and @eq-adjoint-system is not one independent
+  problem per $(\mathbf k,\omega)$.
+- **Unbounded domain, or boundary terms that vanish.** The integrations by
+  parts in @eq-derivative-signs discard surface terms.
+- **The causal solution.** The transform selects the retarded solution; nothing
+  here fixes a different branch.
+- **Linear source and detector.** @eq-direct-response and
+  @eq-adjoint-response are statements about a linear map; a detector whose
+  response depends on the light already received is outside them.
+- **A reciprocal scalar phase kernel.** @eq-phase-reciprocity is what makes
+  $L^T=L$. A non-reciprocal kernel gives $L^T\ne L$ and
+  @eq-adjoint-response fails; the adjoint field would then solve $L^Th=a$, a
+  separate transpose solve, and the saving of one solve for many sources
+  survives only in that modified form.
+- **Real $k$ and $\omega$.** Complex wavenumbers or frequencies are not
+  considered; the coercivity argument uses that $ik\mu$ and $-i\omega/v$ are
+  purely imaginary.
+- **$\mu_a>0$** for invertibility uniform in $(\mathbf k,\omega)$. At
+  $\mu_a=0$ the bound degenerates and the isotropic zero mode at
+  $k=\omega=0$ is genuine.
+- **Distributions are admissible** on the right-hand side: the point impulses
+  of @eq-directed-evaluation are not ordinary functions, and the pairings are
+  understood in that sense.
+- **Finite ranges are a later matter.** Truncating $k$, truncating $\omega$ and
+  inverting numerically belong to @sec-scattering-orders and
+  @sec-time-and-bins; nothing in this chapter approximates anything.
+
 ## Exercises {#sec-fourier-adjoint-exercises}
+
+1. Derive @eq-derivative-signs from @eq-transform-forward by parts, stating
+   which boundary terms are discarded and under what decay assumption. Then
+   show that the *inverse* transform @eq-transform-inverse reverses both signs,
+   and that the pair is consistent.
+2. Derive @eq-shift-theorem by substitution, and show that reversing the sign
+   convention in time turns $e^{+i\omega t_0}$ into $e^{-i\omega t_0}$ and
+   sends a pulse arriving at $t_0>0$ to one arriving at $-t_0$.
+3. Prove $\langle f,Lg\rangle_B=\langle Lf,g\rangle_B$ from
+   @eq-phase-reciprocity, treating the multiplication and integral parts
+   separately, and identify exactly where the absence of conjugation is used.
+4. Exhibit an $f$ for which $(f,Lf)_H$ is not real at $\omega\ne0$, and
+   conclude that $L^T=L$ does not imply $L^\dagger=L$. Then show that the two
+   coincide when $k=\omega=0$.
+5. Derive @eq-coercivity, justifying the bound on the scattering term from the
+   normalisation @eq-phase-normalisation, and deduce
+   $\|L^{-1}\|\le1/\mu_a$. Explain why $\mu_t>0$ alone gives no such bound.
+6. Show that at $\mu_a=0$, $k=0$, $\omega=0$ the constant function is
+   annihilated by $L$. Then compute the next eigenvalue for
+   Henyey--Greenstein scattering and compare with the value measured in
+   @sec-fourier-adjoint-example.
+7. Derive @eq-directed-evaluation from @eq-adjoint-response, and state what
+   changes if the source is a narrow but finite lobe rather than a delta.
+8. Derive the isotropic-source result $\tilde R=\frac1{4\pi}\int h$, and say
+   which single number of the adjoint field it requires.
+9. Suppose the phase kernel is not reciprocal. Write the modified
+   @eq-adjoint-response, say which operator the adjoint field now solves
+   against, and state what is still reused across sources and what is not.
+10. Prove @eq-conjugate-symmetry for a real response, and deduce that storing
+    $\omega\ge0$ loses nothing. Then show that a half-axis store implicitly
+    assumes the response really is real.

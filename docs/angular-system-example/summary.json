@@ -1,0 +1,359 @@
+{
+  "schema": "lighthit-angular-system-v1",
+  "environment": {
+    "python": "3.14.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "numba": "0.66.0",
+    "lighthit": "0.2.0a6",
+    "threads": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    }
+  },
+  "configuration": {
+    "absorption_per_m": 0.04,
+    "scattering_per_m": 0.05,
+    "g": 0.7,
+    "group_index": 1.35,
+    "speed_m_per_ns": 0.2220684874074074,
+    "k_per_m": 0.2,
+    "omega_per_ns": 0.0,
+    "scattering_degree": 8,
+    "truncation_degrees": [
+      3,
+      8,
+      16,
+      32
+    ],
+    "quadrature_order": 1024,
+    "deep_extra_degrees": 400
+  },
+  "basis": {
+    "quadrature_order": 1024,
+    "degrees": 10,
+    "orthonormality_error": 5.651035195342047e-13,
+    "streaming_pointwise_error": 1.3322676295501878e-15,
+    "streaming_projection_error": 5.446754158811018e-13,
+    "coupling_a": [
+      0.0,
+      0.5773502691896258,
+      0.5163977794943222,
+      0.50709255283711,
+      0.5039526306789696,
+      0.502518907629606,
+      0.5017452060042544,
+      0.5012804118276031,
+      0.5009794328681196,
+      0.5007733956671915
+    ],
+    "constant_projection": [
+      1.4142135623730954,
+      -4.240670450428655e-18,
+      9.270626021679832e-14,
+      -2.3592832196347654e-17,
+      1.2582020183214172e-13,
+      -2.4868379111617905e-16,
+      1.4829406284758498e-13,
+      -1.2469002609941104e-16,
+      1.7057578629740486e-13,
+      -2.931242217268232e-17
+    ],
+    "constant_projection_error": 1.7057578629740486e-13
+  },
+  "matrix": {
+    "d0": [
+      0.09,
+      -0.0
+    ],
+    "d0_expected": [
+      0.09,
+      -0.0
+    ],
+    "row0_diagonal": [
+      0.039999999999999994,
+      -0.0
+    ],
+    "row0_diagonal_expected": [
+      0.04,
+      -0.0
+    ],
+    "tail_ratio": [
+      -5.422352196005497e-43,
+      -0.6470814533822581
+    ],
+    "last_diagonal": [
+      0.15192583483669897,
+      -5.430739443394251e-44
+    ],
+    "diagonal": [
+      [
+        0.039999999999999994,
+        -0.0
+      ],
+      [
+        0.055,
+        -0.0
+      ],
+      [
+        0.0655,
+        -0.0
+      ],
+      [
+        0.07285,
+        -0.0
+      ],
+      [
+        0.077995,
+        -0.0
+      ],
+      [
+        0.0815965,
+        -0.0
+      ],
+      [
+        0.08411755,
+        -0.0
+      ],
+      [
+        0.085882285,
+        -0.0
+      ],
+      [
+        0.15192583483669897,
+        -5.430739443394251e-44
+      ]
+    ],
+    "first_offdiagonal": [
+      [
+        0.0,
+        0.11547005383792518
+      ],
+      [
+        0.0,
+        0.10327955589886445
+      ],
+      [
+        0.0,
+        0.101418510567422
+      ],
+      [
+        0.0,
+        0.10079052613579392
+      ],
+      [
+        0.0,
+        0.10050378152592121
+      ],
+      [
+        0.0,
+        0.10034904120085089
+      ],
+      [
+        0.0,
+        0.10025608236552062
+      ],
+      [
+        0.0,
+        0.10019588657362394
+      ]
+    ],
+    "symmetry_error": 0.0,
+    "bandwidth_violation": 0.0,
+    "hermitian_gap": 0.23094010767585035
+  },
+  "solves": {
+    "tridiagonal_vs_dense_relative": 3.533586100246617e-16,
+    "assembled_vs_direct_relative": 3.533586100246617e-16,
+    "assembled_vs_reference_relative": 8.926724529154611e-14,
+    "reference": "dense_finite_rank_reference, Gauss angular quadrature"
+  },
+  "tail_ratio": {
+    "packaged": [
+      -5.422352196005497e-43,
+      -0.6470814533822581
+    ],
+    "deep_continued_fraction": [
+      0.0,
+      -0.6470814533822581
+    ],
+    "relative_difference": 8.379705781495002e-43,
+    "seed": "zero, from degree L + 400"
+  },
+  "zero_wavenumber": {
+    "b0": [
+      15.713484026367723,
+      0.0
+    ],
+    "b0_expected": [
+      15.713484026367723,
+      0.0
+    ],
+    "b0_error": 0.0,
+    "max_abs_b_above_zero": 0.0,
+    "tail_ratio": [
+      0.0,
+      0.0
+    ],
+    "max_abs_tail": 0.0
+  },
+  "output_degree": {
+    "output_degrees": [
+      8,
+      24
+    ],
+    "low_degree_difference": 1.5851186918916647e-43,
+    "relative_low_degree_difference": 1.5765845163184093e-44,
+    "extended_length": 25
+  },
+  "hard_truncation": [
+    {
+      "scattering_degree": 3,
+      "exact_tail_error": 8.15344846544822e-14,
+      "hard_truncation_error": 0.18539035485444574,
+      "h0_exact": [
+        9.98914561386755,
+        0.0
+      ],
+      "h0_hard": [
+        8.567358584839512,
+        0.0
+      ],
+      "h0_reference": [
+        9.989145613867219,
+        1.6653345369377348e-15
+      ]
+    },
+    {
+      "scattering_degree": 8,
+      "exact_tail_error": 8.924516038496103e-14,
+      "hard_truncation_error": 0.026857611167696773,
+      "h0_exact": [
+        10.05413078388708,
+        1.5487206028672135e-44
+      ],
+      "h0_hard": [
+        10.08047112186459,
+        0.0
+      ],
+      "h0_reference": [
+        10.05413078388673,
+        1.9678777650380258e-16
+      ]
+    },
+    {
+      "scattering_degree": 16,
+      "exact_tail_error": 1.3237224726474326e-13,
+      "hard_truncation_error": 0.000834093692297599,
+      "h0_exact": [
+        10.05394346533365,
+        1.5315709887315051e-47
+      ],
+      "h0_hard": [
+        10.053969522021411,
+        0.0
+      ],
+      "h0_reference": [
+        10.053943465333298,
+        2.432687094843823e-16
+      ]
+    },
+    {
+      "scattering_degree": 32,
+      "exact_tail_error": 2.2902793398587186e-13,
+      "hard_truncation_error": 7.803959822037065e-07,
+      "h0_exact": [
+        10.053943454646353,
+        1.3390229881379596e-53
+      ],
+      "h0_hard": [
+        10.053943454669186,
+        0.0
+      ],
+      "h0_reference": [
+        10.053943454646,
+        8.834553639862353e-18
+      ]
+    }
+  ],
+  "branches": {
+    "rule": "forward when eta * (N + 3) < 3, else Miller from N + 1 + max(32, ceil(28 / eta))",
+    "constants": {
+      "forward_threshold": 3,
+      "floor_depth": 32,
+      "depth_scale": 28
+    },
+    "note": "implementation safety choices validated for the current double-precision code, not physical parameters",
+    "k_range_per_m": [
+      0.001,
+      40.0
+    ],
+    "rows": [
+      {
+        "degree": 3,
+        "k_nodes": 61,
+        "forward_nodes": 31,
+        "miller_nodes": 30,
+        "max_miller_depth": 59,
+        "min_decay_rate": 0.002249998101566694,
+        "max_decay_rate": 5.192987713658941
+      },
+      {
+        "degree": 8,
+        "k_nodes": 61,
+        "forward_nodes": 28,
+        "miller_nodes": 33,
+        "max_miller_depth": 100,
+        "min_decay_rate": 0.002249998101566694,
+        "max_decay_rate": 5.192987713658941
+      },
+      {
+        "degree": 16,
+        "k_nodes": 61,
+        "forward_nodes": 25,
+        "miller_nodes": 36,
+        "max_miller_depth": 169,
+        "min_decay_rate": 0.002249998101566694,
+        "max_decay_rate": 5.192987713658941
+      },
+      {
+        "degree": 32,
+        "k_nodes": 61,
+        "forward_nodes": 21,
+        "miller_nodes": 40,
+        "max_miller_depth": 339,
+        "min_decay_rate": 0.002249998101566694,
+        "max_decay_rate": 5.192987713658941
+      }
+    ]
+  },
+  "backends": {
+    "numba_available": true,
+    "moment_difference": 6.661338147750939e-16,
+    "ratio_difference": 8.881784197001252e-16
+  },
+  "checks": {
+    "basis_orthonormal": true,
+    "streaming_recurrence_pointwise": true,
+    "streaming_recurrence_projection": true,
+    "constant_projects_to_sqrt_two": true,
+    "matrix_is_symmetric": true,
+    "matrix_is_tridiagonal": true,
+    "matrix_is_not_hermitian": true,
+    "row0_is_absorption": true,
+    "tridiagonal_matches_dense": true,
+    "assembled_matches_direct": true,
+    "assembled_matches_reference": true,
+    "tail_ratio_matches_deep_fraction": true,
+    "zero_wavenumber_moment": true,
+    "zero_wavenumber_has_no_higher_moments": true,
+    "zero_wavenumber_has_no_tail": true,
+    "solve_independent_of_output_degree": true,
+    "exact_tail_accurate": true,
+    "hard_truncation_visibly_worse": true,
+    "all_finite": true,
+    "backends_agree": true
+  }
+}
