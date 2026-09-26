@@ -476,9 +476,12 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
 
     stage = perf_counter()
     elements = _source_elements(kernel, source)
+    spectral_cone = elements.cone_model == "spectral"
     original_elements = len(elements)
     original_coefficient = float(elements.coefficient0.sum())
-    valid = elements.beta * float(np.min(tables["phase_index"])) > 1
+    threshold_phase = (np.max(tables["phase_index"]) if spectral_cone
+                       else np.min(tables["phase_index"]))
+    valid = elements.beta * float(threshold_phase) > 1
     if not np.any(valid):
         raise ValueError("source is below Cherenkov threshold over the wavelength range")
     if not np.all(valid):
@@ -486,7 +489,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
     dropped = 1 - float(elements.coefficient0.sum()) / original_coefficient
     fastest_group = float(np.min(tables["group_index"]))
     if isinstance(source, CherenkovTrack):
-        if source.beta * float(np.min(tables["phase_index"])) <= 1:
+        if source.beta * float(threshold_phase) <= 1:
             raise ValueError("source is below Cherenkov threshold over the wavelength range")
         origins = source.earliest_arrival_ns(positions, fastest_group)
         segments = _track_segments(source)
@@ -508,10 +511,15 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
                     if config.max_distance_m is None else float(config.max_distance_m))
     distance = _min_distance_to_segments(positions, segments)
     inside = distance <= max_distance
-    emitted = float(np.sum(tables["weight_nm"] * (
-        elements.coefficient0.sum() / tables["wavelength_nm"] ** 2
-        + elements.coefficient2.sum()
-        / (tables["wavelength_nm"] ** 2 * tables["phase_index"] ** 2))))
+    if spectral_cone:
+        emitted = float(np.sum(tables["weight_nm"][None, :] * np.maximum(
+            elements.photon_density_per_nm(tables["wavelength_nm"],
+                                           tables["phase_index"]), 0.0)))
+    else:
+        emitted = float(np.sum(tables["weight_nm"] * (
+            elements.coefficient0.sum() / tables["wavelength_nm"] ** 2
+            + elements.coefficient2.sum()
+            / (tables["wavelength_nm"] ** 2 * tables["phase_index"] ** 2))))
     peak_acceptance = float(np.max(np.abs(np.asarray(
         detector.angular_acceptance(np.linspace(-1, 1, 257)), float))))
     far = np.maximum(distance, 1e-9)
@@ -540,7 +548,10 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
         band = kernel.medium.band(float(tables["wavelength_nm"][lam]))
         detector_scale = (tables["weight_nm"][lam] * areas[work]
                           * tables["efficiency"][lam])
-        field_lam, cone = fields(lam)
+        field_and_cone = fields(lam)
+        if field_and_cone is None:
+            continue
+        field_lam, cone = field_and_cone
         if len(work):
             value = ballistic(field_lam, positions[work], looks[work], band,
                               cone, alpha)[0]
@@ -549,12 +560,49 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
 
     # ------------------------------------------------------------ order 1
     stage = perf_counter()
-    order1_charge, order1_bins, order1_meta = _order1(
-        mode, kernel, source, elements, segments, positions, looks, areas,
-        origins, work, tables, coef, ipow, jpow, degree, g, edges, config,
-        charge[:, 0])
+    if spectral_cone:
+        order1_charge = np.zeros(len(positions))
+        order1_bins = np.zeros((len(positions), len(edges) - 1))
+        order1_meta = {"order1_spectral_cone": True,
+                       "order1_by_wavelength": []}
+        level = np.zeros(len(positions), dtype=np.int8)
+        for lam, phase in enumerate(tables["phase_index"]):
+            mask = elements.beta * phase > 1
+            if not np.any(mask):
+                continue
+            subset = elements if np.all(mask) else elements.subset(mask)
+            subset = replace(subset, reference_phase_index=float(phase),
+                             cone_model="frozen")
+            lam_segments = (_track_segments(replace(
+                source, reference_phase_index=float(phase)))
+                if isinstance(source, CherenkovTrack) else
+                _element_segments(subset))
+            single = {key: value[lam:lam + 1] for key, value in tables.items()}
+            lam_charge, lam_bins, lam_meta = _order1(
+                mode, kernel, source, subset, lam_segments,
+                positions, looks, areas, origins, work, single, coef, ipow,
+                jpow, degree, g, edges, replace(config, screen=False),
+                charge[:, 0])
+            order1_charge += lam_charge
+            order1_bins += lam_bins
+            lam_level = lam_meta.pop("order1_level", None)
+            if lam_level is None:
+                lam_level = np.zeros(len(positions), dtype=np.int8)
+                lam_level[work] = 2
+            level = np.maximum(level, lam_level)
+            for key, value in lam_meta.pop("timings").items():
+                timings[key] = timings.get(key, 0.0) + value
+            order1_meta["order1_by_wavelength"].append({
+                "wavelength_nm": float(tables["wavelength_nm"][lam]),
+                "source_elements": len(subset), **lam_meta})
+        order1_meta["order1_level"] = level
+    else:
+        order1_charge, order1_bins, order1_meta = _order1(
+            mode, kernel, source, elements, segments, positions, looks, areas,
+            origins, work, tables, coef, ipow, jpow, degree, g, edges, config,
+            charge[:, 0])
+        timings.update(order1_meta.pop("timings"))
     charge[:, 1] = order1_charge
-    timings.update(order1_meta.pop("timings"))
     level = order1_meta.pop("order1_level", None)
     if level is None:
         level = np.zeros(len(positions), dtype=np.int8)
@@ -577,7 +625,10 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
         band = kernel.medium.band(float(tables["wavelength_nm"][lam]))
         detector_scale = (tables["weight_nm"][lam] * areas[active_index]
                           * tables["efficiency"][lam])
-        field_lam, cone = fields(lam)
+        field_and_cone = fields(lam)
+        if field_and_cone is None:
+            continue
+        field_lam, cone = field_and_cone
         if len(active_index):
             _, value = ballistic(field_lam, positions[active_index],
                                  looks[active_index], band, cone, alpha,
@@ -599,7 +650,9 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
         "source_elements_dropped_at_spectral_threshold": original_elements - len(elements),
         "source_coefficient_fraction_dropped": dropped,
         "reference_phase_index": float(elements.reference_phase_index),
-        "cherenkov_cone": "frozen at reference_phase_index (as the full path)",
+        "cherenkov_cone": ("wavelength-dependent medium phase index"
+                            if spectral_cone else
+                            "frozen at reference_phase_index (as the full path)"),
         "medium": {"provenance": kernel.medium.provenance, "g": g},
         "wavelength_nm": tables["wavelength_nm"].tolist(),
         "wavelength_weight_nm": tables["weight_nm"].tolist(),
@@ -664,6 +717,21 @@ def _ballistic_backend():
 def _ballistic_fields(source, elements, tables):
     """Per-wavelength ballistic field, exactly as the full path builds it."""
     from dataclasses import replace
+    if elements.cone_model == "spectral":
+        def spectral(lam):
+            phase = float(tables["phase_index"][lam])
+            mask = elements.beta * phase > 1
+            if not np.any(mask):
+                return None
+            subset = elements if np.all(mask) else elements.subset(mask)
+            field0 = subset.field(0, phase_index=phase)
+            field2 = subset.field(2, phase_index=phase)
+            s0 = 1.0 / tables["wavelength_nm"][lam] ** 2
+            s2 = s0 / phase ** 2
+            return (replace(field0, photons=np.ascontiguousarray(
+                s0 * field0.photons - s2 * field2.photons)),
+                field0.cone_cosine)
+        return spectral
     field0 = elements.field(0)
     field2 = elements.field(2)
     if isinstance(source, CherenkovTrack):

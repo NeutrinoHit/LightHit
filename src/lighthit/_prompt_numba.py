@@ -330,18 +330,28 @@ def _batch_deposit(n, s_buf, g0, g2, r, t_emit_rel, tail_exp,
             continue
         v = speed[lam]
         kappa = -mut[lam] * v
-        e_emit = math.exp(kappa * t_emit_rel)
-        h_scale = mus[lam] * v / e_emit
-        w0 = s0w[lam] * h_scale
-        w2 = s2w[lam] * h_scale
         last = n - 1
         limit = r + tail_exp / mut[lam]
         while last > 2 and s_buf[last - 1] > limit:
             last -= 1
         if last < 2:
             continue
+        spread = min(front_extra + abs(front_dtda - front_cos / v) * front_da,
+                     (s_buf[last] - r) / v)
+        front_time = t_emit_rel + r / v
+        end_time = t_emit_rel + s_buf[last] / v
+        outside_window = (front_time - 0.5 * spread >= edges[-1]
+                          or end_time + 0.5 * spread <= edges[0])
+        # Integrated charge is invariant under emission-time translation.
+        # Shift wholly out-of-window batches to zero before exponentiating:
+        # exp(kappa * t_emit_rel) otherwise underflows for delayed sources.
+        t_base = 0.0 if outside_window else t_emit_rel
+        e_emit = math.exp(kappa * t_base)
+        h_scale = mus[lam] * v / e_emit
+        w0 = s0w[lam] * h_scale
+        w2 = s2w[lam] * h_scale
         for j in range(last + 1):
-            t_buf[j] = t_emit_rel + s_buf[j] / v
+            t_buf[j] = t_base + s_buf[j] / v
             h_buf[j] = w0 * g0[j] + w2 * g2[j]
         h_front = h_buf[0]
         for j in range(last + 1):
@@ -380,20 +390,18 @@ def _batch_deposit(n, s_buf, g0, g2, r, t_emit_rel, tail_exp,
                 step = 1
             width = t_b - t_a
             total += _quad_integral(e_a, alpha, beta, gamma, width, kappa, e_b)
-            _deposit_panel(lam, t_a, t_b, e_a, e_b, alpha, beta, gamma, kappa,
-                           edges, eedge, pre, acc, direct_bins)
+            if not outside_window:
+                _deposit_panel(lam, t_a, t_b, e_a, e_b, alpha, beta, gamma,
+                               kappa, edges, eedge, pre, acc, direct_bins)
             e_a = e_b
             e_last = e_b
             j += step
         # front step as a mass-normalised ramp of width W
         t_f = t_buf[0]
         t_end = t_buf[last]
-        spread = front_extra + abs(front_dtda - front_cos / v) * front_da
-        if spread > t_end - t_f:
-            spread = t_end - t_f
         exact = _quad_integral(e_first, h_front, 0.0, 0.0, t_end - t_f, kappa, e_last)
         total += exact
-        if spread > 0.0:
+        if spread > 0.0 and not outside_window:
             t_1 = t_f - 0.5 * spread
             t_2 = t_f + 0.5 * spread
             e_1 = math.exp(kappa * t_1)
@@ -402,12 +410,12 @@ def _batch_deposit(n, s_buf, g0, g2, r, t_emit_rel, tail_exp,
             flat = (_quad_integral(e_2, 1.0, 0.0, 0.0, t_end - t_2, kappa, e_last)
                     if t_end > t_2 else 0.0)
             height = exact / (ramp + flat) if ramp + flat != 0.0 else 0.0
-            _deposit_panel(lam, t_1, t_2, e_1, e_2, 0.0, height / spread, 0.0, kappa,
-                           edges, eedge, pre, acc, direct_bins)
+            _deposit_panel(lam, t_1, t_2, e_1, e_2, 0.0, height / spread,
+                           0.0, kappa, edges, eedge, pre, acc, direct_bins)
             if t_end > t_2:
                 _deposit_panel(lam, t_2, t_end, e_2, e_last, height, 0.0, 0.0, kappa,
                                edges, eedge, pre, acc, direct_bins)
-        elif t_end > t_f:
+        elif t_end > t_f and not outside_window:
             _deposit_panel(lam, t_f, t_end, e_first, e_last, h_front, 0.0, 0.0, kappa,
                            edges, eedge, pre, acc, direct_bins)
         charge[lam] += total

@@ -84,9 +84,12 @@ carried exactly by the moments `sum w c1^i c3^j` (10 for a cubic).
 `c0 lambda^-2 + c2 lambda^-2 n_ph^-2` (the two Cherenkov fields of
 `SpectralLightElements`), times the quadrature weight, the detector spectral
 efficiency and the effective area -- the same factors as the full path. The
-Cherenkov cone is frozen at `reference_phase_index`, as in the full path and
-its ballistic term. `mu_a`, `mu_s`, `v_g = c/n_g` are the medium's values at
-the node.
+default Cherenkov cone is frozen at `reference_phase_index`.
+`cone_model="spectral"` instead forms the cone from `n_phase(lambda)` at each
+wavelength node in prompt and full transport. This recompiles source geometry
+per wavelength; prompt grouping skips its coarse screen in this mode, and
+the full path cannot use a spectral-folded source cache. `mu_a`, `mu_s`,
+`v_g = c/n_g` are the medium's values at the node.
 
 ## 2. The Cherenkov source
 
@@ -266,8 +269,8 @@ The full path's errors come from its finite angular representation.
   measured, mostly negative, bias on modules on the Cherenkov cone (-1.5 % at
   default resolution for the 100 GeV electron, -0.5 % at 4x finer pixels);
   `element_method="ring"` is the uncompressed reference.
-* The Cherenkov cone is frozen at `reference_phase_index`, as in the full
-  path.
+* The default Cherenkov cone is frozen at `reference_phase_index`, as in the
+  full path. `cone_model="spectral"` computes its geometry per wavelength.
 * Point modules: the order-1 kernel has an integrable `1/theta` singularity
   for photons aimed at the module; modules must not sit on a source segment
   (`min_distance_m`).

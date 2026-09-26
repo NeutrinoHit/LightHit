@@ -8,6 +8,9 @@ the raw outputs of runs against the private BGVD model (responses,
 per-module JSON) stay outside Git. Only the aggregate figures below are
 recorded.
 
+These measurements used the frozen reference Cherenkov cone. The optional
+per-wavelength `cone_model="spectral"` is outside this validation set.
+
 ## 1. Set-up
 
 * **Machine:** 4 CPUs, 15 GB RAM, Linux x86-64.

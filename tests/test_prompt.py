@@ -90,6 +90,98 @@ def run_pencil(medium, alpha, edges, receiver, look, position, direction,
 
 # ------------------------------------------------------------ order-1 core
 
+@pytest.mark.parametrize("emission_time", [100_000.0, -100_000.0])
+def test_out_of_window_batch_keeps_integrated_charge(emission_time):
+    edges = np.array([-20., 0., 20.])
+    mus = np.array([0.03])
+    mut = np.array([0.08])
+    speed = np.array([0.22])
+    kappa = -mut * speed
+
+    def deposit(t_emit):
+        pre = np.zeros((1, 3))
+        acc = np.zeros((1, len(edges) - 1, 4))
+        charge = np.zeros(1)
+        kernels._batch_deposit(
+            3, np.array([10., 11., 12.]), np.ones(3), np.zeros(3),
+            10., t_emit, 25., mus, mut, speed, np.ones(1), np.zeros(1),
+            edges, np.exp(np.outer(kappa, edges)), pre, acc, charge, 4,
+            np.empty(3), np.empty(3), 0., 0., 0., 0.)
+        return charge[0], pre, acc
+
+    reference, _, _ = deposit(0.)
+    charge, pre, acc = deposit(emission_time)
+    assert reference > 0
+    assert charge == pytest.approx(reference, rel=1e-12)
+    assert not np.any(pre)
+    assert not np.any(acc)
+
+
+def test_spectral_cone_sums_independent_wavelength_contributions(tmp_path):
+    from lighthit.model import WavelengthQuadrature
+
+    medium = spectral_medium()
+    kernel = lh.TransportKernel(medium, detector(count=3), config(tmp_path))
+    elements = shower().elements
+    keep = np.arange(len(elements)) == 0
+    elements = replace(elements.subset(keep), cone_model="spectral")
+    settings = PromptConfig(element_method="segment")
+    nodes = kernel.wavelength.wavelength_nm.copy()
+    weights = kernel.wavelength.weight_nm.copy()
+    together = kernel.transport_prompt(elements, settings)
+    assert together.metadata["cherenkov_cone"] == "wavelength-dependent medium phase index"
+    summed = np.zeros_like(together.charge_orders_pe)
+    for node, weight in zip(nodes, weights):
+        kernel.wavelength = WavelengthQuadrature(np.array([node]),
+                                                np.array([weight]))
+        summed += kernel.transport_prompt(elements, settings).charge_orders_pe
+    np.testing.assert_allclose(together.charge_orders_pe, summed,
+                               rtol=1e-6, atol=1e-14)
+    assert together.charge_orders_pe[:, 1].sum() > 0
+
+
+def test_full_spectral_cone_matches_frozen_at_one_wavelength(tmp_path):
+    from lighthit.model import WavelengthQuadrature
+
+    kernel = lh.TransportKernel(spectral_medium(), detector(count=1),
+                                config(tmp_path))
+    node = float(kernel.wavelength.wavelength_nm[0])
+    weight = float(kernel.wavelength.weight_nm[0])
+    phase = float(kernel.medium.sample(np.array([node]))["phase_index"][0])
+    kernel.wavelength = WavelengthQuadrature(np.array([node]),
+                                            np.array([weight]))
+    elements = shower().elements
+    one = elements.subset(np.arange(len(elements)) == 0)
+    frozen = kernel.transport(replace(one, reference_phase_index=phase))
+    spectral = kernel.transport(replace(one, cone_model="spectral"))
+    np.testing.assert_allclose(spectral.charge_components_pe,
+                               frozen.charge_components_pe,
+                               rtol=1e-10, atol=1e-14)
+    np.testing.assert_allclose(spectral.components_pe,
+                               frozen.components_pe, rtol=1e-10, atol=1e-14)
+
+
+def test_full_spectral_cone_sums_wavelength_charges(tmp_path):
+    from lighthit.model import WavelengthQuadrature
+
+    kernel = lh.TransportKernel(spectral_medium(), detector(count=1),
+                                config(tmp_path))
+    nodes = kernel.wavelength.wavelength_nm.copy()
+    weights = kernel.wavelength.weight_nm.copy()
+    elements = shower().elements
+    one = elements.subset(np.arange(len(elements)) == 0)
+    spectral = kernel.transport(replace(one, cone_model="spectral"))
+    summed = np.zeros_like(spectral.charge_components_pe)
+    for node, weight in zip(nodes, weights):
+        phase = float(kernel.medium.sample(np.array([node]))["phase_index"][0])
+        kernel.wavelength = WavelengthQuadrature(np.array([node]),
+                                                np.array([weight]))
+        summed += kernel.transport(replace(one,
+                                           reference_phase_index=phase)).charge_components_pe
+    np.testing.assert_allclose(spectral.charge_components_pe, summed,
+                               rtol=1e-10, atol=1e-14)
+
+
 def test_reference_formula_is_the_single_py_directed_limit():
     medium = Medium(0.05, 0.03, 0.9, 1.37, 450.)
     edges = np.arange(-10., 200., 5.)
