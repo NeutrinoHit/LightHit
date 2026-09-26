@@ -1,8 +1,9 @@
 """What goes into the distribution, in one place that both setup.py and a test import.
 
 The package ships the experimental modules its public engines import at
-runtime and no others. Reference implementations, Monte-Carlo cross-checks and
-research modules stay in the repository.
+runtime and no others. Other experimental reference, Monte-Carlo cross-check
+and research modules stay in the repository; top-level reference modules are
+not filtered.
 
 Two things have to be true for that to hold, and only the first is obvious:
 

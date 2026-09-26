@@ -60,6 +60,12 @@ def viewer_payload(response, *, source=None, event_id="event", label=None,
     """
     detector = response.detector
     count = len(detector.positions_m)
+    computed_orders = list(getattr(response, "computed_orders", (0, 1, 2)))
+    if computed_orders != [0, 1, 2]:
+        components, charge_components, computed_orders = response.viewer_components()
+    else:
+        components = response.components_pe
+        charge_components = response.charge_components_pe
     payload = {
         "schema": SCHEMA,
         "units": {"position": "m", "time": "ns", "signal": "photoelectrons"},
@@ -82,8 +88,9 @@ def viewer_payload(response, *, source=None, event_id="event", label=None,
             "sources": _display_source(source),
             "time_origin_ns": response.time_origin_ns.tolist(),
             "active": response.active.tolist(),
-            "components": response.components_pe.tolist(),
-            "charge_components": response.charge_components_pe.tolist(),
+            "components": np.asarray(components).tolist(),
+            "charge_components": np.asarray(charge_components).tolist(),
+            "computed_orders": computed_orders,
             "diagnostics": dict(response.metadata),
         }],
     }
@@ -129,6 +136,15 @@ def validate_event_viewer(result):
             raise ValueError(f"event {identifier}: charge_components must have shape {(count, 3)}")
         if origin.shape != (count,) or not np.isfinite(origin).all():
             raise ValueError(f"event {identifier}: time_origin_ns must have shape {(count,)}")
+        orders = event.get("computed_orders", [0, 1, 2])
+        if (not isinstance(orders, list) or not orders
+                or sorted(set(orders)) != orders or not set(orders) <= {0, 1, 2}):
+            raise ValueError(f"event {identifier}: computed_orders must be a sorted subset of [0, 1, 2]")
+        for order in {0, 1, 2} - set(orders):
+            # an order that was not computed is a placeholder, never a value
+            if np.any(components[:, :, order] != 0) or np.any(charge[:, order] != 0):
+                raise ValueError(f"event {identifier}: order {order} is not computed "
+                                 "and must carry an exact zero placeholder")
         active = np.asarray(event.get("active", np.ones(count, bool)))
         if active.shape != (count,) or active.dtype.kind != "b":
             raise ValueError(f"event {identifier}: active must contain one boolean per module")
