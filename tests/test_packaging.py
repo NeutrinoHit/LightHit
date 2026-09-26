@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -112,19 +113,29 @@ def test_the_manifest_allowlist_matches_the_build_filter():
 
 def test_the_release_metadata_is_present_and_consistent():
     import lighthit
-    pyproject = (ROOT / "pyproject.toml").read_text()
-    version = next(line.split("=", 1)[1].strip().strip('"')
-                   for line in pyproject.splitlines()
-                   if line.startswith("version ="))
-    assert version == lighthit.__version__
-    assert 'license = {text = "BSD-3-Clause"}' in pyproject
-    assert "License :: OSI Approved :: BSD License" in pyproject
+    from lighthit._version import VERSION
+
+    pyproject_path = ROOT / "pyproject.toml"
+    pyproject_text = pyproject_path.read_text()
+    pyproject = tomllib.loads(pyproject_text)
+
+    assert "version" not in pyproject["project"]
+    assert "version" in pyproject["project"]["dynamic"]
+    assert (
+        pyproject["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+        == "lighthit._version.VERSION"
+    )
+    assert lighthit.__version__ == VERSION
+
+    assert 'license = {text = "BSD-3-Clause"}' in pyproject_text
+    assert "License :: OSI Approved :: BSD License" in pyproject_text
+
     licence = (ROOT / "LICENSE").read_text()
     assert licence.startswith("BSD 3-Clause License")
     assert "Dmitry Naumov" in licence
-    checklist = (ROOT / "PUBLISHING.md").read_text()
-    assert version in checklist
 
+    checklist = (ROOT / "PUBLISHING.md").read_text()
+    assert "LH_VERSION" in checklist
 
 # ---------------------------------------------------------------- end to end
 

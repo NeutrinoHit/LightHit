@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lighthit"
-version = "0.2.0a8"
+dynamic = ["version"]
 description = "Spectral radiative-transfer response for neutrino-telescope optical modules"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
@@ -48,3 +48,6 @@ lighthit = ["py.typed", "assets/*.html", "assets/*.js", "assets/*.css"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.setuptools.dynamic]
+version = {attr = "lighthit._version.VERSION"}
