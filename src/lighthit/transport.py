@@ -822,7 +822,8 @@ class TransportKernel:
         approximation at all --- a constant acceptance is a constant. Nothing
         that does not need the directional kernel pays for it.
         """
-        if self.acceptance()["degree"] >= 1:
+        elements = self._source_elements(source)
+        if elements.cone_model == "spectral" or self.acceptance()["degree"] >= 1:
             return self._transport_directional(source, method=method,
                                                 azimuthal_degree=azimuthal_degree)
         return self._transport_axial(source, method=method,
@@ -998,7 +999,9 @@ class TransportKernel:
         Everything else -- the two-field spectral model, the cone, the radial
         cache rule, the time origin, the readout -- is unchanged.
         """
-        if isinstance(source, CherenkovTrack) and find_spec("numba") is not None:
+        if (isinstance(source, CherenkovTrack)
+                and source.cone_model != "spectral"
+                and find_spec("numba") is not None):
             # A straight track is exactly m=0 and admits a per-OM radial window.
             # Keep the generic two-field source engine for showers and for
             # installations without the optional Numba accelerator.
@@ -1034,25 +1037,50 @@ class TransportKernel:
         response = self.acceptance()
         alpha = np.ascontiguousarray(response["alpha"], float)
         elements = self._source_elements(source)
+        spectral_cone = elements.cone_model == "spectral"
+        if spectral_cone:
+            folded = None  # folded source fields assume wavelength-independent geometry
         sample = self.medium.sample(self.wavelength.wavelength_nm)
         original_elements = len(elements)
         original_coefficient = float(elements.coefficient0.sum())
-        valid = elements.beta * float(np.min(sample["phase_index"])) > 1
+        threshold_phase = (np.max(sample["phase_index"]) if spectral_cone
+                           else np.min(sample["phase_index"]))
+        valid = elements.beta * float(threshold_phase) > 1
         if not np.any(valid):
             raise ValueError("source is below Cherenkov threshold over the wavelength range")
         if not np.all(valid):
             elements = elements.subset(valid)
         dropped_fraction = 1 - float(elements.coefficient0.sum()) / original_coefficient
-        field0, field2 = elements.field(0), elements.field(2)
+        reference_phase = (float(np.max(sample["phase_index"]))
+                           if spectral_cone else None)
+        field0 = elements.field(0, phase_index=reference_phase)
+        field2 = elements.field(2, phase_index=reference_phase)
         frame = AxisFrame.of(field0)
         degree = self.config.source_degree
         max_m = (self.config.azimuthal_degree if azimuthal_degree is None
                  else int(azimuthal_degree))
         kwargs = dict(azimuthal_degree=max_m, cell_m=self.config.cell_m,
                       element_order=2, frame=frame)
-        source0 = compiler(field0, degree, self.config.omega_per_ns, **kwargs)
-        source2 = compiler(field2, degree, self.config.omega_per_ns, **kwargs)
+        if spectral_cone:
+            source0 = source2 = None
+        else:
+            source0 = compiler(field0, degree, self.config.omega_per_ns, **kwargs)
+            source2 = compiler(field2, degree, self.config.omega_per_ns, **kwargs)
         compile_seconds = perf_counter() - began
+
+        def compile_spectral(wavelength, phase):
+            mask = elements.beta * phase > 1
+            if not np.any(mask):
+                return None, None
+            subset = elements if np.all(mask) else elements.subset(mask)
+            first_field = subset.field(0, phase_index=float(phase))
+            second_field = subset.field(2, phase_index=float(phase))
+            s0 = 1.0 / wavelength ** 2
+            s2 = s0 / phase ** 2
+            combined = replace(first_field, photons=np.ascontiguousarray(
+                s0 * first_field.photons - s2 * second_field.photons))
+            return combined, compiler(combined, degree,
+                                      self.config.omega_per_ns, **kwargs)
 
         omega = self.config.omega_per_ns
         positions = self.detector.positions_m
@@ -1063,8 +1091,15 @@ class TransportKernel:
         scale_area = np.asarray(self.detector.effective_area_m2, float)
         low, high = self.config.radial_range_m
         centre_distance = np.linalg.norm(positions - elements.centroid_m, axis=1)
-        source_extent = float(np.max(np.linalg.norm(
-            source0.points_m() - elements.centroid_m[None, :], axis=1)))
+        if spectral_cone:
+            endpoints = np.concatenate((
+                elements.start_m,
+                elements.start_m + elements.length_m[:, None] * elements.direction))
+            source_extent = float(np.max(np.linalg.norm(
+                endpoints - elements.centroid_m[None, :], axis=1)))
+        else:
+            source_extent = float(np.max(np.linalg.norm(
+                source0.points_m() - elements.centroid_m[None, :], axis=1)))
         inside = ((centre_distance - source_extent >= low)
                   & (centre_distance + source_extent <= high))
         source0_factor = float(np.sum(
@@ -1072,8 +1107,14 @@ class TransportKernel:
         source2_factor = float(np.sum(
             self.wavelength.weight_nm
             / (self.wavelength.wavelength_nm ** 2 * sample["phase_index"] ** 2)))
-        emitted = float(elements.coefficient0.sum() * source0_factor
-                        + elements.coefficient2.sum() * source2_factor)
+        if spectral_cone:
+            emitted = float(np.sum(self.wavelength.weight_nm[None, :]
+                                   * np.maximum(elements.photon_density_per_nm(
+                                       self.wavelength.wavelength_nm,
+                                       sample["phase_index"]), 0.0)))
+        else:
+            emitted = float(elements.coefficient0.sum() * source0_factor
+                            + elements.coefficient2.sum() * source2_factor)
         peak_acceptance = float(np.max(np.abs(np.asarray(
             self.detector.angular_acceptance(np.linspace(-1, 1, 257)), float))))
         lower_distance = np.maximum(centre_distance - source_extent, low)
@@ -1095,12 +1136,16 @@ class TransportKernel:
                    + np.linalg.norm(positions - elements.start_m[first], axis=1)
                    / (0.299792458 / fastest_group))
         charge = np.zeros((len(positions), 3))
-        zero0 = replace(source0, channels=np.ascontiguousarray(source0.channels[:, :, :1]))
-        zero2 = replace(source2, channels=np.ascontiguousarray(source2.channels[:, :, :1]))
+        zero0 = (None if spectral_cone else replace(
+            source0, channels=np.ascontiguousarray(source0.channels[:, :, :1])))
+        zero2 = (None if spectral_cone else replace(
+            source2, channels=np.ascontiguousarray(source2.channels[:, :, :1])))
         cache_seconds = 0.0
         prepass_seconds = 0.0
         zero_prepare_seconds = zero_apply_seconds = ballistic_charge_seconds = 0.0
         caches = []
+        spectral_available = []
+        max_spectral_cells = max_spectral_channels = max_spectral_bytes = 0
         for wavelength, weight, phase in zip(
                 self.wavelength.wavelength_nm, self.wavelength.weight_nm,
                 sample["phase_index"], strict=True):
@@ -1113,7 +1158,37 @@ class TransportKernel:
             before = perf_counter()
             s0 = 1.0 / wavelength ** 2
             s2 = 1.0 / (wavelength ** 2 * phase ** 2)
-            if folded is not None:
+            if spectral_cone:
+                started = perf_counter()
+                combined_field, compiled = compile_spectral(wavelength, phase)
+                compile_seconds += perf_counter() - started
+                spectral_available.append(compiled is not None)
+                if compiled is None:
+                    continue
+                max_spectral_cells = max(max_spectral_cells, len(compiled.z_m))
+                max_spectral_channels = max(max_spectral_channels,
+                                            compiled.channels.shape[1])
+                max_spectral_bytes = max(max_spectral_bytes,
+                                         compiled.channels.nbytes)
+                zero_compiled = replace(
+                    compiled, channels=np.ascontiguousarray(
+                        compiled.channels[:, :, :1]))
+                if PreparedDirectionalKernel is None:
+                    scattered = self._directional_apply(
+                        None, cache, zero_compiled, positions[work],
+                        looks[work], alpha, omega[:1])
+                else:
+                    started = perf_counter()
+                    prepared = PreparedDirectionalKernel.from_cache(
+                        cache, degree=degree, frequency_indices=[0])
+                    zero_prepare_seconds += perf_counter() - started
+                    started = perf_counter()
+                    scattered = prepared.apply(
+                        zero_compiled, positions[work], looks[work], alpha,
+                        source_omega_per_ns=omega[:1],
+                        receiver_block=self.config.receiver_block)
+                    zero_apply_seconds += perf_counter() - started
+            elif folded is not None:
                 scattered = None
             elif PreparedDirectionalKernel is None:
                 r0, r2 = (self._directional_apply(
@@ -1132,13 +1207,14 @@ class TransportKernel:
                     receiver_block=self.config.receiver_block,
                     second_source=zero2, first_scale=s0, second_scale=s2)
                 zero_apply_seconds += perf_counter() - started
-            combined_field = replace(
-                field0, photons=np.ascontiguousarray(
-                    s0 * field0.photons - s2 * field2.photons))
+            if not spectral_cone:
+                combined_field = replace(
+                    field0, photons=np.ascontiguousarray(
+                        s0 * field0.photons - s2 * field2.photons))
             started = perf_counter()
             ballistic_charge = ballistic(
                 combined_field, positions[work], looks[work], medium,
-                field0.cone_cosine, alpha)[0]
+                combined_field.cone_cosine, alpha)[0]
             ballistic_charge_seconds += perf_counter() - started
             detector_scale = (weight * scale_area[work]
                               * float(self.detector.spectral_weight(float(wavelength))))
@@ -1160,6 +1236,8 @@ class TransportKernel:
                 first_zero[0] - second_zero[0]).real
             zero_apply_seconds += perf_counter() - started
             prepass_seconds += perf_counter() - started
+        if spectral_cone:
+            combined_field = compiled = zero_compiled = None
         active = inside & (charge.sum(axis=1) >= self.config.threshold_pe)
         if self.config.threshold_pe == 0:
             active = inside
@@ -1184,14 +1262,35 @@ class TransportKernel:
         # Every module can fall below threshold -- a detector looking away from
         # the event does exactly that -- and an empty selection is a valid
         # answer, not an error.
-        for (wavelength, weight, phase, cache) in ([] if not np.any(active) else zip(
+        for lam, (wavelength, weight, phase, cache) in enumerate([] if not np.any(active) else zip(
                 self.wavelength.wavelength_nm, self.wavelength.weight_nm,
                 sample["phase_index"], caches, strict=True)):
+            if spectral_cone and not spectral_available[lam]:
+                continue
             s0 = 1.0 / wavelength ** 2
             s2 = 1.0 / (wavelength ** 2 * phase ** 2)
             detector_scale = (weight * scale_area[active]
                               * float(self.detector.spectral_weight(float(wavelength))))
-            if folded is not None:
+            if spectral_cone:
+                started = perf_counter()
+                combined_field, compiled = compile_spectral(wavelength, phase)
+                compile_seconds += perf_counter() - started
+                if PreparedDirectionalKernel is None:
+                    scattered = self._directional_apply(
+                        None, cache, compiled, positions[active],
+                        looks[active], alpha, omega)
+                else:
+                    started = perf_counter()
+                    prepared = PreparedDirectionalKernel.from_cache(
+                        cache, degree=degree)
+                    full_prepare_seconds += perf_counter() - started
+                    started = perf_counter()
+                    scattered = prepared.apply(
+                        compiled, positions[active], looks[active],
+                        alpha, source_omega_per_ns=omega,
+                        receiver_block=self.config.receiver_block)
+                    full_apply_seconds += perf_counter() - started
+            elif folded is not None:
                 scattered = None
             elif PreparedDirectionalKernel is None:
                 r0, r2 = (self._directional_apply(
@@ -1211,18 +1310,21 @@ class TransportKernel:
                 full_apply_seconds += perf_counter() - started
             if folded is None:
                 spectrum[:, active, 1:] += detector_scale[None, :, None] * scattered
-            combined_field = replace(
-                field0, photons=np.ascontiguousarray(
-                    s0 * field0.photons - s2 * field2.photons))
+            if not spectral_cone:
+                combined_field = replace(
+                    field0, photons=np.ascontiguousarray(
+                        s0 * field0.photons - s2 * field2.photons))
             started = perf_counter()
             _, bins = ballistic(
                 combined_field, positions[active], looks[active],
                 cache.medium if cache is not None else self.medium.band(float(wavelength)),
-                field0.cone_cosine, alpha,
+                combined_field.cone_cosine, alpha,
                 time_origin_ns=origins[active],
                 relative_edges_ns=self.config.relative_time_edges_ns)
             ballistic_bins_seconds += perf_counter() - started
             components[active, :, 0] += detector_scale[:, None] * bins
+            if spectral_cone:
+                compiled = combined_field = scattered = None
         readout_start = perf_counter()
         spectrum[0] = charge
         relative = (spectrum[:, active, 1:]
@@ -1254,11 +1356,16 @@ class TransportKernel:
              "wavelength_nodes": len(self.wavelength.wavelength_nm),
              "spectral_source": "S0=lambda^-2; S2=lambda^-2*n_phase^-2",
              "source_fields": 2, "reference_phase_index": elements.reference_phase_index,
-             "fused_two_field_apply": PreparedDirectionalKernel is not None and folded is None,
-             "compiled_source_cells": int(len(source0.z_m)),
-             "compiled_source_channels": int(source0.channels.shape[1]),
+             "cone_model": elements.cone_model,
+             "fused_two_field_apply": (PreparedDirectionalKernel is not None
+                                       and folded is None and not spectral_cone),
+             "compiled_source_cells": (max_spectral_cells if spectral_cone
+                                       else int(len(source0.z_m))),
+             "compiled_source_channels": (max_spectral_channels if spectral_cone
+                                          else int(source0.channels.shape[1])),
              "compiled_source_memory_mib": float(
-                 (source0.channels.nbytes + source2.channels.nbytes) / 2 ** 20),
+                 (max_spectral_bytes if spectral_cone else
+                  source0.channels.nbytes + source2.channels.nbytes) / 2 ** 20),
              "source_elements": len(elements),
              "source_elements_dropped_at_spectral_threshold": original_elements - len(elements),
              "source_coefficient_fraction_dropped": dropped_fraction,

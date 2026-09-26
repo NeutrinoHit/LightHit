@@ -118,8 +118,9 @@ class SpectralLightElements:
 
     ``coefficient2`` includes its physical negative sign.  The axial engine
     internally compiles ``-coefficient2`` as a positive field and subtracts it.
-    The angular cone is frozen at ``reference_phase_index``; this is the stated
-    two-field approximation, not an unrecorded per-wavelength cone update.
+    ``cone_model="frozen"`` uses ``reference_phase_index`` for all wavelengths.
+    ``cone_model="spectral"`` uses the medium's phase index at each wavelength
+    while retaining the same two spectral coefficient fields.
     """
     start_m: np.ndarray
     direction: np.ndarray
@@ -133,6 +134,7 @@ class SpectralLightElements:
     uid: np.ndarray
     reference_phase_index: float = 1.35
     provenance: dict | None = None
+    cone_model: str = "frozen"
 
     def __post_init__(self):
         start = np.asarray(self.start_m, float)
@@ -152,6 +154,8 @@ class SpectralLightElements:
                 or np.any(arrays["length_m"] <= 0) or np.any(arrays["coefficient0"] < 0)
                 or np.any(arrays["coefficient2"] > 0) or np.any(arrays["beta"] <= 0)):
             raise ValueError("invalid spectral element geometry or coefficients")
+        if self.cone_model not in ("frozen", "spectral"):
+            raise ValueError("cone_model must be frozen or spectral")
         object.__setattr__(self, "start_m", start)
         object.__setattr__(self, "direction", direction / norm[:, None])
         for name, value in arrays.items():
@@ -186,15 +190,16 @@ class SpectralLightElements:
                 + self.coefficient2[:, None]
                 / (wavelength[None, :] ** 2 * phase[None, :] ** 2))
 
-    def field(self, index):
+    def field(self, index, *, phase_index=None):
         if index not in (0, 2):
             raise ValueError("field index must be 0 or 2")
         photons = self.coefficient0 if index == 0 else -self.coefficient2
-        contract = SourceContract(phase_index=self.reference_phase_index,
+        phase = self.reference_phase_index if phase_index is None else float(phase_index)
+        contract = SourceContract(phase_index=phase,
                                   wavelength_low_nm=350.0, wavelength_high_nm=610.0)
         return LightElements(
             self.start_m, self.direction, self.length_m, photons,
-            1.0 / (self.beta * self.reference_phase_index),
+            1.0 / (self.beta * phase),
             self.start_ns, self.end_ns, self.row_index.astype(np.int64),
             self.uid.astype(np.int64), contract,
             {**(self.provenance or {}), "spectral_field": index})
@@ -208,7 +213,8 @@ class SpectralLightElements:
             self.coefficient0[mask], self.coefficient2[mask], self.beta[mask],
             self.start_ns[mask], self.end_ns[mask], self.row_index[mask],
             self.uid[mask], self.reference_phase_index,
-            {**(self.provenance or {}), "subset_elements": int(mask.sum())})
+            {**(self.provenance or {}), "subset_elements": int(mask.sum())},
+            self.cone_model)
 
     def moved(self, rotation=None, translation=None, delay_ns=0.0):
         matrix = np.eye(3) if rotation is None else np.asarray(rotation, float)
@@ -264,21 +270,24 @@ class CherenkovTrack:
     beta: float = 1.0
     time_ns: float = 0.0
     reference_phase_index: float = 1.35
+    cone_model: str = "frozen"
 
     @classmethod
     def centered(cls, position_m, direction, length_m, *, beta=1.0,
-                 time_ns=0.0, reference_phase_index=1.35):
+                 time_ns=0.0, reference_phase_index=1.35,
+                 cone_model="frozen"):
         direction = _unit_vector(direction, "direction")
         position = np.asarray(position_m, float)
         if position.shape != (3,) or not np.isfinite(position).all():
             raise ValueError("position_m must be a finite 3-vector")
         return cls(position - 0.5 * float(length_m) * direction, direction,
-                   length_m, beta, time_ns, reference_phase_index)
+                   length_m, beta, time_ns, reference_phase_index, cone_model)
 
     def placed(self, pose: SourcePose):
         return CherenkovTrack.centered(
             pose.position_m, pose.direction, self.length_m, beta=self.beta,
-            time_ns=pose.time_ns, reference_phase_index=self.reference_phase_index)
+            time_ns=pose.time_ns, reference_phase_index=self.reference_phase_index,
+            cone_model=self.cone_model)
 
     def earliest_arrival_ns(self, receiver_positions_m, group_index):
         """Earliest possible track emission plus group flight at each receiver.
@@ -325,7 +334,7 @@ class CherenkovTrack:
             np.full(count, common), -np.full(count, common) / beta ** 2, beta,
             times, times + length / (self.beta * 0.299792458),
             np.arange(count), np.zeros(count, np.int64), self.reference_phase_index,
-            {"source": "CherenkovTrack", "step_m": length})
+            {"source": "CherenkovTrack", "step_m": length}, self.cone_model)
 
 
 @dataclass(frozen=True)
