@@ -671,6 +671,20 @@ class TransportKernel:
             raise ValueError(f"method {method!r} is experimental; pass allow_experimental=True")
         return selected.function(source, method=method)
 
+    def transport_prompt(self, source, config=None):
+        """Prompt signal: scattering orders 0 and exactly 1, without any RTE cache.
+
+        Returns a :class:`lighthit.prompt.PromptTransportResponse` whose
+        ``computed_orders`` is ``(0, 1)``; order >= 2 is *not computed* and
+        cannot be selected from it.  Order 0 uses the same ballistic kernel
+        as :meth:`transport`; order 1 is the direct single-scattering
+        integral with the full HG phase function and the module acceptance
+        at the true arrival direction.  :meth:`transport` is unchanged.
+        See :mod:`lighthit.prompt`.
+        """
+        from .prompt import transport_prompt
+        return transport_prompt(self, source, config)
+
     def _response(self, spectrum, components, charge, origins, active, method, metadata):
         return TransportResponse(
             self.detector, self.config.omega_per_ns.copy(),

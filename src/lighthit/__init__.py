@@ -11,6 +11,7 @@ from .sources import (SourcePose, IsotropicFlash, CherenkovTrack, G4Shower,
 from .transport import (KernelConfig, CacheProgress, CacheBuildEntry,
                         CacheBuildReport, TransportKernel, TransportResponse,
                         TransportComponent)
+from .prompt import PromptConfig, PromptTransportResponse, OrderNotComputedError
 from .bgvd import BGVDModel, load_bgvd_model
 from .api import build
 from .viewer import viewer_payload, merge_event_viewers, write_event_viewer
@@ -24,6 +25,7 @@ __all__ = [
     "G4Shower", "SyntheticShower", "SpectralLightElements", "KernelConfig",
     "CacheProgress", "CacheBuildEntry", "CacheBuildReport", "TransportKernel",
     "TransportResponse", "TransportComponent",
+    "PromptConfig", "PromptTransportResponse", "OrderNotComputedError",
     "BGVDModel", "load_bgvd_model", "build", "viewer_payload",
     "merge_event_viewers", "write_event_viewer",
 ]
