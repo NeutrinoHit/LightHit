@@ -140,8 +140,9 @@ def test_spectral_cone_sums_independent_wavelength_contributions(tmp_path):
     assert together.charge_orders_pe[:, 1].sum() > 0
 
 
-def test_full_spectral_cone_matches_frozen_at_one_wavelength(tmp_path):
+def test_full_spectral_cone_matches_frozen_at_one_wavelength(tmp_path, monkeypatch):
     from lighthit.model import WavelengthQuadrature
+    from lighthit.experimental import axial_fast
 
     kernel = lh.TransportKernel(spectral_medium(), detector(count=1),
                                 config(tmp_path))
@@ -153,7 +154,20 @@ def test_full_spectral_cone_matches_frozen_at_one_wavelength(tmp_path):
     elements = shower().elements
     one = elements.subset(np.arange(len(elements)) == 0)
     frozen = kernel.transport(replace(one, reference_phase_index=phase))
+    frequencies_compiled = []
+    original_compile = axial_fast.compile_axial_source_fast
+
+    def record_compile(source, degree, frequencies, **kwargs):
+        frequencies_compiled.append(len(frequencies))
+        return original_compile(source, degree, frequencies, **kwargs)
+
+    monkeypatch.setattr(axial_fast, "compile_axial_source_fast", record_compile)
     spectral = kernel.transport(replace(one, cone_model="spectral"))
+    assert frequencies_compiled == [1, len(kernel.config.omega_per_ns)]
+    assert spectral.metadata["compiled_source_memory_mib"] == pytest.approx(
+        spectral.metadata["compiled_source_cells"]
+        * spectral.metadata["compiled_source_channels"]
+        * len(kernel.config.omega_per_ns) * 16 / 2 ** 20)
     np.testing.assert_allclose(spectral.charge_components_pe,
                                frozen.charge_components_pe,
                                rtol=1e-10, atol=1e-14)
@@ -180,6 +194,78 @@ def test_full_spectral_cone_sums_wavelength_charges(tmp_path):
                                            reference_phase_index=phase)).charge_components_pe
     np.testing.assert_allclose(spectral.charge_components_pe, summed,
                                rtol=1e-10, atol=1e-14)
+
+
+@pytest.mark.parametrize("cone_model", ["frozen", "spectral"])
+def test_hybrid_uses_prompt_low_orders_and_rte_ge2(tmp_path, cone_model):
+    from lighthit.model import WavelengthQuadrature
+
+    omega = np.linspace(0., 1.2, 17)
+    kernel = lh.TransportKernel(
+        spectral_medium(), detector(count=2),
+        config(tmp_path, omega_per_ns=omega, threshold_pe=0.0))
+    kernel.wavelength = WavelengthQuadrature(
+        kernel.wavelength.wavelength_nm[:1].copy(),
+        kernel.wavelength.weight_nm[:1].copy())
+    one = shower().elements.subset(np.arange(48) == 0)
+    one = replace(one, cone_model=cone_model)
+
+    full = kernel.transport(one)
+    prompt = kernel.transport_prompt(one, compute_bins_for_all=True)
+    hybrid = kernel.transport_hybrid(one, frequency_nodes=len(omega))
+    assert isinstance(hybrid, lh.HybridTransportResponse)
+    np.testing.assert_allclose(hybrid.charge_components_pe[:, :2],
+                               prompt.charge_orders_pe, rtol=0, atol=0)
+    np.testing.assert_allclose(hybrid.components_pe[:, :, :2],
+                               prompt.bins_orders_pe, rtol=0, atol=0)
+    np.testing.assert_allclose(hybrid.charge_components_pe[:, 2],
+                               full.charge_components_pe[:, 2], rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(hybrid.components_pe[:, :, 2],
+                               full.components_pe[:, :, 2], rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(hybrid.spectrum_ge2_pe,
+                               full.spectrum_pe[:, :, 2], rtol=1e-12, atol=1e-14)
+    assert hybrid.metadata["fourier_inverted_orders"] == [2]
+
+    sparse = kernel.transport_hybrid(one, frequency_nodes=5)
+    indices = np.rint(np.linspace(0, len(omega) - 1, 5)).astype(int)
+    np.testing.assert_allclose(sparse.spectrum_ge2_pe,
+                               full.spectrum_pe[indices, :, 2], rtol=1e-12,
+                               atol=1e-14)
+    compact_kernel = lh.TransportKernel(
+        spectral_medium(), detector(count=2),
+        config(tmp_path / "compact", omega_per_ns=omega[indices],
+               readout_omega_per_ns=omega, threshold_pe=0.0))
+    compact_kernel.wavelength = kernel.wavelength
+    compact = compact_kernel.transport_hybrid(one, frequency_nodes=5)
+    np.testing.assert_allclose(compact.spectrum_ge2_pe,
+                               sparse.spectrum_ge2_pe, rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(compact.components_pe,
+                               sparse.components_pe, rtol=1e-12, atol=1e-14)
+    saved = tmp_path / "hybrid.npz"
+    sparse.save(saved)
+    with np.load(saved, allow_pickle=False) as archive:
+        assert "spectrum_ge2_pe" in archive
+        assert "spectrum_pe" not in archive
+    lh.viewer_payload(sparse)
+
+
+def test_spectral_prompt_global_screen_preserves_active_oms(tmp_path):
+    kernel = lh.TransportKernel(
+        spectral_medium(), detector(count=12),
+        config(tmp_path, threshold_pe=0.001))
+    source = replace(shower().elements, cone_model="spectral")
+    settings = PromptConfig(element_method="grouped")
+    exact = kernel.transport_prompt(source, replace(settings, screen=False))
+    screened = kernel.transport_prompt(
+        source, settings, selection_extra_charge=np.zeros(len(kernel.detector)))
+    assert screened.metadata["order1_global_screen"]["coarse_only_modules"] > 0
+    np.testing.assert_array_equal(screened.active, exact.active)
+    np.testing.assert_allclose(screened.charge_orders_pe[exact.active],
+                               exact.charge_orders_pe[exact.active], rtol=1e-12,
+                               atol=1e-14)
+    np.testing.assert_allclose(screened.bins_orders_pe[exact.active],
+                               exact.bins_orders_pe[exact.active], rtol=1e-12,
+                               atol=1e-14)
 
 
 def test_reference_formula_is_the_single_py_directed_limit():

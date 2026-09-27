@@ -133,7 +133,7 @@ def _apply_m0(points, receivers, looks, channels, second_channels,
               first_scale, second_scale, starts, degree, max_out,
               alpha, pair_lambda, pair_mu, log_r, coefficients, absorption,
               velocity, omega, flight, start_norm, jmax, receiver_block,
-              cell_begin, cell_end):
+              cell_begin, cell_end, ge2_only):
     """Specialization of equation (*) for an exactly axisymmetric m=0 source."""
     nfreq = len(omega)
     nrec = receivers.shape[0]
@@ -211,7 +211,7 @@ def _apply_m0(points, receivers, looks, channels, second_channels,
                         weight = alpha[lam] * detector[detector_column] * rotation
                         if weight == 0.0:
                             continue
-                        for order in range(2):
+                        for order in range(1 if ge2_only else 0, 2):
                             for w in range(nfreq):
                                 c0 = coefficients[j, ell, p, 0, order, w]
                                 c1 = coefficients[j, ell, p, 1, order, w]
@@ -226,7 +226,8 @@ def _apply_m0(points, receivers, looks, channels, second_channels,
                             value = (first_scale * channels[cell, source_column, w]
                                      - second_scale * second_channels[cell, source_column, w])
                         value *= scale_phase[w]
-                        result[index, w, 0] += value * radial_sum[w, 0]
+                        if not ge2_only:
+                            result[index, w, 0] += value * radial_sum[w, 0]
                         result[index, w, 1] += value * radial_sum[w, 1]
     return result
 
@@ -236,7 +237,7 @@ def _apply(points, receivers, looks, channels, second_channels,
            first_scale, second_scale, starts, degree, max_m, max_out,
            alpha, pair_lambda, pair_mu, log_r, coefficients, absorption,
            velocity, omega, flight, start_norm, jmax, receiver_block,
-           cell_begin, cell_end):
+           cell_begin, cell_end, ge2_only):
     """Equation (*) for the requested (receiver, cell-window) pairs."""
     nfreq = len(omega)
     nrec = receivers.shape[0]
@@ -355,23 +356,23 @@ def _apply(points, receivers, looks, channels, second_channels,
                         mu_pair = pair_mu[p]
                         if mu_pair > min(ell, max_out):
                             continue
-                        for sign in range(-1, 2, 2):
-                            nu = sign * mu_pair
-                            if mu_pair == 0 and sign == -1:
-                                continue
-                            column = lam * lam + lam + nu
-                            weight = alpha[lam] * detector[column]
-                            if weight == 0.0:
-                                continue
-                            slot = nu + max_out
-                            for order in range(2):
-                                for w in range(nfreq):
-                                    c0 = coefficients[j, ell, p, 0, order, w]
-                                    c1 = coefficients[j, ell, p, 1, order, w]
-                                    c2 = coefficients[j, ell, p, 2, order, w]
-                                    c3 = coefficients[j, ell, p, 3, order, w]
-                                    radial = ((c0 * t + c1) * t + c2) * t + c3
-                                    channel_sum[slot, w, order] += weight * radial
+                        detector_centre = lam * lam + lam
+                        positive = alpha[lam] * detector[detector_centre + mu_pair]
+                        negative = (alpha[lam] * detector[detector_centre - mu_pair]
+                                    if mu_pair else 0.0)
+                        if positive == 0.0 and negative == 0.0:
+                            continue
+                        for order in range(1 if ge2_only else 0, 2):
+                            for w in range(nfreq):
+                                c0 = coefficients[j, ell, p, 0, order, w]
+                                c1 = coefficients[j, ell, p, 1, order, w]
+                                c2 = coefficients[j, ell, p, 2, order, w]
+                                c3 = coefficients[j, ell, p, 3, order, w]
+                                radial = ((c0 * t + c1) * t + c2) * t + c3
+                                if negative != 0.0:
+                                    channel_sum[max_out - mu_pair, w, order] += negative * radial
+                                if positive != 0.0:
+                                    channel_sum[max_out + mu_pair, w, order] += positive * radial
                     # ---- contract
                     for a in range(width):
                         for w in range(nfreq):
@@ -379,7 +380,7 @@ def _apply(points, receivers, looks, channels, second_channels,
                             if value == 0.0:
                                 continue
                             phase = scale_phase[w]
-                            for order in range(2):
+                            for order in range(1 if ge2_only else 0, 2):
                                 result[index, w, order] += (
                                     value * channel_sum[a, w, order] * phase)
     return result
@@ -455,7 +456,7 @@ class PreparedDirectionalKernel:
     def apply(self, source, receivers_m, look_directions, alpha, *,
               source_omega_per_ns, receiver_block=4,
               cell_begin=None, cell_end=None, second_source=None,
-              first_scale=1.0, second_scale=0.0):
+              first_scale=1.0, second_scale=0.0, ge2_only=False):
         """Return both scattered orders, shape (frequency, receiver, 2).
 
         ``cell_begin``/``cell_end`` optionally select one contiguous source-cell
@@ -537,6 +538,7 @@ class PreparedDirectionalKernel:
             self.coefficients, self.absorption_per_m, self.speed_m_per_ns,
             self.omega_per_ns, self.radial_phase == "flight",
             _start_norm_table(jmax), int(jmax), int(receiver_block), begin, end)
+        common += (bool(ge2_only),)
         if max_m == 0:
             result = _apply_m0(
                 local_points, local_receivers, local_looks, data, second_data,

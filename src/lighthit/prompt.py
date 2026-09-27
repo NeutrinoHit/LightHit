@@ -213,8 +213,8 @@ class PromptTransportResponse:
     (all arrival times); ``bins_orders_pe[:, :, k]`` the charge inside each
     bin of ``relative_time_edges_ns`` measured from ``time_origin_ns``. Their
     difference is the charge outside the window, reported per order by
-    :meth:`outside_window_pe`. Bins are filled for ``active`` modules only,
-    exactly as in :class:`~lighthit.transport.TransportResponse`.
+    :meth:`outside_window_pe`. Bins are filled for ``active`` modules by
+    default; ``compute_bins_for_all`` also fills inactive computed modules.
     """
     detector: DetectorArray
     relative_time_edges_ns: np.ndarray
@@ -444,7 +444,8 @@ def _source_elements(kernel, source):
 
 # ------------------------------------------------------------ main driver
 
-def transport_prompt(kernel, source, config: PromptConfig | None = None):
+def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
+                     compute_bins_for_all=False, selection_extra_charge=None):
     """Orders 0 and exactly 1 for ``source`` on ``kernel``'s detector.
 
     See the module docstring for the physics.  Uses the kernel's medium,
@@ -455,6 +456,8 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
         raise ImportError("transport_prompt requires the optional Numba accelerator; "
                           "install lighthit[accelerate]")
     config = config or PromptConfig()
+    if compute_bins_for_all and config.screen:
+        config = replace(config, screen=False)
     began = perf_counter()
     timings = {}
     jit_state = _jit_state()
@@ -467,6 +470,10 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
     coef, ipow, jpow, degree = acceptance_monomials(alpha)
     detector = kernel.detector
     positions = np.ascontiguousarray(detector.positions_m, float)
+    extra = (np.zeros(len(positions)) if selection_extra_charge is None else
+             np.asarray(selection_extra_charge, float))
+    if extra.shape != (len(positions),) or not np.isfinite(extra).all():
+        raise ValueError("selection_extra_charge must be finite per OM")
     looks = np.ascontiguousarray(-detector.orientations, float)
     areas = np.asarray(detector.effective_area_m2, float)
     edges = np.asarray(kernel.config.relative_time_edges_ns, float)
@@ -566,6 +573,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
         order1_meta = {"order1_spectral_cone": True,
                        "order1_by_wavelength": []}
         level = np.zeros(len(positions), dtype=np.int8)
+        spectral_tasks = []
         for lam, phase in enumerate(tables["phase_index"]):
             mask = elements.beta * phase > 1
             if not np.any(mask):
@@ -578,29 +586,86 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
                 if isinstance(source, CherenkovTrack) else
                 _element_segments(subset))
             single = {key: value[lam:lam + 1] for key, value in tables.items()}
+            spectral_tasks.append((lam, subset, lam_segments, single))
+
+        global_screen = (selection_extra_charge is not None
+                         and mode == "grouped" and config.screen and threshold > 0)
+        fine_work = work
+        coarse_total = None
+        if global_screen:
+            for lam, subset, lam_segments, single in spectral_tasks:
+                coarse_charge, _, coarse_meta = _order1(
+                    mode, kernel, source, subset, lam_segments,
+                    positions, looks, areas, origins, work, single, coef, ipow,
+                    jpow, degree, g, edges, config, charge[:, 0],
+                    coarse_only=True)
+                order1_charge += coarse_charge
+                for key, value in coarse_meta["timings"].items():
+                    timings[key] = timings.get(key, 0.0) + value
+            level[work] = 1
+            coarse_total = order1_charge.copy()
+            fine_work = work[(charge[work, 0] + extra[work]
+                              + config.screen_margin * np.maximum(
+                                  order1_charge[work], 0.0)) >= threshold]
+            order1_meta["order1_global_screen"] = {
+                "enabled": True, "fine_modules": len(fine_work),
+                "coarse_only_modules": len(work) - len(fine_work),
+                "margin": config.screen_margin}
+            order1_charge[fine_work] = 0.0
+
+        for lam, subset, lam_segments, single in spectral_tasks:
+            if not len(fine_work):
+                continue
             lam_charge, lam_bins, lam_meta = _order1(
                 mode, kernel, source, subset, lam_segments,
-                positions, looks, areas, origins, work, single, coef, ipow,
+                positions, looks, areas, origins, fine_work, single, coef, ipow,
                 jpow, degree, g, edges, replace(config, screen=False),
                 charge[:, 0])
-            order1_charge += lam_charge
+            order1_charge[fine_work] += lam_charge[fine_work]
             order1_bins += lam_bins
             lam_level = lam_meta.pop("order1_level", None)
             if lam_level is None:
                 lam_level = np.zeros(len(positions), dtype=np.int8)
-                lam_level[work] = 2
+                lam_level[fine_work] = 2
             level = np.maximum(level, lam_level)
             for key, value in lam_meta.pop("timings").items():
                 timings[key] = timings.get(key, 0.0) + value
             order1_meta["order1_by_wavelength"].append({
                 "wavelength_nm": float(tables["wavelength_nm"][lam]),
                 "source_elements": len(subset), **lam_meta})
+        if global_screen and len(fine_work):
+            ratio = coarse_total[fine_work] / np.maximum(
+                order1_charge[fine_work], 1e-300)
+            worst = float(np.min(ratio))
+            order1_meta["order1_global_screen"]["coarse_over_fine_ratio_min"] = worst
+            if worst * config.screen_margin < 1.0:
+                wider = 1.5 / max(worst, 1e-3)
+                extra_work = work[(level[work] == 1)
+                                  & (charge[work, 0] + extra[work]
+                                     + wider * np.maximum(coarse_total[work], 0.0)
+                                     >= threshold)]
+                if len(extra_work):
+                    order1_charge[extra_work] = 0.0
+                    for lam, subset, lam_segments, single in spectral_tasks:
+                        lam_charge, lam_bins, lam_meta = _order1(
+                            mode, kernel, source, subset, lam_segments,
+                            positions, looks, areas, origins, extra_work,
+                            single, coef, ipow, jpow, degree, g, edges,
+                            replace(config, screen=False), charge[:, 0])
+                        order1_charge[extra_work] += lam_charge[extra_work]
+                        order1_bins[extra_work] += lam_bins[extra_work]
+                        for key, value in lam_meta.pop("timings").items():
+                            timings[key] = timings.get(key, 0.0) + value
+                    level[extra_work] = 2
+                order1_meta["order1_global_screen"]["widened_modules"] = len(extra_work)
+                order1_meta["order1_global_screen"]["fine_modules"] = int((level == 2).sum())
+                order1_meta["order1_global_screen"]["coarse_only_modules"] = int((level == 1).sum())
         order1_meta["order1_level"] = level
     else:
         order1_charge, order1_bins, order1_meta = _order1(
             mode, kernel, source, elements, segments, positions, looks, areas,
             origins, work, tables, coef, ipow, jpow, degree, g, edges, config,
-            charge[:, 0])
+            charge[:, 0], selection_extra_charge=extra)
         timings.update(order1_meta.pop("timings"))
     charge[:, 1] = order1_charge
     level = order1_meta.pop("order1_level", None)
@@ -615,12 +680,14 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
 
     # ----------------------------------------------------- active and bins
     computed = inside.copy()
-    active = computed & (charge.sum(axis=1) >= threshold)
+    active = computed & (charge.sum(axis=1) + extra >= threshold)
     if threshold == 0:
         active = computed.copy()
+    if selection_extra_charge is not None and np.any(active & (level < 2)):
+        raise ValueError("prompt screen omitted an OM selected by the combined charge")
     stage = perf_counter()
     bins = np.zeros((len(positions), len(edges) - 1, 2))
-    active_index = np.flatnonzero(active)
+    active_index = work if compute_bins_for_all else np.flatnonzero(active)
     for lam in range(len(tables["wavelength_nm"])):
         band = kernel.medium.band(float(tables["wavelength_nm"][lam]))
         detector_scale = (tables["weight_nm"][lam] * areas[active_index]
@@ -636,7 +703,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
                                  relative_edges_ns=edges)
             bins[active_index, :, 0] += detector_scale[:, None] * value
     timings["order0_bins_seconds"] = perf_counter() - stage
-    bins[active, :, 1] = order1_bins[active]
+    bins[active_index, :, 1] = order1_bins[active_index]
     timings["elapsed_seconds"] = perf_counter() - began
 
     window = bins.sum(axis=1)
@@ -670,6 +737,8 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None):
         "max_distance_m": max_distance,
         "computed_modules": int(computed.sum()),
         "active_modules": int(active.sum()),
+        "bins_for_all_computed_modules": bool(compute_bins_for_all),
+        "selection_extra_charge_used": selection_extra_charge is not None,
         "omitted_beyond_max_distance": int((~inside).sum()),
         "omitted_conservative_bound_max_pe": float(upper[~inside].max()) if np.any(~inside) else 0.0,
         "tail_bound_relative": float(np.exp(-config.tail_exponent)),
@@ -765,7 +834,7 @@ def _min_distance_to_segments(positions, segments):
 
 def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             origins, work, tables, coef, ipow, jpow, degree, g, edges, config,
-            order0_charge):
+            order0_charge, *, coarse_only=False, selection_extra_charge=None):
     from . import _prompt_numba as kernels
     y_g = (1.0 - abs(g)) / (1.0 + abs(g)) if g != 0 else 1.0
     kappa = -tables["mut"] * tables["speed"]
@@ -854,6 +923,21 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             float(merge[2]), float(merge[3]), float(np.max(tables["speed"])),
             _blocks(len(targets)))
 
+    if coarse_only:
+        if mode != "grouped":
+            raise ValueError("coarse_only requires the grouped prompt algorithm")
+        stage = perf_counter()
+        coarse_config = replace(config, cell_m=config.screen_cell_m,
+                                pixel_face=config.screen_pixel_face,
+                                ring_nodes=config.screen_ring_nodes)
+        coarse = compress(elements, segments, coarse_config)
+        timings["order1_screen_compress_seconds"] = perf_counter() - stage
+        stage = perf_counter()
+        coarse_charge, _, _, _ = grouped(
+            coarse, work, (config.merge_theta_min, 0.3, 2.0, 0.1))
+        timings["order1_screen_eval_seconds"] = perf_counter() - stage
+        return coarse_charge, np.zeros((n, len(edges) - 1)), {"timings": timings}
+
     fine_merge = (config.merge_theta_min, config.merge_theta_ratio,
                   config.merge_tau_ns, config.merge_log_r)
     threshold = float(kernel.config.threshold_pe)
@@ -876,7 +960,10 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
         charge[work] = coarse_charge[work]
         level[work] = 1
         margin = float(config.screen_margin)
-        fine_work = work[order0_charge[work] + margin * coarse_charge[work] >= threshold]
+        extra = (np.zeros(n) if selection_extra_charge is None else
+                 np.asarray(selection_extra_charge, float))
+        fine_work = work[(order0_charge[work] + extra[work]
+                          + margin * coarse_charge[work]) >= threshold]
     stage = perf_counter()
     pencils = compress(elements, segments, config)
     timings["order1_compress_seconds"] = perf_counter() - stage

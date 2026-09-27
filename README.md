@@ -138,6 +138,39 @@ print(prompt.charge_pe, prompt.bins_pe, prompt.rate_pe_per_ns)
 This selects stored components; it does not skip the multiply-scattered solve
 or make the transport itself faster.
 
+For a shower, `transport_hybrid` instead computes orders 0 and 1 with the
+direct physical-time prompt solver and order >=2 with the directional RTE.
+It requires the Numba accelerator and a prepared directional cache. With the
+standard 321-frequency cache, only 65 selected nodes are applied by default:
+
+```python
+hybrid = kernel.transport_hybrid(shower, frequency_nodes=65)
+print(hybrid.charge_pe, hybrid.bins_pe)
+```
+
+`HybridTransportResponse.spectrum_ge2_pe` contains only the >=2 spectrum on
+the computed frequency grid. Prompt orders have exact time bins but no stored
+nonzero-frequency spectrum. The active OMs receive the full prompt calculation;
+the integrated order-1 charge for screened, inactive OMs is a coarse estimate
+and is identified by `metadata["prompt_order1_level"]`.
+For a screening control, pass
+`prompt_config=lh.PromptConfig(screen=False)`; this evaluates direct order 1
+for every OM and costs more time.
+
+To reduce the cache itself, build it on 65 frequencies and specify a separate
+321-node readout grid. The readout grid is used only after the expensive solve:
+
+```python
+config = lh.KernelConfig(
+    omega_per_ns=np.linspace(0.0, 1.2, 65),
+    readout_omega_per_ns=np.linspace(0.0, 1.2, 321),
+    cache_directory="hybrid-cache",
+    cache_policy="require",
+)
+kernel = lh.TransportKernel(medium, detector, config)
+hybrid = kernel.transport_hybrid(shower, frequency_nodes=65)
+```
+
 ## Configuring the calculation
 
 Numerical settings are collected in `KernelConfig`:

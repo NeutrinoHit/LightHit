@@ -77,6 +77,12 @@ def test_fused_apply_matches_the_numpy_definition(radial_phase, azimuthal_degree
         got = prepared.apply(source, receivers, looks, ALPHA,
                              source_omega_per_ns=omega, receiver_block=block)
         assert np.max(np.abs(got - want)) / np.max(np.abs(want)) < 1e-12
+        ge2 = prepared.apply(source, receivers, looks, ALPHA,
+                             source_omega_per_ns=omega, receiver_block=block,
+                             ge2_only=True)
+        assert np.count_nonzero(ge2[:, :, 0]) == 0
+        np.testing.assert_allclose(ge2[:, :, 1], got[:, :, 1], rtol=1e-12,
+                                   atol=1e-14)
 
 
 def test_fused_apply_on_a_frequency_subset():
@@ -120,6 +126,12 @@ def test_two_source_fields_share_one_directional_apply(azimuthal_degree):
                             source_omega_per_ns=omega, second_source=second,
                             first_scale=.7, second_scale=.2)
     np.testing.assert_allclose(actual, expected, rtol=2e-12, atol=1e-14)
+    ge2 = prepared.apply(first, receivers, looks, ALPHA,
+                         source_omega_per_ns=omega, second_source=second,
+                         first_scale=.7, second_scale=.2, ge2_only=True)
+    assert np.count_nonzero(ge2[:, :, 0]) == 0
+    np.testing.assert_allclose(ge2[:, :, 1], actual[:, :, 1],
+                               rtol=2e-12, atol=1e-14)
 
 
 def test_fused_ballistic_matches_the_numpy_twin():
