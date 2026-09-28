@@ -363,6 +363,7 @@ class TransportKernel:
         }
         self._acceptance = None
         self._directional_caches = {}
+        self._ge2_store = None
         self.last_build_report = CacheBuildReport()
 
     def register_method(self, name, function, *, experimental=True, description="user method"):
@@ -754,13 +755,26 @@ class TransportKernel:
                                 compute_bins_for_all=compute_bins_for_all,
                                 selection_extra_charge=selection_extra_charge)
 
-    def transport_hybrid(self, source, *, frequency_nodes=65, prompt_config=None):
+    def transport_hybrid(self, source, *, frequency_nodes=65, prompt_config=None,
+                         ge2_basis=None):
         """Prompt orders 0+1 and sparse-frequency RTE order >=2 for a shower.
 
         The existing directional cache may retain a denser frequency grid;
         only ``frequency_nodes`` entries are compiled and applied here.
         The physical-time prompt result is never replaced by an RTE spectrum.
+
+        ``ge2_basis=None`` keeps the reference cloud-in-cell source for order
+        >=2.  A :class:`lighthit.ShowerBasis` instead represents that source
+        on the axial-slice shower basis (:mod:`lighthit.shower_basis`); the
+        prompt orders, the RTE cache, the active-OM rule and the readout are
+        unchanged.
         """
+        if ge2_basis is not None:
+            from .shower_basis import transport_hybrid_basis
+            return transport_hybrid_basis(self, source, ge2_basis,
+                                          frequency_nodes=frequency_nodes,
+                                          prompt_config=prompt_config,
+                                          store=self.ge2_kernel_store())
         if not isinstance(source, (G4Shower, SyntheticShower, SpectralLightElements)):
             raise TypeError("transport_hybrid currently requires a shower source")
         if not isinstance(frequency_nodes, int) or isinstance(frequency_nodes, bool):
@@ -780,6 +794,21 @@ class TransportKernel:
             - response.metadata["prompt_elapsed_seconds"])
         response.metadata["elapsed_seconds"] = perf_counter() - began
         return response
+
+    def ge2_kernel_store(self, path=None):
+        """The prepared order >=2 kernels used by ``transport_hybrid(ge2_basis=...)``.
+
+        With ``path`` naming a directory written by
+        :meth:`lighthit.shower_basis.Ge2KernelStore.save`, the pack is memory
+        mapped instead of being rebuilt from the directional caches.  The
+        store is kept on the kernel and reused by every later event.
+        """
+        from .shower_basis import Ge2KernelStore
+        if path is not None:
+            self._ge2_store = Ge2KernelStore.load(path)
+        elif self._ge2_store is None:
+            self._ge2_store = Ge2KernelStore()
+        return self._ge2_store
 
     def _response(self, spectrum, components, charge, origins, active, method, metadata):
         return TransportResponse(

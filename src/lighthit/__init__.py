@@ -13,6 +13,7 @@ from .transport import (KernelConfig, CacheProgress, CacheBuildEntry,
                         HybridTransportResponse,
                         TransportComponent)
 from .prompt import PromptConfig, PromptTransportResponse, OrderNotComputedError
+from .shower_basis import ShowerBasis, Ge2KernelStore
 from .bgvd import BGVDModel, load_bgvd_model
 from .api import build
 from .viewer import viewer_payload, merge_event_viewers, write_event_viewer
@@ -24,6 +25,7 @@ __all__ = [
     "WavelengthQuadrature", "PointGreenSolver", "SolverSettings", "GreenResult",
     "single_scattering_rate", "SourcePose", "IsotropicFlash", "CherenkovTrack",
     "G4Shower", "SyntheticShower", "SpectralLightElements", "KernelConfig",
+    "ShowerBasis", "Ge2KernelStore",
     "CacheProgress", "CacheBuildEntry", "CacheBuildReport", "TransportKernel",
     "TransportResponse", "HybridTransportResponse", "TransportComponent",
     "PromptConfig", "PromptTransportResponse", "OrderNotComputedError",

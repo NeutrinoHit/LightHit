@@ -171,6 +171,35 @@ kernel = lh.TransportKernel(medium, detector, config)
 hybrid = kernel.transport_hybrid(shower, frequency_nodes=65)
 ```
 
+### Shower basis for order >=2
+
+The order >=2 source of a shower can instead be represented on an
+axial-slice basis: cubic slices along the shower axis (0.25 m), a
+five-point transverse moment stencil and the exact angular harmonics of the
+kernel configuration. Orders 0+1, the RTE cache, the active-OM rule and the
+readout are unchanged; only the order >=2 source differs:
+
+```python
+basis = lh.ShowerBasis()          # cell_m=0.25, cubic slices, stencil
+hybrid = kernel.transport_hybrid(shower, frequency_nodes=65, ge2_basis=basis)
+```
+
+The prepared order >=2 radial splines are kept on the kernel and reused by
+every later event. To start a job without rebuilding them, save them once and
+memory-map them afterwards:
+
+```python
+kernel.ge2_kernel_store().save("ge2-pack")      # after the first event
+kernel.ge2_kernel_store("ge2-pack")             # in a later process
+```
+
+On one BGVD cluster and a 100 GeV electron a warm event took 14 s instead of
+628 s on the same 4-core machine (1.9 instead of 5.6 GiB), with the same active
+OMs, order >=2 charge within 2e-4 and total time-bin L1 within 0.2 % of the
+default hybrid; the basis source is closer to a converged source reference
+than the default one. See `docs/research/shower-basis.md` for the measured
+errors, including 1 TeV electrons and muons with showers.
+
 ## Configuring the calculation
 
 Numerical settings are collected in `KernelConfig`:
