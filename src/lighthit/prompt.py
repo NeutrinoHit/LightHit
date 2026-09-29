@@ -445,7 +445,8 @@ def _source_elements(kernel, source):
 # ------------------------------------------------------------ main driver
 
 def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
-                     compute_bins_for_all=False, selection_extra_charge=None):
+                     compute_bins_for_all=False, selection_extra_charge=None,
+                     time_origin_ns=None):
     """Orders 0 and exactly 1 for ``source`` on ``kernel``'s detector.
 
     See the module docstring for the physics.  Uses the kernel's medium,
@@ -510,6 +511,10 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         mode = config.element_method
         if mode == "auto":
             mode = "segment" if len(elements) <= config.segment_max_elements else "grouped"
+    if time_origin_ns is not None:
+        origins = np.asarray(time_origin_ns, float)
+        if origins.shape != (len(positions),) or not np.isfinite(origins).all():
+            raise ValueError("time_origin_ns must be finite with one value per OM")
     timings["source_seconds"] = perf_counter() - stage
 
     # ---------------------------------------------------- module selection
@@ -746,7 +751,8 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
                             "order1": float(charge[:, 1].sum())},
         "window_charge_pe": {"order0": float(window[:, 0].sum()),
                              "order1": float(window[:, 1].sum())},
-        "time_origin": ("earliest straight-track emission and group flight"
+        "time_origin": ("caller-supplied per-OM origin" if time_origin_ns is not None
+                        else "earliest straight-track emission and group flight"
                         if isinstance(source, CherenkovTrack) else
                         "earliest element start and fastest group flight"),
         "ballistic": "identical to TransportKernel.transport: "

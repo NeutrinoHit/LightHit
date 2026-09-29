@@ -46,6 +46,37 @@ __all__ = ["compile_axial_slices"]
 
 
 @njit(cache=True, nogil=True, parallel=True)
+def earliest_element_arrival(receivers, starts, directions, lengths, start_ns,
+                             group_index):
+    """Per-OM lower bound on arrival from any moving source segment.
+
+    The emission time is at least ``start_ns`` and the optical path is at
+    least the distance to the segment.  This bound keeps a long source's
+    readout origin near its locally relevant light instead of tying every OM
+    to the first element of the entire event.
+    """
+    result = np.empty(len(receivers), np.float64)
+    flight = float(group_index) / 0.299792458
+    for receiver in prange(len(receivers)):
+        earliest = np.inf
+        for element in range(len(lengths)):
+            dx = receivers[receiver, 0] - starts[element, 0]
+            dy = receivers[receiver, 1] - starts[element, 1]
+            dz = receivers[receiver, 2] - starts[element, 2]
+            along = (dx * directions[element, 0] + dy * directions[element, 1]
+                     + dz * directions[element, 2])
+            along = min(max(along, 0.0), lengths[element])
+            dx -= along * directions[element, 0]
+            dy -= along * directions[element, 1]
+            dz -= along * directions[element, 2]
+            arrival = start_ns[element] + flight * np.sqrt(dx * dx + dy * dy + dz * dz)
+            if arrival < earliest:
+                earliest = arrival
+        result[receiver] = earliest
+    return result
+
+
+@njit(cache=True, nogil=True, parallel=True)
 def _cone_harmonics(vectors, cones, starts, aa, bb, max_m, out):
     """out[e, c] = P_l(mu_C,e) Y_lm(u_e), parallel over elements."""
     degree = len(starts) - 2
@@ -365,7 +396,7 @@ from ._directional_numba import _parity, _start_norm_table, _wigner_into  # noqa
 def _apply_multi(points, receivers, looks, channels0, channels2, scale0, scale2,
                  out_scale, starts, degree, max_m, max_out, alpha, pair_lambda, pair_mu,
                  log_r, coefficients, absorption, velocity, omega, flight, start_norm,
-                 jmax):
+                 jmax, radial_low, radial_high):
     """sum_lambda out_scale[lambda, d] * (s0 K field0 - s2 K field2)_lambda, order >=2.
 
     ``coefficients``: (lambda, radial interval, degree, pair, cubic power,
@@ -393,6 +424,8 @@ def _apply_multi(points, receivers, looks, channels0, channels2, scale0, scale2,
             dy = receivers[index, 1] - points[cell, 1]
             dz = receivers[index, 2] - points[cell, 2]
             radius = np.sqrt(dx * dx + dy * dy + dz * dz)
+            if radius < radial_low or radius > radial_high:
+                continue
             cosine = dz / radius
             if cosine > 1.0:
                 cosine = 1.0
@@ -504,13 +537,156 @@ def _apply_multi(points, receivers, looks, channels0, channels2, scale0, scale2,
     return result
 
 
+
+@njit(cache=True, nogil=True, parallel=True)
+def _apply_multi_spectral(points, receivers, looks, channels, out_scale, starts, degree, max_m, max_out, alpha, pair_lambda, pair_mu,
+                 log_r, coefficients, absorption, velocity, omega, flight, start_norm,
+                 jmax, radial_low, radial_high):
+    """Fused wavelength-dependent sources on a shared spatial point set, order >=2.
+
+    ``coefficients``: (lambda, radial interval, degree, pair, cubic power,
+    frequency).  Returns (receiver, frequency) complex.
+    """
+    nfreq = len(omega)
+    nrec = receivers.shape[0]
+    nlam = coefficients.shape[0]
+    npair = len(pair_lambda)
+    width = 2 * max_out + 1
+    result = np.zeros((nrec, nfreq), np.complex128)
+    root2 = np.sqrt(2.0)
+    for index in prange(nrec):
+        wigner = np.empty((degree + 1, width, max_m + 1), np.float64)
+        detector = np.empty((max_out + 1) * (max_out + 1), np.float64)
+        erow = np.empty((width, 2 * max_m + 1), np.float64)
+        rotated = np.empty((nlam, width, nfreq), np.complex128)
+        channel_sum = np.empty((width, nfreq), np.complex128)
+        cosines = np.empty(max_m + 1, np.float64)
+        sines = np.empty(max_m + 1, np.float64)
+        scale_phase = np.empty((nlam, nfreq), np.complex128)
+        for cell in range(points.shape[0]):
+            dx = receivers[index, 0] - points[cell, 0]
+            dy = receivers[index, 1] - points[cell, 1]
+            dz = receivers[index, 2] - points[cell, 2]
+            radius = np.sqrt(dx * dx + dy * dy + dz * dz)
+            if radius < radial_low or radius > radial_high:
+                continue
+            cosine = dz / radius
+            if cosine > 1.0:
+                cosine = 1.0
+            elif cosine < -1.0:
+                cosine = -1.0
+            phi = np.arctan2(dy, dx)
+            transverse = np.sqrt(dx * dx + dy * dy)
+            sine = transverse / radius
+            cp = 1.0 if transverse == 0.0 else dx / transverse
+            sp = 0.0 if transverse == 0.0 else dy / transverse
+            for n in range(max_m + 1):
+                cosines[n] = np.cos(n * phi)
+                sines[n] = np.sin(n * phi)
+            lx = looks[index, 0]
+            ly = looks[index, 1]
+            lz = looks[index, 2]
+            a1 = cosine * cp * lx + cosine * sp * ly - sine * lz
+            a2 = -sp * lx + cp * ly
+            a3 = sine * cp * lx + sine * sp * ly + cosine * lz
+            _detector_harmonics(a1, a2, a3, max_out, detector)
+            _wigner_into(degree, max_out, max_m, cosine, start_norm, jmax, wigner)
+            logr = np.log(radius)
+            j = np.searchsorted(log_r, logr, side='right') - 1
+            if j < 0:
+                j = 0
+            if j > len(log_r) - 2:
+                j = len(log_r) - 2
+            t = logr - log_r[j]
+            for lam in range(nlam):
+                scale = (out_scale[lam, index] * np.exp(-absorption[lam] * radius)
+                         / (4 * np.pi * radius * radius))
+                for w in range(nfreq):
+                    if flight:
+                        angle = omega[w] * radius / velocity[lam]
+                        scale_phase[lam, w] = scale * (np.cos(angle) + 1j * np.sin(angle))
+                    else:
+                        scale_phase[lam, w] = scale
+            for ell in range(degree + 1):
+                for a in range(width):
+                    for b in range(2 * max_m + 1):
+                        erow[a, b] = 0.0
+                erow[max_out, max_m] = wigner[ell, max_out, 0]
+                top_n = min(ell, max_m)
+                top_p = min(ell, max_out)
+                for n in range(1, top_n + 1):
+                    base = root2 * _parity(n) * wigner[ell, max_out, n]
+                    erow[max_out, max_m + n] = base * cosines[n]
+                    erow[max_out, max_m - n] = base * sines[n]
+                for p in range(1, top_p + 1):
+                    erow[max_out + p, max_m] = (root2 * _parity(p)
+                                                * wigner[ell, max_out + p, 0])
+                    for n in range(1, top_n + 1):
+                        cross = _parity(p) * wigner[ell, max_out + p, n]
+                        straight = wigner[ell, max_out - p, n]
+                        cc = _parity(n) * (cross + straight)
+                        ss = _parity(n) * (cross - straight)
+                        erow[max_out + p, max_m + n] = cc * cosines[n]
+                        erow[max_out + p, max_m - n] = cc * sines[n]
+                        erow[max_out - p, max_m + n] = -ss * sines[n]
+                        erow[max_out - p, max_m - n] = ss * cosines[n]
+                keep = min(ell, max_m)
+                centre = starts[ell] + min(ell, max_m)
+                for lam in range(nlam):
+                    for a in range(width):
+                        for w in range(nfreq):
+                            rotated[lam, a, w] = 0.0
+                for a in range(max_out - top_p, max_out + top_p + 1):
+                    for b in range(max_m - keep, max_m + keep + 1):
+                        factor = erow[a, b]
+                        if factor == 0.0:
+                            continue
+                        column = centre + (b - max_m)
+                        for lam in range(nlam):
+                            for w in range(nfreq):
+                                rotated[lam, a, w] += factor * channels[lam, cell, column, w]
+                for lam in range(nlam):
+                    for a in range(width):
+                        for w in range(nfreq):
+                            channel_sum[a, w] = 0.0
+                    for p in range(npair):
+                        lam_detector = pair_lambda[p]
+                        mu_pair = pair_mu[p]
+                        if mu_pair > top_p:
+                            continue
+                        detector_centre = lam_detector * lam_detector + lam_detector
+                        positive = alpha[lam_detector] * detector[detector_centre + mu_pair]
+                        negative = (alpha[lam_detector] * detector[detector_centre - mu_pair]
+                                    if mu_pair else 0.0)
+                        if positive == 0.0 and negative == 0.0:
+                            continue
+                        for w in range(nfreq):
+                            c0 = coefficients[lam, j, ell, p, 0, w]
+                            c1 = coefficients[lam, j, ell, p, 1, w]
+                            c2 = coefficients[lam, j, ell, p, 2, w]
+                            c3 = coefficients[lam, j, ell, p, 3, w]
+                            radial = ((c0 * t + c1) * t + c2) * t + c3
+                            if negative != 0.0:
+                                channel_sum[max_out - mu_pair, w] += negative * radial
+                            if positive != 0.0:
+                                channel_sum[max_out + mu_pair, w] += positive * radial
+                    for a in range(max_out - top_p, max_out + top_p + 1):
+                        for w in range(nfreq):
+                            value = rotated[lam, a, w]
+                            if value == 0.0:
+                                continue
+                            result[index, w] += value * channel_sum[a, w] * scale_phase[lam, w]
+    return result
+
 def apply_multi(bundle, source0, source2, receivers_m, look_directions, alpha, scale0,
-                scale2, out_scale, *, frequencies=None):
+                scale2, out_scale, *, frequencies=None, radial_window_m=None):
     """Order >=2 response summed over wavelengths; returns (frequency, receiver).
 
     ``bundle`` is a :class:`lighthit.shower_basis.Ge2KernelStore` bundle,
     ``scale0/scale2`` the two field weights and ``out_scale`` (lambda,
-    receiver) the detector scale of every wavelength.
+    receiver) the detector scale of every wavelength.  ``radial_window_m``
+    skips source points outside a per-receiver radial window inside the cache;
+    callers must check the omitted contribution before using this option.
     """
     coefficients = bundle["coefficients"]
     omega = bundle["omega"]
@@ -537,10 +713,17 @@ def apply_multi(bundle, source0, source2, receivers_m, look_directions, alpha, s
         np.atleast_2d(np.asarray(look_directions, float))))
     radial_low = np.exp(bundle["log_r"][0])
     radial_high = np.exp(bundle["log_r"][-1])
-    for receiver in local_receivers:
-        radius = np.linalg.norm(local_points - receiver, axis=1)
-        if np.any(radius < radial_low) or np.any(radius > radial_high):
-            raise ValueError("Source/receiver distances outside the cache")
+    if radial_window_m is None:
+        for receiver in local_receivers:
+            radius = np.linalg.norm(local_points - receiver, axis=1)
+            if np.any(radius < radial_low) or np.any(radius > radial_high):
+                raise ValueError("Source/receiver distances outside the cache")
+    else:
+        low, high = map(float, radial_window_m)
+        if (not np.isfinite(low) or not np.isfinite(high) or low < radial_low - 1e-9
+                or high > radial_high + 1e-9 or low >= high):
+            raise ValueError("radial window must lie inside the kernel cache")
+        radial_low, radial_high = low, high
     acceptance_degree = int(bundle["acceptance_degree"])
     alpha = np.ascontiguousarray(np.asarray(alpha, float)[:acceptance_degree + 1])
     jmax = max(max_m, acceptance_degree)
@@ -551,6 +734,71 @@ def apply_multi(bundle, source0, source2, receivers_m, look_directions, alpha, s
         np.ascontiguousarray(out_scale, dtype=float), starts, int(bundle["degree"]),
         int(max_m), acceptance_degree, alpha, bundle["pair_lambda"], bundle["pair_mu"],
         bundle["log_r"], coefficients, bundle["absorption"], bundle["speed"], omega,
-        bundle["phase"] == "flight", _start_norm_table(jmax), int(jmax))
+        bundle["phase"] == "flight", _start_norm_table(jmax), int(jmax),
+        radial_low, radial_high)
     carrier = np.exp(1j * omega * source0.reference_ns)
     return result.T * carrier[:, None]
+
+
+def apply_multi_spectral(bundle, sources, receivers_m, look_directions, alpha,
+                         out_scale, *, radial_window_m=None,
+                         channel_dtype=np.complex64):
+    """Apply multiple spectral source bands sharing exactly the same points.
+
+    The expensive receiver-to-source geometry is evaluated once per point.
+    Wavelength-dependent source harmonics and RTE splines are then contracted
+    inside the same Numba pass.  Each band's emission-time reference is aligned
+    before stacking; the returned spectrum uses absolute event time.
+    """
+    sources = list(sources)
+    if not sources or len(sources) != len(bundle["absorption"]):
+        raise ValueError("one spectral source is needed for each bundled wavelength")
+    first = sources[0]
+    omega = np.asarray(bundle["omega"])
+    points = np.asarray(first.points_m(), float)
+    for item in sources:
+        if (not np.array_equal(item.points_m(), points)
+                or item.channels.shape != first.channels.shape
+                or item.azimuthal_degree != first.azimuthal_degree
+                or not np.array_equal(item.frame.axis, first.frame.axis)):
+            raise ValueError("fused spectral sources must share points and angular layout")
+    reference = min(float(item.reference_ns) for item in sources)
+    channels = np.empty((len(sources),) + first.channels.shape, channel_dtype)
+    for index, item in enumerate(sources):
+        phase = np.exp(1j * omega * (item.reference_ns - reference))
+        channels[index] = item.channels * phase[None, None, :]
+    starts = [0]
+    for ell in range(first.degree + 1):
+        starts.append(starts[-1] + 2 * min(ell, first.azimuthal_degree) + 1)
+    starts = np.asarray(starts, np.int64)
+    centre = np.asarray(first.frame.centre_m, float)
+    local_points = np.ascontiguousarray(first.frame.rotate(points - centre))
+    receivers = np.atleast_2d(np.asarray(receivers_m, float))
+    local_receivers = np.ascontiguousarray(first.frame.rotate(receivers - centre))
+    local_looks = np.ascontiguousarray(first.frame.rotate(
+        np.atleast_2d(np.asarray(look_directions, float))))
+    radial_low = float(np.exp(bundle["log_r"][0]))
+    radial_high = float(np.exp(bundle["log_r"][-1]))
+    if radial_window_m is None:
+        for receiver in local_receivers:
+            radius = np.linalg.norm(local_points - receiver, axis=1)
+            if np.any(radius < radial_low) or np.any(radius > radial_high):
+                raise ValueError("Source/receiver distances outside the cache")
+    else:
+        low, high = map(float, radial_window_m)
+        if (not np.isfinite(low) or not np.isfinite(high) or low < radial_low - 1e-9
+                or high > radial_high + 1e-9 or low >= high):
+            raise ValueError("radial window must lie inside the kernel cache")
+        radial_low, radial_high = low, high
+    acceptance_degree = int(bundle["acceptance_degree"])
+    alpha = np.ascontiguousarray(np.asarray(alpha, float)[:acceptance_degree + 1])
+    max_m = min(int(first.azimuthal_degree), int(bundle["degree"]))
+    jmax = max(max_m, acceptance_degree)
+    result = _apply_multi_spectral(
+        local_points, local_receivers, local_looks, np.ascontiguousarray(channels),
+        np.ascontiguousarray(out_scale, float), starts, int(bundle["degree"]),
+        int(max_m), acceptance_degree, alpha, bundle["pair_lambda"], bundle["pair_mu"],
+        bundle["log_r"], bundle["coefficients"], bundle["absorption"],
+        bundle["speed"], omega, bundle["phase"] == "flight",
+        _start_norm_table(jmax), int(jmax), radial_low, radial_high)
+    return result.T * np.exp(1j * omega * reference)[:, None]

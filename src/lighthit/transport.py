@@ -739,7 +739,7 @@ class TransportKernel:
         return selected.function(source, method=method)
 
     def transport_prompt(self, source, config=None, *, compute_bins_for_all=False,
-                         selection_extra_charge=None):
+                         selection_extra_charge=None, time_origin_ns=None):
         """Prompt signal: scattering orders 0 and exactly 1, without any RTE cache.
 
         Returns a :class:`lighthit.prompt.PromptTransportResponse` whose
@@ -753,7 +753,8 @@ class TransportKernel:
         from .prompt import transport_prompt
         return transport_prompt(self, source, config,
                                 compute_bins_for_all=compute_bins_for_all,
-                                selection_extra_charge=selection_extra_charge)
+                                selection_extra_charge=selection_extra_charge,
+                                time_origin_ns=time_origin_ns)
 
     def transport_hybrid(self, source, *, frequency_nodes=65, prompt_config=None,
                          ge2_basis=None):

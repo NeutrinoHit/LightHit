@@ -176,8 +176,8 @@ hybrid = kernel.transport_hybrid(shower, frequency_nodes=65)
 The order >=2 source of a shower can instead be represented on an
 axial-slice basis: cubic slices along the shower axis (0.25 m), a
 five-point transverse moment stencil and the exact angular harmonics of the
-kernel configuration. Orders 0+1, the RTE cache, the active-OM rule and the
-readout are unchanged; only the order >=2 source differs:
+kernel configuration. For compact showers, orders 0+1, the RTE cache, the
+active-OM rule and the readout are unchanged; only the order >=2 source differs:
 
 ```python
 basis = lh.ShowerBasis()          # cell_m=0.25, cubic slices, stencil
@@ -199,6 +199,32 @@ OMs, order >=2 charge within 2e-4 and total time-bin L1 within 0.2 % of the
 default hybrid; the basis source is closer to a converged source reference
 than the default one. See `docs/research/shower-basis.md` for the measured
 errors, including 1 TeV electrons and muons with showers.
+
+For a long G4 muon source, the basis now uses a separate 3–300 m source
+window for each OM and sums the zero-frequency charge before selecting active
+modules. An explicitly selected nearly straight track can use the axial
+`m=0` channel while its secondaries keep the shower basis:
+
+```python
+hybrid = kernel.transport_hybrid(
+    muon_event_source, frequency_nodes=65,
+    ge2_basis=lh.ShowerBasis(track_uid=primary_muon_uid))
+```
+
+The track option is an approximation and remains opt-in. See
+`docs/research/long-muon-radial-windows.md` for the NTSim checks, cutoff
+comparison, timing, memory and current limitations.
+
+The same `ShowerBasis` also supports `cone_model="spectral"`: it applies the
+Cherenkov threshold and cone angle separately at every wavelength node.
+The existing RTE cache and prepared kernel pack are reused. On the checked
+100 GeV NTSim electron it took 12.2 s versus 116 s for the spectral hybrid,
+with 26 matching active OMs. See `docs/research/spectral-shower-basis.md`
+for the formula, per-OM accuracy and NTSim run commands.
+The explicitly selected spectral muon route can additionally fuse wavelength
+bands and use 33 of the prepared 65 frequencies; on two checked 100 GeV G4
+muons this preserved the active OMs and kept order >=2 time-bin L1 differences
+below 3% on bright OMs. See `docs/research/muon-fast-spectral.md`.
 
 ## Configuring the calculation
 

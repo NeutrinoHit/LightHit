@@ -18,41 +18,51 @@ import numpy as np
 
 
 def compare(reference_path, candidate_path, output):
-    with np.load(reference_path, allow_pickle=False) as a, np.load(
-            candidate_path, allow_pickle=False) as b:
-        active = a["active"] | b["active"]
-        bright = np.flatnonzero(active)
-        bright = bright[np.argsort(-a["charge"][bright].sum(axis=1))[:10]]
-        result = {
-            "reference": str(reference_path), "candidate": str(candidate_path),
-            "active_reference": int(a["active"].sum()),
-            "active_candidate": int(b["active"].sum()),
-            "active_lost": int((a["active"] & ~b["active"]).sum()),
-            "active_gained": int((b["active"] & ~a["active"]).sum()),
-            "prompt_charge_bitwise": bool(np.array_equal(a["charge"][:, :2],
-                                                          b["charge"][:, :2])),
-            "prompt_bins_bitwise": bool(np.array_equal(a["bins"][:, :, :2],
-                                                        b["bins"][:, :, :2])),
-        }
-        for name, columns in (("ge2", [2]), ("total", [0, 1, 2])):
-            qa, qb = a["charge"][:, columns].sum(1), b["charge"][:, columns].sum(1)
-            ba, bb = a["bins"][:, :, columns].sum(2), b["bins"][:, :, columns].sum(2)
-            dq = np.abs(qb - qa)
-            db = np.abs(bb - ba)
-            result[name] = {
-                "charge_max_abs_pe": float(dq.max()),
-                "charge_max_rel_bright": float((dq[bright] /
-                    np.maximum(np.abs(qa[bright]), 1e-300)).max()),
-                "bins_l1_max_bright": float((db[bright].sum(1) /
-                    np.maximum(np.abs(ba[bright]).sum(1), 1e-300)).max()),
-                "bins_l1_global": float(db.sum() /
-                    max(np.abs(ba).sum(), 1e-300)),
+    def read_response(path):
+        with np.load(path, allow_pickle=False) as archive:
+            return {
+                "charge": archive["charge"] if "charge" in archive
+                          else archive["charge_components_pe"],
+                "bins": archive["bins"] if "bins" in archive
+                        else archive["components_pe"],
+                "active": archive["active"],
             }
-        edges = np.arange(-60., 745., 5.)
-        early = (edges[:-1] >= 0) & (edges[1:] <= 20)
-        result["early_0_20ns_max_abs_pe"] = float(np.abs(
-            a["bins"][:, early].sum((1, 2))
-            - b["bins"][:, early].sum((1, 2))).max())
+    a, b = read_response(reference_path), read_response(candidate_path)
+    active = a["active"] | b["active"]
+    bright = np.flatnonzero(active)
+    bright = bright[np.argsort(-a["charge"][bright].sum(axis=1))[:10]]
+    result = {
+        "reference": str(reference_path), "candidate": str(candidate_path),
+        "active_reference": int(a["active"].sum()),
+        "active_candidate": int(b["active"].sum()),
+        "active_lost": int((a["active"] & ~b["active"]).sum()),
+        "active_gained": int((b["active"] & ~a["active"]).sum()),
+        "prompt_charge_bitwise": bool(np.array_equal(a["charge"][:, :2],
+                                                      b["charge"][:, :2])),
+        "prompt_charge_bitwise_active": bool(np.array_equal(
+            a["charge"][active, :2], b["charge"][active, :2])),
+        "prompt_bins_bitwise": bool(np.array_equal(a["bins"][:, :, :2],
+                                                    b["bins"][:, :, :2])),
+    }
+    for name, columns in (("ge2", [2]), ("total", [0, 1, 2])):
+        qa, qb = a["charge"][:, columns].sum(1), b["charge"][:, columns].sum(1)
+        ba, bb = a["bins"][:, :, columns].sum(2), b["bins"][:, :, columns].sum(2)
+        dq = np.abs(qb - qa)
+        db = np.abs(bb - ba)
+        result[name] = {
+            "charge_max_abs_pe": float(dq.max()),
+            "charge_max_rel_bright": float((dq[bright] /
+                np.maximum(np.abs(qa[bright]), 1e-300)).max()),
+            "bins_l1_max_bright": float((db[bright].sum(1) /
+                np.maximum(np.abs(ba[bright]).sum(1), 1e-300)).max()),
+            "bins_l1_global": float(db.sum() /
+                max(np.abs(ba).sum(), 1e-300)),
+        }
+    edges = np.arange(-60., 745., 5.)
+    early = (edges[:-1] >= 0) & (edges[1:] <= 20)
+    result["early_0_20ns_max_abs_pe"] = float(np.abs(
+        a["bins"][:, early].sum((1, 2))
+        - b["bins"][:, early].sum((1, 2))).max())
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(result, indent=2))
@@ -72,10 +82,24 @@ def main():
     parser.add_argument("--position", type=float, nargs=3, default=(5., -269.5, 330.))
     parser.add_argument("--direction", type=float, nargs=3, default=(.35, -.20, .915))
     parser.add_argument("--cone-model", choices=("frozen", "spectral"), default="frozen")
+    parser.add_argument("--radial-high", type=float,
+                        help="Optional radial cutoff within the prepared cache, in metres")
+    parser.add_argument("--tail-tolerance-pe", type=float, default=1e-4,
+                        help="Maximum estimated omitted charge per OM")
+    parser.add_argument("--track-uid", type=int,
+                        help="Explicit UID of a nearly straight primary track for the m=0 route")
+    parser.add_argument("--track-cell-m", type=float, default=0.5)
+    parser.add_argument("--track-transverse", choices=("stencil", "collapse"),
+                        default="stencil")
+    parser.add_argument("--secondary-cell-m", type=float, default=0.5)
+    parser.add_argument("--spectral-fusion", action="store_true",
+                        help="fuse wavelength bands sharing spatial source points")
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--pack", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--frequency-nodes", type=int, default=65,
+                        help="expensive RTE frequencies selected from the prepared cache")
     parser.add_argument("--reference", type=Path)
     parser.add_argument("--candidate", type=Path)
     args = parser.parse_args()
@@ -126,17 +150,26 @@ def main():
         source = source_from_event(event, cone_model=args.cone_model,
                                    max_phase_index=phase_max)
     print("LightHit", lh.__version__, "source_elements", len(source.elements), flush=True)
+    basis = lh.ShowerBasis(radial_high_m=args.radial_high,
+                           radial_tail_tolerance_pe=args.tail_tolerance_pe,
+                           track_uid=args.track_uid, track_cell_m=args.track_cell_m,
+                           track_transverse=args.track_transverse,
+                           secondary_cell_m=args.secondary_cell_m,
+                           spectral_fusion=args.spectral_fusion)
     args.output.mkdir(parents=True, exist_ok=True)
     for trial in range(args.repeat):
         start = perf_counter()
         if args.method == "hybrid":
-            response = kernel.transport_hybrid(source, frequency_nodes=65)
+            response = kernel.transport_hybrid(source,
+                                               frequency_nodes=args.frequency_nodes)
         elif args.method == "basis":
-            response = kernel.transport_hybrid(source, frequency_nodes=65,
-                                               ge2_basis=lh.ShowerBasis())
+            response = kernel.transport_hybrid(source,
+                                               frequency_nodes=args.frequency_nodes,
+                                               ge2_basis=basis)
         else:
-            response = transport_hybrid_basis(kernel, source, lh.ShowerBasis(),
-                                              frequency_nodes=65, representation="cells")
+            response = transport_hybrid_basis(kernel, source, basis,
+                                              frequency_nodes=args.frequency_nodes,
+                                              representation="cells")
         wall = perf_counter() - start
         prefix = args.output / f"{args.method}-{trial}"
         np.savez_compressed(prefix.with_suffix(".npz"),
