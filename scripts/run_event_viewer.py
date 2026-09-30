@@ -22,7 +22,7 @@ from scipy.spatial.transform import Rotation
 from lighthit import SolverSettings, __version__, synthetic_medium
 from lighthit.cache import CacheGrid, ResponseCache
 from lighthit.readout import inverse_bins
-from lighthit.viewer import SCHEMA, write_event_viewer
+from lighthit.viewer import SCHEMA, source_timing, write_event_viewer
 from lighthit.experimental.axial_source import AxisFrame
 from lighthit.experimental.axial_fast import PreparedAxialKernel, compile_axial_source_fast
 from lighthit.experimental.ballistic_fast import (vectorised_ballistic_fast,
@@ -115,9 +115,15 @@ def source_front(elements, receivers, medium):
 
 
 def source_display(elements, frame, label, shape):
-    return [{"type": "axis", "position_m": frame.centre_m.tolist(),
-             "direction": frame.axis.tolist(), "extent_m": float(elements.extent_m),
-             "shape": shape, "label": label}]
+    display = {"type": "axis", "position_m": frame.centre_m.tolist(),
+               "direction": frame.axis.tolist(), "extent_m": float(elements.extent_m),
+               "shape": shape, "label": label}
+    # emission time along the axis on the detector clock: the viewer animates
+    # the muon head / shower spindle with it
+    timing = source_timing(elements, frame.centre_m, frame.axis, elements.extent_m)
+    if timing is not None:
+        display["timing"] = timing
+    return [display]
 
 
 def run_shower(path, event_index, elements, cache, prepared, zero_prepared,

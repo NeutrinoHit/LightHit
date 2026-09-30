@@ -17,11 +17,12 @@
       <label>Component<select id="part"><option value="all">Total</option><option value="prompt">0+1 · prompt</option><option value="0">Unscattered</option><option value="1">One scattering</option><option value="2">Two or more</option></select></label>
       <label>Display<select id="display"><option value="raw">Raw bins</option><option value="smooth">3 ns Gaussian</option><option value="both">Both</option></select></label>
       <label>Time bins<select id="rebin"><option value="1">Original</option><option value="2">Merge ×2</option><option value="4">Merge ×4</option></select></label>
+      <label>Clock<select id="clock"><option value="detector">Detector clock · source synced</option><option value="om">Per-OM origin</option></select></label>
       <label>Time mode<select id="time-mode"><option value="frame">Current bin</option><option value="cumulative">Cumulative</option><option value="integrated">Full signal</option></select></label>
       <label>OM scale<input id="gain" type="range" min="0.4" max="3" step="0.1" value="1"></label>
     </section>
     <section class="workspace">
-      <article class="panel geometry-panel"><div class="panel-title"><h2>Geometry and signal evolution</h2><span>Click an OM</span></div><div id="geometry"></div><div class="time-control"><button id="play">▶ Play</button><input id="time" type="range" min="0" value="0"><output id="time-label"></output><button id="all-time">Full signal</button></div><p class="caption">Size shows absolute signed signal; colour uses sign·log₁₀. Negative Fourier bins are preserved.</p></article>
+      <article class="panel geometry-panel"><div class="panel-title"><h2>Geometry and signal evolution</h2><span>Click an OM</span></div><div id="geometry"></div><div class="time-control"><button id="play">▶ Play</button><input id="time" type="range" min="0" value="0"><output id="time-label"></output><button id="all-time">Full signal</button></div><p class="caption">Size shows absolute signed signal; colour uses sign·log₁₀. Negative Fourier bins are preserved. On the detector clock the gold track head or shower spindle moves with the time slider; its afterglow is display-only.</p></article>
       <article class="panel waveform-panel"><div class="panel-title"><h2>Selected OM</h2><label><input id="absolute" type="checkbox"> Absolute time</label></div><label>Optical module<select id="module"></select></label><div id="waveform"></div><dl id="details"></dl><p class="caption">The 3 ns view redistributes stored bin integrals assuming uniform signal within each raw bin. It is display-only, not an exact detector response; raw signed bins remain available.</p></article>
     </section>
     <section class="panel heatmap-panel"><div class="panel-title"><h2>Time histograms for all OMs</h2><span id="heatmap-mode">Raw bins · click a row</span></div><div id="heatmap"></div><p class="caption">In Both mode, the waveform overlays both views; the map and animation use the 3 ns display. Smoothing and merging cannot recover frequencies above ωmax or change the integrated charge at ω=0.</p></section>
@@ -30,6 +31,7 @@
   </main>
   <script id="result" type="application/json">__RESULT_JSON__</script>
   <script>__VIEWER_SMOOTHING_JS__</script>
+  <script>__VIEWER_SOURCE_JS__</script>
   <script>__VIEWER_JS__</script>
 </body>
 </html>

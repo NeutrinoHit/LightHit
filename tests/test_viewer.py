@@ -11,8 +11,8 @@ from scipy.special import ndtr
 
 from lighthit import CherenkovTrack, DetectorArray, IsotropicFlash
 from lighthit.viewer import (SCHEMA, load_event_result, save_event_result,
-                             merge_event_viewers, validate_event_viewer, viewer_payload,
-                             write_event_viewer)
+                             merge_event_viewers, source_timing, validate_event_viewer,
+                             viewer_payload, write_event_viewer)
 
 
 def payload():
@@ -201,3 +201,105 @@ def test_invalid_payload_is_rejected(mutation):
     mutation(value)
     with pytest.raises(ValueError):
         validate_event_viewer(value)
+
+
+def _timed(payload_value, **timing):
+    source = payload_value["events"][0]["sources"][0]
+    source["timing"] = {"s_m": [-2.0, 0.0, 2.0], "t_ns": [0.0, 6.0, 12.0],
+                        "weight": [1.0, 1.0, 1.0], **timing}
+    return payload_value
+
+
+def test_track_payload_carries_emission_timing_on_the_detector_clock():
+    detector = DetectorArray(
+        payload()["detector"]["positions_m"], [[0., 0., 1.]] * 2, .05,
+        lambda x: np.ones_like(np.asarray(x, float)),
+        lambda w: np.ones_like(np.asarray(w, float)))
+    value = payload()["events"][0]
+    response = SimpleNamespace(
+        detector=detector, relative_time_edges_ns=np.array([-1., 0., 1., 2.]),
+        time_origin_ns=np.array([10., 11.]), active=np.array([True, False]),
+        components_pe=np.asarray(value["components"]),
+        charge_components_pe=np.asarray(value["charge_components"]), metadata={})
+    track = CherenkovTrack.centered([1., 2., 3.], [0., 0., 1.], 30., time_ns=5.)
+    timing = viewer_payload(response, source=track)["events"][0]["sources"][0]["timing"]
+    assert timing["s_m"][0] == -15. and timing["s_m"][-1] == 15.
+    assert timing["t_ns"][0] == 5.  # start of the track, at time_ns
+    np.testing.assert_allclose(np.diff(timing["t_ns"]) / np.diff(timing["s_m"]),
+                               1 / 0.299792458)
+
+
+def test_source_timing_is_a_relativistic_front_weighted_by_photon_yield():
+    z = np.linspace(-3., 3., 40)
+    elements = SimpleNamespace(
+        midpoints_m=np.column_stack((np.zeros_like(z), np.zeros_like(z), z)),
+        photons=np.exp(-0.5 * z ** 2), length_m=np.full(len(z), .15),
+        start_ns=20. + z / 0.299792458, end_ns=20. + (z + .15) / 0.299792458)
+    timing = source_timing(elements, [0., 0., 0.], [0., 0., 1.], 3.)
+    slope = np.polyfit(timing["s_m"], timing["t_ns"], 1)[0]
+    assert slope == pytest.approx(1 / 0.299792458, rel=1e-6)
+    assert max(timing["weight"]) == 1.
+    assert timing["s_m"][np.argmax(timing["weight"])] == pytest.approx(0., abs=.1)
+
+
+@pytest.mark.parametrize("bad", [
+    {"t_ns": [0.0, 6.0]}, {"t_ns": [0.0, 9.0, 3.0]}, {"s_m": [0.0, 0.0, 2.0]},
+    {"weight": [1.0, -1.0, 1.0]}, {"t_ns": [0.0, float("nan"), 3.0]}])
+def test_invalid_source_timing_is_rejected(bad):
+    with pytest.raises(ValueError, match="timing"):
+        validate_event_viewer(_timed(payload(), **bad))
+    validate_event_viewer(_timed(payload()))  # and the good block passes
+    validate_event_viewer(_timed(payload(), t_ns=[12.0, 6.0, 0.0]))  # reversed motion
+
+
+def test_viewer_has_a_detector_clock_and_source_animation(tmp_path):
+    path = write_event_viewer(_timed(payload()), tmp_path / "viewer.html")
+    text = path.read_text()
+    assert 'id="clock"' in text and "Detector clock" in text
+    assert "LightHitViewerSource" in text and "__VIEWER_SOURCE_JS__" not in text
+    assert json.loads((tmp_path / "viewer.json").read_text())[
+        "events"][0]["sources"][0]["timing"]["t_ns"] == [0.0, 6.0, 12.0]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is unavailable")
+def test_source_animation_helper_moves_a_head_and_bins_on_the_detector_clock():
+    helper = Path(__file__).resolve().parents[1] / "src/lighthit/assets/event_viewer_source.js"
+    source = {"position_m": [0, 0, 0], "direction": [0, 0, 1], "shape": "track",
+              "timing": {"s_m": [-2, 0, 2], "t_ns": [12, 6, 0]}}  # moves against +z
+    script = (
+        f"const s=require({json.dumps(str(helper))});const p=s.prepare({json.dumps(source)});"
+        "const f=s.frame(p,3);"
+        "console.log(JSON.stringify({rev:p.reversed,head:s.head(p,3),before:s.head(p,-1),"
+        "after:s.head(p,13),hidden:s.frame(p,-Infinity).size,last:f.size.at(-1),"
+        "bins:[-1,0,4.9,5,10].map(x=>s.binAt([0,5,10],x)),"
+        "range:s.clockRange([0,10],[[0,1,0],[0,0,2]],[0,5,10],[3,20])}));")
+    out = json.loads(subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                                    check=True).stdout)
+    assert out["rev"] is True
+    np.testing.assert_allclose(out["head"], [0, 0, 1])  # t=3 is halfway from s=2 to s=0
+    assert out["before"] is None and out["after"] is None
+    assert set(out["hidden"]) == {0} and out["last"] > 0
+    assert out["bins"] == [-1, 0, 0, 1, 2]
+    assert out["range"]["t0"] < 3 < 20 < out["range"]["t1"]
+
+
+def test_straight_muon_selection_shows_a_track_not_a_spindle():
+    z = np.linspace(-100., 100., 30)
+    elements = SimpleNamespace(
+        midpoints_m=np.column_stack((np.zeros_like(z), np.zeros_like(z), z)),
+        photons=np.ones_like(z), length_m=np.full(len(z), 7.), start_ns=20. + z / .3,
+        end_ns=20. + (z + 7.) / .3)
+    from lighthit.viewer import _display_sources
+    shower = SimpleNamespace(elements=elements)
+    assert _display_sources(None, {}) == []
+    plain = {"type": "axis", "shape": "spindle", "label": "G4 shower"}
+    import lighthit.viewer as viewer
+    original = viewer._display_source
+    viewer._display_source = lambda source: [dict(plain)]
+    try:
+        assert _display_sources(shower, {})[0]["shape"] == "spindle"
+        assert _display_sources(shower, {"track_uid": None})[0]["shape"] == "spindle"
+        for metadata in ({"track_uid": 0}, {"automatic_track_selection": {"reason": "x"}}):
+            assert _display_sources(shower, metadata)[0]["shape"] == "track"
+    finally:
+        viewer._display_source = original

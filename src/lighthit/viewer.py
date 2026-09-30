@@ -5,6 +5,11 @@ track, a point flash and a future source model all provide the same three
 response components on the same detector geometry.  Signed Fourier-inversion
 bins are preserved; the viewer applies a signed-log colour transform only for
 display and never changes stored values.
+
+Axis sources may carry an optional ``timing`` block (emission time along the
+axis on the detector clock, the same clock as ``time_origin_ns``).  The viewer
+uses it to animate a moving track head or a growing shower spindle in step
+with the detector response; older payloads without it stay valid and static.
 """
 from importlib.resources import files
 from pathlib import Path
@@ -23,6 +28,41 @@ def _identifier(detector, *names, default):
     return np.asarray(default, int).tolist()
 
 
+LIGHT_SPEED_M_PER_NS = 0.299792458
+
+
+def source_timing(elements, centre_m, axis, half_m, bins=48):
+    """Axial emission timing of light elements, for the viewer animation.
+
+    Returns ``s_m`` (bin centres along ``axis`` from ``centre_m``), ``t_ns``
+    (emission time on the detector clock) and ``weight`` (relative photon
+    yield, maximum 1).  The time is a weighted straight-line fit of the element
+    emission times against ``s``: a relativistic source is a front moving along
+    its axis, and the fit keeps that front monotonic.  Display data only.
+    """
+    axis = np.asarray(axis, float)
+    axis = axis / np.linalg.norm(axis)
+    s = (elements.midpoints_m - np.asarray(centre_m, float)) @ axis
+    length = np.asarray(elements.length_m, float)
+    photons = (np.asarray(elements.photons, float) if hasattr(elements, "photons")
+               else np.asarray(elements.coefficient0, float) * length)
+    time = 0.5 * (np.asarray(elements.start_ns, float) + np.asarray(elements.end_ns, float))
+    edges = np.linspace(-half_m, half_m, bins + 1)
+    index = np.clip(np.digitize(s, edges) - 1, 0, bins - 1)
+    weight = np.bincount(index, photons, bins)
+    if np.count_nonzero(weight) < 2:
+        return None
+    centres = 0.5 * (edges[1:] + edges[:-1])
+    filled = weight > 0
+    mean_s = np.bincount(index, photons * s, bins)[filled] / weight[filled]
+    mean_time = np.bincount(index, photons * time, bins)[filled] / weight[filled]
+    slope, offset = np.polyfit(mean_s, mean_time, 1, w=np.sqrt(weight[filled]))
+    if abs(slope) < 1e-6:  # all light in one instant: fall back to a beta = 1 front
+        slope = 1.0 / LIGHT_SPEED_M_PER_NS
+    return {"s_m": centres.tolist(), "t_ns": (offset + slope * centres).tolist(),
+            "weight": (weight / weight.max()).tolist()}
+
+
 def _display_source(source):
     """Portable viewer description for public source objects we can show exactly."""
     if source is None:
@@ -35,19 +75,42 @@ def _display_source(source):
     if isinstance(source, CherenkovTrack):
         direction = np.asarray(source.direction, float)
         direction /= np.linalg.norm(direction)
+        half = float(source.length_m) / 2
+        along = np.linspace(-half, half, 64)
         return [{"type": "axis", "shape": "track",
                  "position_m": (np.asarray(source.start_m, float)
-                                + 0.5 * source.length_m * direction).tolist(),
-                 "direction": direction.tolist(), "extent_m": float(source.length_m) / 2,
-                 "label": "Cherenkov track"}]
+                                + half * direction).tolist(),
+                 "direction": direction.tolist(), "extent_m": half,
+                 "label": "Cherenkov track",
+                 "timing": {"s_m": along.tolist(),
+                            "t_ns": (source.time_ns + (along + half)
+                                     / (source.beta * LIGHT_SPEED_M_PER_NS)).tolist(),
+                            "weight": [1.0] * len(along)}}]
     if isinstance(source, (G4Shower, SyntheticShower)):
-        return [{"type": "axis", "shape": "spindle",
-                 "position_m": source.centroid_m.tolist(),
-                 "direction": source.principal_axis.tolist(),
-                 "extent_m": float(source.extent_m),
-                 "label": ("G4 shower" if isinstance(source, G4Shower)
-                           else "synthetic shower")}]
+        display = {"type": "axis", "shape": "spindle",
+                   "position_m": source.centroid_m.tolist(),
+                   "direction": source.principal_axis.tolist(),
+                   "extent_m": float(source.extent_m),
+                   "label": ("G4 shower" if isinstance(source, G4Shower)
+                             else "synthetic shower")}
+        timing = source_timing(source.elements, source.centroid_m,
+                               source.principal_axis, source.extent_m)
+        if timing is not None:
+            display["timing"] = timing
+        return [display]
     return []
+
+
+def _display_sources(source, metadata):
+    """Display sources; a transport that followed one straight muon shows a track."""
+    sources = _display_source(source)
+    metadata = metadata or {}
+    if metadata.get("automatic_track_selection") or metadata.get("track_uid") is not None:
+        for item in sources:
+            if item.get("shape") == "spindle":
+                item["shape"] = "track"
+                item["label"] = "G4 track"
+    return sources
 
 
 def viewer_payload(response, *, source=None, event_id="event", label=None,
@@ -85,7 +148,7 @@ def viewer_payload(response, *, source=None, event_id="event", label=None,
         "events": [{
             "event_id": str(event_id),
             "label": str(label if label is not None else event_id),
-            "sources": _display_source(source),
+            "sources": _display_sources(source, response.metadata),
             "time_origin_ns": response.time_origin_ns.tolist(),
             "active": response.active.tolist(),
             "components": np.asarray(components).tolist(),
@@ -161,7 +224,26 @@ def validate_event_viewer(result):
                 if (direction.shape != (3,) or not np.isfinite(direction).all()
                         or not np.isclose(np.linalg.norm(direction), 1, atol=1e-10)):
                     raise ValueError(f"event {identifier}: invalid source direction")
+                if source.get("timing") is not None:
+                    _validate_timing(source["timing"], identifier)
     return result
+
+
+def _validate_timing(timing, identifier):
+    """Optional axial timing of a source: ``s_m`` ascending, ``t_ns`` monotonic."""
+    s = np.asarray(timing.get("s_m"), float)
+    t = np.asarray(timing.get("t_ns"), float)
+    weight = np.asarray(timing.get("weight", np.ones_like(s)), float)
+    if (s.ndim != 1 or len(s) < 2 or t.shape != s.shape or weight.shape != s.shape
+            or not (np.isfinite(s).all() and np.isfinite(t).all()
+                    and np.isfinite(weight).all())):
+        raise ValueError(f"event {identifier}: source timing needs finite s_m, t_ns "
+                         "and weight arrays of one length of at least two")
+    step = np.diff(t)
+    if (np.any(np.diff(s) <= 0) or np.any(weight < 0)
+            or not (np.all(step >= 0) or np.all(step <= 0))):
+        raise ValueError(f"event {identifier}: source timing needs increasing s_m, "
+                         "monotonic t_ns and nonnegative weights")
 
 
 def merge_event_viewers(*payloads):
@@ -223,6 +305,7 @@ def write_event_viewer(result, output_path, *, json_path=None):
         "__PLOTLY_JS__": get_plotlyjs(),
         "__RESULT_JSON__": payload,
         "__VIEWER_SMOOTHING_JS__": assets.joinpath("event_viewer_smoothing.js").read_text(encoding="utf-8"),
+        "__VIEWER_SOURCE_JS__": assets.joinpath("event_viewer_source.js").read_text(encoding="utf-8"),
         "__VIEWER_JS__": assets.joinpath("event_viewer.js").read_text(encoding="utf-8"),
     }.items():
         html = html.replace(token, value)
@@ -230,5 +313,5 @@ def write_event_viewer(result, output_path, *, json_path=None):
     return output
 
 
-__all__ = ["SCHEMA", "viewer_payload", "validate_event_viewer", "merge_event_viewers",
+__all__ = ["SCHEMA", "source_timing", "viewer_payload", "validate_event_viewer", "merge_event_viewers",
            "save_event_result", "load_event_result", "write_event_viewer"]

@@ -398,6 +398,14 @@ raw and smoothed curve. The Gaussian view redistributes already
 binned integrals under a uniform-within-bin assumption; it is for display and
 does not replace an exact detector timing response or modify saved raw data.
 
+For tracks and showers the animation also shows the source itself: on the
+default detector clock a gold head runs along the muon track, or the shower
+spindle grows along its axis, in step with the time slider, while each OM shows
+its bin at `time_origin + relative time`. The Per-OM origin clock keeps the
+older view in which every OM is shown at its own time zero. The source timing
+is an optional `timing` block of an axis source (`lighthit.viewer.source_timing`
+builds it from light elements); payloads without it stay valid and static.
+
 ## Installed synthetic demonstration
 
 The wheel includes one public-data-only Baikal-like example. Its geometry and
