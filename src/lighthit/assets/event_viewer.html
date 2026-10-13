@@ -19,7 +19,18 @@
       <label>Time bins<select id="rebin"><option value="1">Original</option><option value="2">Merge ×2</option><option value="4">Merge ×4</option></select></label>
       <label>Clock<select id="clock"><option value="detector">Detector clock · source synced</option><option value="om">Per-OM origin</option></select></label>
       <label>Time mode<select id="time-mode"><option value="frame">Current bin</option><option value="cumulative">Cumulative</option><option value="integrated">Full signal</option></select></label>
+      <label>Scene bounds<select id="scene-bounds"><option value="source" selected>Source + detector</option><option value="detector">Detector array</option></select></label>
+      <label>Scene padding, %<input id="scene-padding" type="number" min="0" max="50" step="1" value="10"></label>
       <label>OM scale<input id="gain" type="range" min="0.4" max="3" step="0.1" value="1"></label>
+    </section>
+    <section class="recording-controls" aria-label="Video export">
+      <label>Video duration, s<input id="record-duration" type="number" min="1" max="600" step="1" value="20"></label>
+      <label>FPS<select id="record-fps"><option value="15">15</option><option value="30" selected>30</option><option value="60">60</option></select></label>
+      <label><input id="presentation" type="checkbox"> Presentation view</label>
+      <button id="record-video" disabled>Record video</button>
+      <a id="record-download" hidden>Save video</a>
+      <button id="record-local-save" hidden disabled>Save to local server</button>
+      <output id="record-status" role="status" aria-live="polite">Checking video support…</output>
     </section>
     <section class="workspace">
       <article class="panel geometry-panel"><div class="panel-title"><h2>Geometry and signal evolution</h2><span>Click an OM</span></div><div id="geometry"></div><div class="time-control"><button id="play">▶ Play</button><input id="time" type="range" min="0" value="0"><output id="time-label"></output><button id="all-time">Full signal</button></div><p class="caption">Size shows absolute signed signal; colour uses sign·log₁₀. Negative Fourier bins are preserved. On the detector clock the gold track head or shower spindle moves with the time slider; its afterglow is display-only.</p></article>

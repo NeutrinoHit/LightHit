@@ -13,6 +13,7 @@ with the detector response; older payloads without it stay valid and static.
 """
 from importlib.resources import files
 from pathlib import Path
+from types import SimpleNamespace
 import json
 
 import numpy as np
@@ -38,14 +39,15 @@ def source_timing(elements, centre_m, axis, half_m, bins=48):
     (emission time on the detector clock) and ``weight`` (relative photon
     yield, maximum 1).  The time is a weighted straight-line fit of the element
     emission times against ``s``: a relativistic source is a front moving along
-    its axis, and the fit keeps that front monotonic.  Display data only.
+    its axis, and the fit keeps that front monotonic. Spectral ``coefficient0``
+    is already integrated over each step and is used without another length
+    factor. Display data only.
     """
     axis = np.asarray(axis, float)
     axis = axis / np.linalg.norm(axis)
     s = (elements.midpoints_m - np.asarray(centre_m, float)) @ axis
-    length = np.asarray(elements.length_m, float)
     photons = (np.asarray(elements.photons, float) if hasattr(elements, "photons")
-               else np.asarray(elements.coefficient0, float) * length)
+               else np.asarray(elements.coefficient0, float))
     time = 0.5 * (np.asarray(elements.start_ns, float) + np.asarray(elements.end_ns, float))
     edges = np.linspace(-half_m, half_m, bins + 1)
     index = np.clip(np.digitize(s, edges) - 1, 0, bins - 1)
@@ -101,16 +103,99 @@ def _display_source(source):
     return []
 
 
-def _display_sources(source, metadata):
-    """Display sources; a transport that followed one straight muon shows a track."""
-    sources = _display_source(source)
+def _display_track_uid(metadata):
+    """Read an actual selected UID, including nested hybrid response metadata."""
     metadata = metadata or {}
-    if metadata.get("automatic_track_selection") or metadata.get("track_uid") is not None:
-        for item in sources:
-            if item.get("shape") == "spindle":
-                item["shape"] = "track"
-                item["label"] = "G4 track"
-    return sources
+    values = []
+    components = metadata.get("muon_components")
+    basis = metadata.get("ge2_basis")
+    automatic = metadata.get("automatic_track_selection")
+    if isinstance(components, dict):
+        values.append(components.get("primary_uid"))
+    if isinstance(basis, dict):
+        values.append(basis.get("track_uid"))
+    values.append(metadata.get("track_uid"))
+    if isinstance(automatic, dict):
+        values.extend(automatic.get(key) for key in ("track_uid", "primary_uid", "uid"))
+    for value in values:
+        if isinstance(value, (int, np.integer)) and not isinstance(value, (bool, np.bool_)):
+            return int(value)
+    return None
+
+
+def _display_primary_track(source, track_uid):
+    """Fit a display axis and clock using only the selected track's elements.
+
+    This is a straight-axis animation, not an integration of the broken G4
+    trajectory. Neither secondary emission times nor secondary yield influence
+    its geometry or head timing; all physics arrays remain untouched.
+    """
+    elements = getattr(source, "elements", None)
+    if elements is None or not hasattr(elements, "uid"):
+        return None
+    selected = np.asarray(elements.uid) == track_uid
+    if not np.any(selected):
+        return None
+    starts = np.asarray(elements.start_m, float)[selected]
+    directions = np.asarray(elements.direction, float)[selected]
+    lengths = np.asarray(elements.length_m, float)[selected]
+    ends = starts + lengths[:, None]*directions
+    midpoints = .5*(starts+ends)
+    # C0 already includes the true step length; multiplying by length again
+    # would overweight long steps and distort both the geometry and clock.
+    weights = (np.asarray(elements.photons, float)[selected] if hasattr(elements, "photons")
+               else np.asarray(elements.coefficient0, float)[selected])
+    if not np.isfinite(weights).all() or np.any(weights < 0) or weights.sum() <= 0:
+        return None
+    share = weights/weights.sum()
+    centre = np.sum(share[:, None]*midpoints, axis=0)
+    offset = midpoints-centre
+    covariance = np.einsum("i,ij,ik->jk", share, offset, offset)
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    mean_direction = np.sum(share[:, None]*directions, axis=0)
+    axis = (mean_direction if np.max(np.abs(eigenvalues)) <= 1e-24
+            else eigenvectors[:, np.argmax(eigenvalues)])
+    norm = np.linalg.norm(axis)
+    if not np.isfinite(norm) or norm == 0:
+        return None
+    axis = axis/norm
+    if axis @ mean_direction < 0:
+        axis = -axis
+    along = (np.concatenate((starts, ends))-centre) @ axis
+    low, high = float(along.min()), float(along.max())
+    half = .5*(high-low)
+    if half <= 0:
+        return None
+    # The visible guide spans the projected endpoints, not a symmetric radius
+    # about a potentially asymmetric photon-weighted centroid.
+    centre = centre+.5*(low+high)*axis
+    timing_elements = SimpleNamespace(midpoints_m=midpoints, photons=weights,
+                                      start_ns=np.asarray(elements.start_ns, float)[selected],
+                                      end_ns=np.asarray(elements.end_ns, float)[selected])
+    timing = source_timing(timing_elements, centre, axis, half)
+    display = {"type": "axis", "shape": "track", "label": "G4 track",
+               "track_uid": int(track_uid), "position_m": centre.tolist(),
+               "direction": axis.tolist(), "extent_m": half}
+    if timing is not None:
+        display["timing"] = timing
+    return display
+
+
+def _display_sources(source, metadata):
+    """Display a selected primary muon independently of its secondary light."""
+    track_uid = _display_track_uid(metadata)
+    if track_uid is not None:
+        track = _display_primary_track(source, track_uid)
+        if track is not None:
+            info = metadata or {}
+            components = info.get("muon_components")
+            automatic = info.get("automatic_track_selection")
+            if ((isinstance(components, dict) and components.get("primary_uid") == track_uid)
+                    or (isinstance(automatic, dict)
+                        and automatic.get("reason") == "dominant_straight_muon")):
+                track["label"] = "G4 muon track"
+            return [track]
+    return _display_source(source)
 
 
 def viewer_payload(response, *, source=None, event_id="event", label=None,

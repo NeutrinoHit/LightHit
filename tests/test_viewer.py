@@ -283,23 +283,105 @@ def test_source_animation_helper_moves_a_head_and_bins_on_the_detector_clock():
     assert out["range"]["t0"] < 3 < 20 < out["range"]["t1"]
 
 
-def test_straight_muon_selection_shows_a_track_not_a_spindle():
-    z = np.linspace(-100., 100., 30)
-    elements = SimpleNamespace(
-        midpoints_m=np.column_stack((np.zeros_like(z), np.zeros_like(z), z)),
-        photons=np.ones_like(z), length_m=np.full(len(z), 7.), start_ns=20. + z / .3,
-        end_ns=20. + (z + 7.) / .3)
+def _mixed_muon_source(include_secondaries=True):
+    from lighthit import G4Shower, SpectralLightElements
+    count, step = 40, 2.5
+    z = np.arange(count)*step
+    starts = np.column_stack((np.full(count, 2.), np.full(count, -4.), z))
+    lengths = np.full(count, step)
+    times = 10.+z/.299792458
+    ends = times+step/.299792458
+    coefficient = np.full(count, 2.5)
+    uid = np.zeros(count, np.int64)
+    if include_secondaries:
+        starts = np.vstack((starts, [[200., 300., -1000.], [-300., -200., 5000.]]))
+        lengths = np.r_[lengths, 30., 100.]
+        times = np.r_[times, 1e6, 2e6]
+        ends = np.r_[ends, 1e6+100., 2e6+333.]
+        coefficient = np.r_[coefficient, 1e12, 1e12]
+        uid = np.r_[uid, 1, 2]
+    elements = SpectralLightElements(
+        starts, np.tile([0., 0., 1.], (len(starts), 1)), lengths,
+        coefficient, -coefficient, np.ones(len(starts)), times, ends,
+        np.arange(len(starts)), uid)
+    return G4Shower(elements, "synthetic-mixed-viewer-test", 0)
+
+
+@pytest.mark.parametrize("metadata", [
+    {"track_uid": 0}, {"ge2_basis": {"track_uid": 0}},
+    {"muon_components": {"primary_uid": 0}},
+    {"automatic_track_selection": {"track_uid": 0, "reason": "dominant_straight_muon"}},
+])
+def test_selected_muon_geometry_and_head_clock_ignore_late_bright_secondaries(metadata):
     from lighthit.viewer import _display_sources
-    shower = SimpleNamespace(elements=elements)
-    assert _display_sources(None, {}) == []
-    plain = {"type": "axis", "shape": "spindle", "label": "G4 shower"}
-    import lighthit.viewer as viewer
-    original = viewer._display_source
-    viewer._display_source = lambda source: [dict(plain)]
-    try:
-        assert _display_sources(shower, {})[0]["shape"] == "spindle"
-        assert _display_sources(shower, {"track_uid": None})[0]["shape"] == "spindle"
-        for metadata in ({"track_uid": 0}, {"automatic_track_selection": {"reason": "x"}}):
-            assert _display_sources(shower, metadata)[0]["shape"] == "track"
-    finally:
-        viewer._display_source = original
+    mixed = _mixed_muon_source()
+    original = {name: getattr(mixed.elements, name).copy() for name in
+                ("start_m", "direction", "length_m", "coefficient0", "coefficient2", "beta",
+                 "start_ns", "end_ns", "row_index", "uid")}
+    track = _display_sources(mixed, metadata)[0]
+    assert track == _display_sources(_mixed_muon_source(False), metadata)[0]
+    assert track["shape"] == "track" and track["track_uid"] == 0
+    identified_muon = "muon_components" in metadata or "automatic_track_selection" in metadata
+    assert track["label"] == ("G4 muon track" if identified_muon else "G4 track")
+    np.testing.assert_allclose(track["position_m"], [2., -4., 50.], atol=1e-13)
+    np.testing.assert_allclose(track["direction"], [0., 0., 1.], atol=1e-13)
+    assert track["extent_m"] == pytest.approx(50.)
+    timing = track["timing"]
+    np.testing.assert_allclose(timing["t_ns"], 10.+(np.asarray(timing["s_m"])+50.)/.299792458,
+                               rtol=1e-13, atol=1e-12)
+    assert max(timing["t_ns"]) < 350.  # secondaries are at 1–2 million ns
+    for name, values in original.items():
+        np.testing.assert_array_equal(getattr(mixed.elements, name), values)
+
+
+def test_spectral_source_timing_does_not_multiply_integrated_yield_by_length():
+    z = np.arange(6)-2.5
+    coefficient = np.arange(1., 7.)
+    elements = SimpleNamespace(
+        midpoints_m=np.column_stack((np.zeros(6), np.zeros(6), z)),
+        coefficient0=coefficient, length_m=np.array([10., 1., .01, 50., .4, 3.]),
+        start_ns=20.+z/.299792458, end_ns=20.+z/.299792458)
+    timing = source_timing(elements, [0., 0., 0.], [0., 0., 1.], 3., bins=6)
+    np.testing.assert_allclose(timing["weight"], coefficient/coefficient.max(), rtol=0., atol=0.)
+
+
+@pytest.mark.parametrize("metadata", [
+    {}, {"track_uid": None}, {"ge2_basis": {"track_uid": None}},
+    {"automatic_track_selection": {"reason": "no_muon"}},
+    {"automatic_track_selection": {"reason": "curved_muon"}},
+    {"automatic_track_selection": {"reason": "dominant_straight_muon"}},
+    {"track_uid": 999},
+])
+def test_generic_shower_remains_a_spindle_without_an_identified_track(metadata):
+    from lighthit.viewer import _display_sources
+    sources = _display_sources(_mixed_muon_source(), metadata)
+    assert sources[0]["shape"] == "spindle" and sources[0]["label"] == "G4 shower"
+    assert _display_sources(None, metadata) == []
+
+
+def test_component_primary_uid_takes_precedence_over_legacy_basis_metadata():
+    from lighthit.viewer import _display_sources
+    source = _display_sources(_mixed_muon_source(), {
+        "muon_components": {"primary_uid": 0}, "ge2_basis": {"track_uid": 2}, "track_uid": 1})[0]
+    assert source["track_uid"] == 0
+    assert source["extent_m"] == pytest.approx(50.)
+
+
+def test_primary_viewer_fix_preserves_detector_response_arrays():
+    value = payload()["events"][0]
+    detector = DetectorArray(payload()["detector"]["positions_m"], [[0., 0., 1.]]*2, .05,
+                             lambda x: np.ones_like(np.asarray(x, float)),
+                             lambda w: np.ones_like(np.asarray(w, float)))
+    response = SimpleNamespace(
+        detector=detector, relative_time_edges_ns=np.array([-1., 0., 1., 2.]),
+        time_origin_ns=np.array([10., 11.]), active=np.array([True, False]),
+        components_pe=np.asarray(value["components"]),
+        charge_components_pe=np.asarray(value["charge_components"]),
+        metadata={"ge2_basis": {"track_uid": 0}})
+    before = {name:getattr(response, name).copy() for name in
+              ("time_origin_ns", "active", "components_pe", "charge_components_pe")}
+    result = viewer_payload(response, source=_mixed_muon_source())
+    assert result["events"][0]["sources"][0]["shape"] == "track"
+    for name, array in before.items():
+        np.testing.assert_array_equal(getattr(response, name), array)
+    np.testing.assert_array_equal(result["events"][0]["components"], before["components_pe"])
