@@ -48,7 +48,9 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from numba import njit, prange
+from numba import njit, prange, types
+from numba.extending import intrinsic
+from llvmlite import ir
 
 __all__ = []
 
@@ -99,18 +101,53 @@ def gauss_inverse_mean(u, v, var_u, var_v, tau, weight):
 
 
 @njit(cache=True, nogil=True)
+def _prepare_gauss_inverse(tau, weight):
+    """Receiver-independent factors for the supplied Gaussian rule."""
+    tangent = np.empty(tau.shape[0])
+    weighted_sec2 = np.empty(tau.shape[0])
+    for k in range(tau.shape[0]):
+        t = math.tan(tau[k])
+        tangent[k] = t
+        weighted_sec2[k] = weight[k] * (1.0 + t * t)
+    return tangent, weighted_sec2
+
+
+@njit(cache=True, nogil=True, inline="always")
+def gauss_inverse_mean_prepared(u, v, var_u, var_v, tangent, weighted_sec2):
+    """Same Gaussian mean with the tangent rule prepared once."""
+    scale = 2.0 * (var_u + var_v) + u * u + v * v
+    if scale <= 0.0:
+        return 1e300
+    s0 = 1.0 / math.sqrt(scale)
+    total = 0.0
+    for k in range(tangent.shape[0]):
+        s = s0 * tangent[k]
+        s2 = s * s
+        a = 1.0 + 2.0 * s2 * var_u
+        b = 1.0 + 2.0 * s2 * var_v
+        total += weighted_sec2[k] * math.exp(-s2 * (u * u / a + v * v / b)) / math.sqrt(a * b)
+    return 2.0 / math.sqrt(math.pi) * s0 * total
+
+
+_IFUNC_TAYLOR = np.asarray([
+    [1.0 / (math.factorial(n) * (n + j + 1.0)) for n in range(24)]
+    for j in range(3)
+], dtype=np.float64)
+
+
+@njit(cache=True, nogil=True)
 def _ifuncs(z, ez):
     """``I_k(z) = int_0^1 x^k exp(z x) dx`` for k = 0, 1, 2 (stable)."""
     if abs(z) < 1.0:
-        term = 1.0
-        i0 = 0.0
-        i1 = 0.0
-        i2 = 0.0
-        for n in range(24):
-            i0 += term / (n + 1.0)
-            i1 += term / (n + 2.0)
-            i2 += term / (n + 3.0)
-            term *= z / (n + 1.0)
+        # Same 24-term Taylor polynomials as the forward recurrence, with
+        # constant coefficients: no per-term divisions at every panel.
+        i0 = _IFUNC_TAYLOR[0, 23]
+        i1 = _IFUNC_TAYLOR[1, 23]
+        i2 = _IFUNC_TAYLOR[2, 23]
+        for n in range(22, -1, -1):
+            i0 = i0 * z + _IFUNC_TAYLOR[0, n]
+            i1 = i1 * z + _IFUNC_TAYLOR[1, n]
+            i2 = i2 * z + _IFUNC_TAYLOR[2, n]
         return i0, i1, i2
     return ((ez - 1.0) / z,
             (ez * (z - 1.0) + 1.0) / (z * z),
@@ -256,6 +293,33 @@ def _batch_sigma(r, sin_min, tan_half_min, y_g):
 
 
 @njit(cache=True, nogil=True)
+def _stationary_path_gauss(r, sigma, mut, tail_exp, panel_width, gx, gw, out_s, out_w):
+    """Positive Gauss rule in t=asinh((S-r)/sigma), including dS/dt.
+
+    Integrates the same finite optical path as the prompt grid. It is an
+    explicit stationary-only numerical alternative, not a time histogram.
+    """
+    end=math.asinh(tail_exp/(mut*sigma))
+    # Bound attenuation change as well as HG/geometric change. Uniform
+    # asinh panels alone underresolve strongly absorbed backward pencils.
+    max_optical_width=4. if len(gx)<=4 else 8.
+    lo=0.;count=0
+    while lo<end:
+        hi=min(end,lo+panel_width,math.asinh(math.sinh(lo)+max_optical_width/(mut*sigma)))
+        if hi<=lo:raise ValueError('stationary Gauss path cannot advance')
+        if count+len(gx)>len(out_s):
+            raise ValueError('stationary Gauss path exceeds max_path_nodes')
+        half=(hi-lo)/2;centre=(hi+lo)/2
+        for j in range(len(gx)):
+            t=centre+half*gx[j]
+            out_s[count]=r+sigma*math.sinh(t)
+            out_w[count]=half*gw[j]*sigma*math.cosh(t)
+            count+=1
+        lo=hi
+    return count
+
+
+@njit(cache=True, nogil=True)
 def _batch_add_pencil(n, s_buf, r, sin_t, cos_t, pref, jac_sin, w0, w2, c1, c3,
                       apoly, g, g0, g2):
     """Add one pencil with polynomial acceptance ``apoly`` (monomial
@@ -284,36 +348,101 @@ def _batch_add_pencil(n, s_buf, r, sin_t, cos_t, pref, jac_sin, w0, w2, c1, c3,
         g2[k] += w2 * value
 
 
+@njit(cache=True, nogil=True, inline="always")
+def _cubic_moment_coefficients(moments, coef, ipow, jpow):
+    """Reduce a cubic on the unit circle to ``A(c) + s B(c)``.
+
+    The moments are unchanged. Only their polynomial evaluation uses
+    ``s**2 = 1 - c**2``, so the reduction is independent of hemisphere,
+    wavelength and the receiver's azimuth-averaging convention.
+    """
+    a0 = a1 = a2 = a3 = b0 = b1 = b2 = 0.0
+    for m in range(coef.shape[0]):
+        value = coef[m] * moments[m]
+        i = ipow[m]
+        j = jpow[m]
+        if j == 0:
+            if i == 0:
+                a0 += value
+            elif i == 1:
+                a1 += value
+            elif i == 2:
+                a2 += value
+            else:
+                a3 += value
+        elif j == 1:
+            if i == 0:
+                b0 += value
+            elif i == 1:
+                b1 += value
+            else:
+                b2 += value
+        elif j == 2:
+            if i == 0:
+                a0 += value
+                a2 -= value
+            else:
+                a1 += value
+                a3 -= value
+        else:
+            b0 += value
+            b2 -= value
+    return a0, a1, a2, a3, b0, b1, b2
+
+
 @njit(cache=True, nogil=True)
 def _batch_add_moments(n, s_buf, r, sin_t, cos_t, jac_sin, mom0, mom2,
-                       coef, ipow, jpow, max_power, g, g0, g2, cpow, spow):
+                       coef, ipow, jpow, max_power, g, g0, g2, cpow, spow,
+                       backward=False):
     """Add a group with singular-weighted acceptance moments ``mom0/mom2``
     (``mom*[0]`` is ``sum w f / r``) to the batch profile."""
     rs = r * sin_t
-    y_theta = sin_t / (1.0 + cos_t)
-    jac = 2.0 / (r * jac_sin)
+    y_theta = 0.0 if backward else sin_t / (1.0 + cos_t)
+    jac = 0.0 if backward else 2.0 / (r * jac_sin)
     n_mono = coef.shape[0]
     g1 = 1.0 + g * g
     gg = 2.0 * g
     norm = (1.0 - g * g) / (4.0 * math.pi)
+    cubic = max_power <= 3
+    if cubic:
+        a00, a01, a02, a03, b00, b01, b02 = _cubic_moment_coefficients(
+            mom0, coef, ipow, jpow)
+        a20, a21, a22, a23, b20, b21, b22 = _cubic_moment_coefficients(
+            mom2, coef, ipow, jpow)
     for k in range(n):
-        y = (s_buf[k] - r) / rs + y_theta
-        inv = 1.0 / (1.0 + y * y)
-        c = (1.0 - y * y) * inv
-        s = 2.0 * y * inv
-        cpow[0] = 1.0
-        spow[0] = 1.0
-        for p in range(1, max_power + 1):
-            cpow[p] = cpow[p - 1] * c
-            spow[p] = spow[p - 1] * s
-        a0 = 0.0
-        a2 = 0.0
-        for m in range(n_mono):
-            basis = coef[m] * cpow[ipow[m]] * spow[jpow[m]]
-            a0 += basis * mom0[m]
-            a2 += basis * mom2[m]
+        if backward:
+            # Backward moments contain w/r, not w/(r*sin(theta)). Keep
+            # the cancelling factors together, including exactly theta=pi.
+            shift = s_buf[k] - r * cos_t
+            denominator = rs * rs + shift * shift
+            c = (rs * rs - shift * shift) / denominator
+            s = 2.0 * rs * shift / denominator
+            path_jacobian = 2.0 * r / denominator
+        else:
+            y = (s_buf[k] - r) / rs + y_theta
+            inv = 1.0 / (1.0 + y * y)
+            c = (1.0 - y * y) * inv
+            s = 2.0 * y * inv
+            path_jacobian = jac * inv
+        if cubic:
+            a0 = a00 + c * (a01 + c * (a02 + c * a03))
+            a0 += s * (b00 + c * (b01 + c * b02))
+            a2 = a20 + c * (a21 + c * (a22 + c * a23))
+            a2 += s * (b20 + c * (b21 + c * b22))
+        else:
+            cpow[0] = 1.0
+            spow[0] = 1.0
+            for p in range(1, max_power + 1):
+                cpow[p] = cpow[p - 1] * c
+                spow[p] = spow[p - 1] * s
+            a0 = 0.0
+            a2 = 0.0
+            for m in range(n_mono):
+                basis = coef[m] * cpow[ipow[m]] * spow[jpow[m]]
+                a0 += basis * mom0[m]
+                a2 += basis * mom2[m]
         den = g1 - gg * c
-        value = jac * inv * norm / (den * math.sqrt(den))
+        value = path_jacobian * norm / (den * math.sqrt(den))
         g0[k] += a0 * value
         g2[k] += a2 * value
 
@@ -322,7 +451,8 @@ def _batch_add_moments(n, s_buf, r, sin_t, cos_t, jac_sin, mom0, mom2,
 def _batch_deposit(n, s_buf, g0, g2, r, t_emit_rel, tail_exp,
                    mus, mut, speed, s0w, s2w, edges, eedge, pre, acc, charge,
                    direct_bins, t_buf, h_buf,
-                   front_extra, front_da, front_dtda, front_cos):
+                   front_extra, front_da, front_dtda, front_cos,
+                   compute_bins=True):
     """Deposit a batch profile for every wavelength (see module docstring)."""
     n_lambda = mus.shape[0]
     for lam in range(n_lambda):
@@ -390,7 +520,7 @@ def _batch_deposit(n, s_buf, g0, g2, r, t_emit_rel, tail_exp,
                 step = 1
             width = t_b - t_a
             total += _quad_integral(e_a, alpha, beta, gamma, width, kappa, e_b)
-            if not outside_window:
+            if compute_bins and not outside_window:
                 _deposit_panel(lam, t_a, t_b, e_a, e_b, alpha, beta, gamma,
                                kappa, edges, eedge, pre, acc, direct_bins)
             e_a = e_b
@@ -401,7 +531,7 @@ def _batch_deposit(n, s_buf, g0, g2, r, t_emit_rel, tail_exp,
         t_end = t_buf[last]
         exact = _quad_integral(e_first, h_front, 0.0, 0.0, t_end - t_f, kappa, e_last)
         total += exact
-        if spread > 0.0 and not outside_window:
+        if compute_bins and spread > 0.0 and not outside_window:
             t_1 = t_f - 0.5 * spread
             t_2 = t_f + 0.5 * spread
             e_1 = math.exp(kappa * t_1)
@@ -415,7 +545,7 @@ def _batch_deposit(n, s_buf, g0, g2, r, t_emit_rel, tail_exp,
             if t_end > t_2:
                 _deposit_panel(lam, t_2, t_end, e_2, e_last, height, 0.0, 0.0, kappa,
                                edges, eedge, pre, acc, direct_bins)
-        elif t_end > t_f and not outside_window:
+        elif compute_bins and t_end > t_f and not outside_window:
             _deposit_panel(lam, t_f, t_end, e_first, e_last, h_front, 0.0, 0.0, kappa,
                            edges, eedge, pre, acc, direct_bins)
         charge[lam] += total
@@ -428,12 +558,46 @@ def _pencil_frame(dx, dy, dz, sx, sy, sz, nx, ny, nz):
     hx = dx / r
     hy = dy / r
     hz = dz / r
+    return _pencil_frame_from_ray(r, hx, hy, hz, sx, sy, sz, nx, ny, nz)
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _pencil_frame_from_ray(r, hx, hy, hz, sx, sy, sz, nx, ny, nz):
+    """Directional frame with an exactly reused displacement unit vector."""
     cosine = hx * sx + hy * sy + hz * sz
     px = hx - cosine * sx
     py = hy - cosine * sy
     pz = hz - cosine * sz
     sine = math.sqrt(px * px + py * py + pz * pz)
     c1 = sx * nx + sy * ny + sz * nz
+    if sine > 1e-300:
+        c3 = (px * nx + py * ny + pz * nz) / sine
+    else:
+        c3 = 0.0
+    theta = math.atan2(sine, cosine)
+    return r, theta, sine, cosine, c1, c3
+
+
+@njit(cache=True, nogil=True)
+def _prepare_pencil_look_powers(pencil_dir, nx, ny, nz, powers):
+    """Receiver-look dot product and powers, with original scalar ordering."""
+    for p in range(pencil_dir.shape[0]):
+        c1 = pencil_dir[p, 0] * nx + pencil_dir[p, 1] * ny + pencil_dir[p, 2] * nz
+        cp1 = 1.0 * c1
+        cp2 = cp1 * c1
+        powers[p, 0] = cp1
+        powers[p, 1] = cp2
+        powers[p, 2] = cp2 * c1
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _pencil_frame_from_ray_cached_look(r, hx, hy, hz, sx, sy, sz, nx, ny, nz, c1):
+    """Original frame arithmetic, using the identical cached look dot."""
+    cosine = hx * sx + hy * sy + hz * sz
+    px = hx - cosine * sx
+    py = hy - cosine * sy
+    pz = hz - cosine * sz
+    sine = math.sqrt(px * px + py * py + pz * pz)
     if sine > 1e-300:
         c3 = (px * nx + py * ny + pz * nz) / sine
     else:
@@ -550,8 +714,12 @@ def _segment_a_breaks(b, z_r, length, cone_cos, cone_sin, dtda, inv_v_lo, inv_v_
     root = z_r - b * cone_cos / cone_sin
     centre = min(max(root, 0.0), length)
     r_star = math.sqrt(b * b + (z_r - centre) ** 2)
-    delta = 0.3 * r_star * r_star / b
-    delta_min = max(delta * grade_min, 0.25 * abs(root - centre))
+    # On the extension of a finite segment there is no interior cone root
+    # and no azimuthal singularity. Ordinary front/geometry subdivision below
+    # suffices, without dividing by the zero transverse distance.
+    delta = 0.3 * r_star * r_star / b if b > 1e-12 else length
+    delta_min = (max(delta * grade_min, 0.25 * abs(root - centre))
+                 if b > 1e-12 else delta)
     raw = np.empty(capacity)
     n = 0
     raw[n] = 0.0
@@ -613,12 +781,13 @@ def _scratch_note():
 
 
 @njit(cache=True, nogil=True)
-def _segment_order1_block(block, receivers, looks, areas, origins, work, seg_start, seg_dir, seg_length, seg_q0, seg_q2, seg_cone, seg_t0, seg_dtda, apoly, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, a_gauss, w_front, grade_ratio, grade_min, max_rel, phi_w_panel, phi_gauss, phi_uniform, max_breaks, max_nodes, min_impact, n_blocks, n_recv, n_seg, n_lambda, nb, charge_out, bins_out, nodes_out, batch_out, close_out, mut_min, speed_max, inv_v_lo, inv_v_hi, ax, aw, gx, gw, n_work, max_phi):
+def _segment_order1_block(block, receivers, looks, areas, origins, work, seg_start, seg_dir, seg_length, seg_q0, seg_q2, seg_cone, seg_t0, seg_dtda, apoly, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, a_gauss, w_front, grade_ratio, grade_min, max_rel, phi_w_panel, phi_gauss, phi_uniform, max_breaks, max_nodes, min_impact, n_blocks, n_recv, n_seg, n_lambda, nb, charge_out, bins_out, nodes_out, batch_out, close_out, mut_min, speed_max, inv_v_lo, inv_v_hi, ax, aw, gx, gw, n_work, max_phi, compute_bins, stationary_gauss_order, stationary_panel_width, pgx, pgw):
     """One thread block of :func:`segment_order1` (no hoisting)."""
     pre = np.zeros((n_lambda, 3))
     acc = np.zeros((n_lambda, nb, 4))
     charge = np.zeros(n_lambda)
     s_buf = np.empty(max_nodes)
+    path_weights = np.empty(max_nodes)
     t_buf = np.empty(max_nodes)
     h_buf = np.empty(max_nodes)
     g0 = np.empty(max_nodes)
@@ -655,12 +824,22 @@ def _segment_order1_block(block, receivers, looks, areas, origins, work, seg_sta
             cxm = ox - closest * ux
             cym = oy - closest * uy
             czm = oz - closest * uz
-            if math.sqrt(cxm * cxm + cym * cym + czm * czm) < min_impact or b < 1e-9:
+            if math.sqrt(cxm * cxm + cym * cym + czm * czm) < min_impact:
                 close_out[d] += 1
                 continue
-            e1x = bx / b
-            e1y = by / b
-            e1z = bz / b
+            if b > 0.0:
+                e1x = bx / b
+                e1y = by / b
+                e1z = bz / b
+            else:
+                # Azimuth is arbitrary on the axis. Pick a well-conditioned
+                # transverse unit vector instead of dropping a real signal.
+                if abs(ux) < 0.9:
+                    e1x, e1y, e1z = 0.0, uz, -uy
+                else:
+                    e1x, e1y, e1z = -uz, 0.0, ux
+                norm = math.sqrt(e1x * e1x + e1y * e1y + e1z * e1z)
+                e1x, e1y, e1z = e1x / norm, e1y / norm, e1z / norm
             e2x = uy * e1z - uz * e1y
             e2y = uz * e1x - ux * e1z
             e2z = ux * e1y - uy * e1x
@@ -668,7 +847,7 @@ def _segment_order1_block(block, receivers, looks, areas, origins, work, seg_sta
             cone_sin = math.sqrt(1.0 - cone_cos * cone_cos)
             theta_c = math.acos(cone_cos)
             n_breaks = _segment_a_breaks(b, z_r, seg_length[i], cone_cos, cone_sin,
-                                         seg_dtda[i], inv_v_lo, inv_v_hi, w_front,
+                                         seg_dtda[i] if compute_bins else 0., inv_v_lo if compute_bins else 0., inv_v_hi if compute_bins else 0., w_front,
                                          grade_ratio, grade_min, max_rel, breaks)
             for panel in range(n_breaks - 1):
                 a_lo = breaks[panel]
@@ -686,11 +865,15 @@ def _segment_order1_block(block, receivers, looks, areas, origins, work, seg_sta
                     dx = ox - a * ux
                     dy = oy - a * uy
                     dz3 = oz - a * uz
-                    t_emit = seg_t0[i] + a * seg_dtda[i] - origins[d]
+                    t_emit = seg_t0[i] + a * seg_dtda[i] - origins[d] if compute_bins else 0.
                     sin_min = math.sin(max(theta_min, 1e-9))
                     sigma = _batch_sigma(r_a, sin_min, math.tan(0.5 * max(theta_min, 1e-9)), y_g)
-                    n = _batch_grid(r_a, sigma, t_emit, h, h_tail, tail_exp, mut_min,
-                                    speed_max, edges[nb], s_buf)
+                    if stationary_gauss_order>0:
+                        n=_stationary_path_gauss(r_a,sigma,mut_min,tail_exp,stationary_panel_width,
+                            pgx,pgw,s_buf,path_weights)
+                    else:
+                        n = _batch_grid(r_a, sigma, t_emit, h, h_tail if compute_bins else h, tail_exp, mut_min,
+                                        speed_max, edges[nb] if compute_bins else 0., s_buf)
                     g0[:n] = 0.0
                     g2[:n] = 0.0
                     for q in range(n_phi):
@@ -710,13 +893,22 @@ def _segment_order1_block(block, receivers, looks, areas, origins, work, seg_sta
                                           weight * seg_q2[i], c1, c3, apoly, g,
                                           g0, g2)
                         used += 1
-                    _batch_deposit(n, s_buf, g0, g2, r_a, t_emit, tail_exp,
-                                   mus, mut, speed, s0w, s2w, edges, eedge, pre, acc,
-                                   charge, direct_bins, t_buf, h_buf,
-                                   0.0, wa, seg_dtda[i], dz / r_a)
+                    if stationary_gauss_order>0:
+                        for lam in range(n_lambda):
+                            for k in range(n):
+                                charge[lam]+=mus[lam]*path_weights[k]*math.exp(-mut[lam]*s_buf[k])*(
+                                    s0w[lam]*g0[k]+s2w[lam]*g2[k])
+                    else:
+                        _batch_deposit(n, s_buf, g0, g2, r_a, t_emit, tail_exp,
+                                       mus, mut, speed, s0w, s2w, edges, eedge, pre, acc,
+                                       charge, direct_bins, t_buf, h_buf,
+                                       0.0, wa, seg_dtda[i], dz / r_a, compute_bins)
                     batches += 1
-        charge_out[d] = _finalize(edges, eedge, itab, pre, acc, charge,
-                                  areas[d], bins_out[d])
+        if compute_bins:
+            charge_out[d] = _finalize(edges, eedge, itab, pre, acc, charge,
+                                      areas[d], bins_out[d])
+        else:
+            charge_out[d] = charge.sum() * areas[d]
         nodes_out[d] = used
         batch_out[d] = batches
 
@@ -730,7 +922,8 @@ def segment_order1(receivers, looks, areas, origins, work,
                    edges, eedge, itab, direct_bins,
                    a_gauss, w_front, grade_ratio, grade_min, max_rel,
                    phi_w_panel, phi_gauss, phi_uniform,
-                   max_breaks, max_nodes, min_impact, n_blocks):
+                   max_breaks, max_nodes, min_impact, n_blocks, compute_bins=True,
+                   stationary_gauss_order=0, stationary_panel_width=1.0):
     """First-order contribution of straight Cherenkov segments at the listed modules.
 
     Tensor rule per segment and module: Gauss--Legendre panels in ``a``
@@ -743,11 +936,14 @@ def segment_order1(receivers, looks, areas, origins, work,
     Returns ``(charge, bins, pencils_used, batches_used, too_close)``.
     """
     n_recv = receivers.shape[0]
+    if stationary_gauss_order<0 or (stationary_gauss_order>0 and
+            (compute_bins or stationary_gauss_order<2 or stationary_panel_width<=0 or mut.min()<=0)):
+        raise ValueError('stationary Gauss requires charge-only, order>=2, positive width/extinction')
     n_seg = seg_start.shape[0]
     n_lambda = mus.shape[0]
     nb = edges.shape[0] - 1
     charge_out = np.zeros(n_recv)
-    bins_out = np.zeros((n_recv, nb))
+    bins_out = np.zeros((n_recv, nb if compute_bins else 0))
     nodes_out = np.zeros(n_recv, dtype=np.int64)
     batch_out = np.zeros(n_recv, dtype=np.int64)
     close_out = np.zeros(n_recv, dtype=np.int64)
@@ -757,10 +953,11 @@ def segment_order1(receivers, looks, areas, origins, work,
     inv_v_hi = 1.0 / speed.min()
     ax, aw = _gauss_legendre(a_gauss)
     gx, gw = _gauss_legendre(phi_gauss)
+    pgx,pgw=_gauss_legendre(max(2,stationary_gauss_order))
     n_work = work.shape[0]
     max_phi = 8 * phi_uniform + 4096
     for block in prange(n_blocks):
-        _segment_order1_block(block, receivers, looks, areas, origins, work, seg_start, seg_dir, seg_length, seg_q0, seg_q2, seg_cone, seg_t0, seg_dtda, apoly, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, a_gauss, w_front, grade_ratio, grade_min, max_rel, phi_w_panel, phi_gauss, phi_uniform, max_breaks, max_nodes, min_impact, n_blocks, n_recv, n_seg, n_lambda, nb, charge_out, bins_out, nodes_out, batch_out, close_out, mut_min, speed_max, inv_v_lo, inv_v_hi, ax, aw, gx, gw, n_work, max_phi)
+        _segment_order1_block(block, receivers, looks, areas, origins, work, seg_start, seg_dir, seg_length, seg_q0, seg_q2, seg_cone, seg_t0, seg_dtda, apoly, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, a_gauss, w_front, grade_ratio, grade_min, max_rel, phi_w_panel, phi_gauss, phi_uniform, max_breaks, max_nodes, min_impact, n_blocks, n_recv, n_seg, n_lambda, nb, charge_out, bins_out, nodes_out, batch_out, close_out, mut_min, speed_max, inv_v_lo, inv_v_hi, ax, aw, gx, gw, n_work, max_phi, compute_bins,stationary_gauss_order,stationary_panel_width,pgx,pgw)
     return charge_out, bins_out, nodes_out, batch_out, close_out
 
 
@@ -846,7 +1043,7 @@ def _pixel(sx, sy, sz, n_face):
     return (face * n_face + i) * n_face + j
 
 
-@njit(cache=True, nogil=True)
+@njit(cache=True, nogil=True, inline="always")
 def _hash_slot(keys, key):
     mask = keys.shape[0] - 1
     mixed = key ^ (key >> 31)
@@ -1017,11 +1214,191 @@ def _fill_moments_averaged(weight, c1, c3, averaged, ipow, jpow, max_power,
 
 
 
+@njit(cache=True, nogil=True, inline="always")
+def _fill_moments_averaged_pair(weight0, weight2, c1, c3, averaged,
+                              ipow, jpow, max_power, out0, out2, cp, sp):
+    """Share angular powers, preserving each field's multiplication order."""
+    cp[0] = 1.0
+    sp[0] = 1.0
+    perp2 = max(1.0 - c1 * c1, 0.0)
+    for p in range(1, max_power + 1):
+        cp[p] = cp[p - 1] * c1
+        if averaged:
+            if p % 2 == 1:
+                sp[p] = 0.0
+            else:
+                sp[p] = sp[p - 2] * perp2 * (p - 1.0) / p
+        else:
+            sp[p] = sp[p - 1] * c3
+    for m in range(out0.shape[0]):
+        out0[m] = weight0 * cp[ipow[m]] * sp[jpow[m]]
+        out2[m] = weight2 * cp[ipow[m]] * sp[jpow[m]]
+
+
+@njit(cache=True, nogil=True)
+def _is_cubic_moment_layout(ipow, jpow, max_power):
+    """Specialize only the canonical degree-three monomial ordering."""
+    if max_power != 3 or ipow.shape[0] != 10 or jpow.shape[0] != 10:
+        return False
+    m = 0
+    for k in range(4):
+        for i in range(k + 1):
+            if ipow[m] != i or jpow[m] != k - i:
+                return False
+            m += 1
+    return True
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _accumulate_cubic_moments_pair(weight0, weight2, c1, c3, averaged, row):
+    """Cubic specialization with the same scalar powers as the generic path."""
+    cp1 = 1.0 * c1
+    cp2 = cp1 * c1
+    cp3 = cp2 * c1
+    return _accumulate_cubic_moments_pair_prepared(
+        weight0, weight2, cp1, cp2, cp3, c3, averaged, row)
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _accumulate_cubic_moments_pair_prepared(weight0, weight2, cp1, cp2, cp3, c3, averaged, row):
+    """Accumulate the original cubic moments without indirect scratch arrays.
+
+    Multiplications retain ``weight * c1_power * c3_power`` association,
+    including the original signed-zero behavior in azimuthal averages.
+    Each row entry receives the same single addition in pencil order.
+    """
+    cp0 = 1.0
+    sp0 = 1.0
+    if averaged:
+        perp2 = max(1.0 - cp1 * cp1, 0.0)
+        sp1 = 0.0
+        sp2 = sp0 * perp2 * (2 - 1.0) / 2
+        sp3 = 0.0
+    else:
+        sp1 = sp0 * c3
+        sp2 = sp1 * c3
+        sp3 = sp2 * c3
+    row[0] += weight0 * cp0 * sp0
+    row[10] += weight2 * cp0 * sp0
+    row[1] += weight0 * cp0 * sp1
+    row[11] += weight2 * cp0 * sp1
+    row[2] += weight0 * cp1 * sp0
+    row[12] += weight2 * cp1 * sp0
+    row[3] += weight0 * cp0 * sp2
+    row[13] += weight2 * cp0 * sp2
+    row[4] += weight0 * cp1 * sp1
+    row[14] += weight2 * cp1 * sp1
+    row[5] += weight0 * cp2 * sp0
+    row[15] += weight2 * cp2 * sp0
+    row[6] += weight0 * cp0 * sp3
+    row[16] += weight2 * cp0 * sp3
+    row[7] += weight0 * cp1 * sp2
+    row[17] += weight2 * cp1 * sp2
+    row[8] += weight0 * cp2 * sp1
+    row[18] += weight2 * cp2 * sp1
+    row[9] += weight0 * cp3 * sp0
+    row[19] += weight2 * cp3 * sp0
+    return abs(weight0 * cp0 * sp0)
+
+
+@njit(cache=True, nogil=True)
+def _prepare_pencil_shape(pencil_dir, pencil_major, pencil_pos_cov):
+    """Minor axes, three covariance projections and traces, once per pencil."""
+    prepared = np.empty((pencil_dir.shape[0], 7))
+    for p in range(pencil_dir.shape[0]):
+        ax_, ay_, az_ = pencil_major[p]
+        sx_, sy_, sz_ = pencil_dir[p]
+        bx_ = sy_ * az_ - sz_ * ay_
+        by_ = sz_ * ax_ - sx_ * az_
+        bz_ = sx_ * ay_ - sy_ * ax_
+        cov = pencil_pos_cov[p]
+        prepared[p, 0] = bx_
+        prepared[p, 1] = by_
+        prepared[p, 2] = bz_
+        prepared[p, 3] = (ax_ * (cov[0] * ax_ + cov[3] * ay_ + cov[4] * az_)
+                         + ay_ * (cov[3] * ax_ + cov[1] * ay_ + cov[5] * az_)
+                         + az_ * (cov[4] * ax_ + cov[5] * ay_ + cov[2] * az_))
+        prepared[p, 4] = (bx_ * (cov[0] * bx_ + cov[3] * by_ + cov[4] * bz_)
+                         + by_ * (cov[3] * bx_ + cov[1] * by_ + cov[5] * bz_)
+                         + bz_ * (cov[4] * bx_ + cov[5] * by_ + cov[2] * bz_))
+        prepared[p, 5] = (ax_ * (cov[0] * bx_ + cov[3] * by_ + cov[4] * bz_)
+                         + ay_ * (cov[3] * bx_ + cov[1] * by_ + cov[5] * bz_)
+                         + az_ * (cov[4] * bx_ + cov[5] * by_ + cov[2] * bz_))
+        prepared[p, 6] = cov[0] + cov[1] + cov[2]
+    return prepared
+
+
+@njit(cache=True, nogil=True)
+def _pencil_shape_factor_prepared(p, r, theta, sine, rx, ry, rz, pencil_pos,
+                                  pencil_major, pencil_var_major,
+                                  pencil_var_minor, prepared, smoothing_factor,
+                                  gauss_tangent, gauss_weighted_sec2):
+    """Original shape correction with receiver-independent factors cached."""
+    hx_ = (rx - pencil_pos[p, 0]) / r
+    hy_ = (ry - pencil_pos[p, 1]) / r
+    hz_ = (rz - pencil_pos[p, 2]) / r
+    return _pencil_shape_factor_from_ray(
+        p, r, theta, sine, hx_, hy_, hz_, pencil_major, pencil_var_major,
+        pencil_var_minor, prepared, smoothing_factor, gauss_tangent,
+        gauss_weighted_sec2)
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _pencil_shape_factor_from_ray(p, r, theta, sine, hx_, hy_, hz_,
+                                  pencil_major, pencil_var_major,
+                                  pencil_var_minor, prepared, smoothing_factor,
+                                  gauss_tangent, gauss_weighted_sec2):
+    """Prepared shape correction with an exactly reused displacement ray."""
+    ax_ = pencil_major[p, 0]
+    ay_ = pencil_major[p, 1]
+    az_ = pencil_major[p, 2]
+    bx_ = prepared[p, 0]
+    by_ = prepared[p, 1]
+    bz_ = prepared[p, 2]
+    inv_r2 = 1.0 / (r * r)
+    m11 = pencil_var_major[p] + prepared[p, 3] * inv_r2
+    m22 = pencil_var_minor[p] + prepared[p, 4] * inv_r2
+    m12 = prepared[p, 5] * inv_r2
+    # Gershgorin bounds the largest eigenvalue of this symmetric matrix.
+    # A strict, padded upper bound proves the far branch without solving
+    # the eigensystem. Extreme entries retain the original overflow path.
+    upper = max(m11, m22) + abs(m12)
+    far = (max(abs(m11), abs(m22), abs(m12)) < 1e150
+           and theta * theta > (smoothing_factor * smoothing_factor
+                                 * max(upper, 0.0) * (1.0 + 1e-12)))
+    mu1 = mu2 = extent = 0.0
+    if not far:
+        half_tr = 0.5 * (m11 + m22)
+        disc = math.sqrt(max(0.25 * (m11 - m22) ** 2 + m12 * m12, 0.0))
+        mu1 = half_tr + disc
+        mu2 = max(half_tr - disc, 1e-16 * mu1 + 1e-300)
+        extent = math.sqrt(max(mu1, 0.0))
+    u_ = hx_ * ax_ + hy_ * ay_ + hz_ * az_
+    v_ = hx_ * bx_ + hy_ * by_ + hz_ * bz_
+    if not far and extent > 0.0 and theta < smoothing_factor * extent:
+        angle = 0.5 * math.atan2(2.0 * m12, m11 - m22)
+        ca = math.cos(angle)
+        sa = math.sin(angle)
+        mean = gauss_inverse_mean_prepared(ca * u_ + sa * v_, -sa * u_ + ca * v_,
+                                           mu1, mu2, gauss_tangent, gauss_weighted_sec2)
+        factor = mean * (theta / sine if sine > 1e-300 else 1.0)
+        theta_eff = math.asin(min(1.0, 1.0 / factor)) if factor > 1.0 else theta
+        return factor, theta_eff, theta < extent, True
+    if sine <= 1e-300:
+        return 0.0, theta, False, False
+    d2 = u_ * u_ + v_ * v_
+    factor = 1.0 / sine
+    if d2 > 0.0:
+        quad_form = m11 * u_ * u_ + 2.0 * m12 * u_ * v_ + m22 * v_ * v_
+        factor *= 1.0 + 0.5 * (3.0 * quad_form / d2 - (m11 + m22)) / d2
+    return factor, theta, False, True
+
+
 @njit(cache=True, nogil=True)
 def _pencil_shape_factor(p, r, theta, sine, rx, ry, rz, pencil_pos, pencil_dir,
                          pencil_major, pencil_var_major, pencil_var_minor,
                          pencil_pos_cov, smoothing_factor, gauss_tau, gauss_w):
-    """Mean of ``1/sin(theta)`` over one pencil's apparent angular shape.
+    """Forward-hemisphere mean of 1/sin(theta) over the apparent pencil shape.
 
     The shape seen from the module is the direction covariance (major and
     minor axes in the tangent plane) plus the position covariance projected
@@ -1085,10 +1462,261 @@ def _pencil_shape_factor(p, r, theta, sine, rx, ry, rz, pencil_pos, pencil_dir,
 
 
 @njit(cache=True, nogil=True)
-def _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work, pencil_pos, pencil_dir, pencil_w0, pencil_w2, pencil_t, pencil_major, pencil_var_major, pencil_var_minor, pencil_pos_cov, gauss_tau, gauss_w, coef, ipow, jpow, max_power, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, max_nodes, smoothing_factor, theta_lo, theta_ratio, tau_step, log_r_step, speed_ref, n_blocks, n_recv, n_pen, n_lambda, nb, n_mono, charge_out, bins_out, groups_out, batches_out, mut_min, speed_max, n_values, log_theta_ratio, theta_bins, n_work):
-    """One thread block of :func:`grouped_pencils_order1` (no hoisting)."""
+def _grouped_batch_charge_estimate(values, slots, order, start, stop, n_mono,
+                                   coef, radius, area, g, mus, mut, s0w, s2w,
+                                   backward=False):
+    """Absolute integral bound for the continuous, already grouped profile.
+
+    Moment rows include 1/(r sin(theta)). The remaining path Jacobian is
+    dchi/dS, with theta <= chi <= pi and S >= radius. Bound polynomial
+    factors by one and the HG density by its maximum on that angular range.
+    This does not bound overshoot of subsequent polynomial time quadrature.
+    """
+    first = 0.0
+    second = 0.0
+    for q in range(start, stop):
+        row = values[slots[order[q]]]
+        weight = row[2 * n_mono]
+        if weight <= 0.0:
+            continue
+        theta = max(row[2 * n_mono + 1] / weight, 1e-9)
+        peak = _hg(math.cos(theta) if g >= 0.0 else -1.0, g)
+        delta = max(math.pi - theta, 0.0)
+        # Backward moments use w/r: the interval/sine ratio has limit one.
+        angular = ((1.0 if delta == 0.0 else delta / math.sin(delta)) * peak
+                   if backward else delta * peak)
+        for m in range(n_mono):
+            first += angular * abs(coef[m] * row[m])
+            second += angular * abs(coef[m] * row[n_mono + m])
+    bound = 0.0
+    for lam in range(len(mus)):
+        bound += (abs(mus[lam]) * math.exp(-mut[lam] * radius)
+                  * (abs(s0w[lam]) * first + abs(s2w[lam]) * second))
+    return abs(area) * bound
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _geometry_bit_hash(value):
+    value = (value ^ (value >> np.uint64(30))) * np.uint64(0xbf58476d1ce4e5b9)
+    value = (value ^ (value >> np.uint64(27))) * np.uint64(0x94d049bb133111eb)
+    return value ^ (value >> np.uint64(31))
+
+
+@njit(cache=True, nogil=True)
+def _exact_pencil_geometry_ids(pencil_pos, pencil_t):
+    """Stable first-occurrence IDs for bitwise equal position and clock.
+
+    Float bit keys preserve signed zero and every original float64 value.
+    Only the reusable geometry is indexed; pencil accumulation stays in its
+    original order, including pencils with different directions or shapes.
+    """
+    n = pencil_pos.shape[0]
+    pos_bits = pencil_pos.view(np.uint64)
+    time_bits = pencil_t.view(np.uint64)
+    capacity = 8
+    while capacity < 2 * n:
+        capacity *= 2
+    slots = np.full(capacity, -1, dtype=np.int64)
+    representatives = np.empty(n, dtype=np.int64)
+    ids = np.empty(n, dtype=np.int64)
+    used = 0
+    mask = np.uint64(capacity - 1)
+    for p in range(n):
+        hashed = _geometry_bit_hash(pos_bits[p, 0])
+        hashed = _geometry_bit_hash(hashed ^ pos_bits[p, 1])
+        hashed = _geometry_bit_hash(hashed ^ pos_bits[p, 2])
+        hashed = _geometry_bit_hash(hashed ^ time_bits[p])
+        slot = np.int64(hashed & mask)
+        while slots[slot] >= 0:
+            geometry = slots[slot]
+            q = representatives[geometry]
+            if (pos_bits[p, 0] == pos_bits[q, 0]
+                    and pos_bits[p, 1] == pos_bits[q, 1]
+                    and pos_bits[p, 2] == pos_bits[q, 2]
+                    and time_bits[p] == time_bits[q]):
+                break
+            slot = (slot + 1) & (capacity - 1)
+        if slots[slot] < 0:
+            slots[slot] = used
+            representatives[used] = p
+            used += 1
+        ids[p] = slots[slot]
+    return ids, representatives[:used]
+
+
+@njit(cache=True, nogil=True)
+def _prepare_receiver_geometry(rx, ry, rz, origin, pencil_pos, pencil_t,
+                               representatives, speed_ref, tau_step,
+                               log_r_step, geometry, geometry_keys):
+    """Fill one row per exact geometry using the original scalar arithmetic."""
+    for g in range(representatives.shape[0]):
+        p = representatives[g]
+        dx = rx - pencil_pos[p, 0]
+        dy = ry - pencil_pos[p, 1]
+        dz = rz - pencil_pos[p, 2]
+        r = math.sqrt(dx * dx + dy * dy + dz * dz)
+        geometry[g, 0] = r
+        geometry[g, 1] = dx / r
+        geometry[g, 2] = dy / r
+        geometry[g, 3] = dz / r
+        t_emit = pencil_t[p] - origin
+        tau = t_emit + r / speed_ref
+        log_r = math.log(r)
+        geometry[g, 4] = t_emit
+        geometry[g, 5] = tau
+        geometry[g, 6] = log_r
+        geometry_keys[g, 0] = int(math.floor(log_r / log_r_step)) + (1 << 20)
+        geometry_keys[g, 1] = min(max(int(math.floor(tau / tau_step)) + (1 << 20),
+                                      0), (1 << 21) - 1)
+
+
+@intrinsic
+def _float64_bits(typing_context, value):
+    """Reinterpret one float64 register as uint64 without allocation."""
+    if value != types.float64:
+        return None
+    signature = types.uint64(types.float64)
+
+    def codegen(context, builder, sig, args):
+        return builder.bitcast(args[0], ir.IntType(64))
+
+    return signature, codegen
+
+@njit(cache=True, nogil=True, inline='always')
+def scalar_theta_index(theta, theta_lo, log_theta_ratio):
+    if theta < theta_lo:
+        return 0
+    return 1 + int(math.log(theta / theta_lo) / log_theta_ratio)
+
+@njit(cache=True, nogil=True)
+def build_theta_thresholds(theta_lo, log_theta_ratio, theta_bins, max_adjustments=128):
+    """First representable angle at every scalar index transition.
+
+    Construction performs at most max_adjustments neighboring-float moves
+    per threshold. An empty result requests the original scalar fallback.
+    """
+    empty = np.empty(0, dtype=np.float64)
+    if (not math.isfinite(theta_lo) or theta_lo <= 0.0 or theta_lo > math.pi
+            or not math.isfinite(log_theta_ratio) or log_theta_ratio <= 0.0
+            or theta_bins < 2 or theta_bins > 4096 or max_adjustments < 0):
+        return empty
+    maximum = math.log(math.pi / theta_lo) / log_theta_ratio
+    if not math.isfinite(maximum) or maximum < 0.0 or maximum > 4094.0:
+        return empty
+    # A caller's table size must cover every physical angle exactly.
+    if theta_bins != 2 + int(maximum):
+        return empty
+    thresholds = np.empty(theta_bins - 1, dtype=np.float64)
+    thresholds[0] = theta_lo
+    for k in range(1, theta_bins - 1):
+        value = theta_lo * math.exp(k * log_theta_ratio)
+        if not math.isfinite(value) or value <= 0.0:
+            return empty
+        changes = 0
+        while scalar_theta_index(value, theta_lo, log_theta_ratio) < k + 1:
+            if changes >= max_adjustments:
+                return empty
+            value = np.nextafter(value, np.inf)
+            changes += 1
+        previous = np.nextafter(value, -np.inf)
+        while scalar_theta_index(previous, theta_lo, log_theta_ratio) >= k + 1:
+            if changes >= max_adjustments:
+                return empty
+            value = previous
+            previous = np.nextafter(value, -np.inf)
+            changes += 1
+        if value < thresholds[k - 1]:
+            return empty
+        thresholds[k] = value
+    return thresholds
+
+@njit(cache=True, nogil=True, inline='always')
+def threshold_theta_index(theta, theta_lo, log_theta_ratio, thresholds):
+    """Equivalent scalar index, using upper-bound search over transitions."""
+    if (thresholds.shape[0] == 0 or not math.isfinite(theta)
+            or theta > math.pi):
+        return scalar_theta_index(theta, theta_lo, log_theta_ratio)
+    low = 0
+    high = thresholds.shape[0]
+    while low < high:
+        middle = (low + high) // 2
+        if theta < thresholds[middle]:
+            high = middle
+        else:
+            low = middle + 1
+    return low
+
+@njit(cache=True, nogil=True)
+def build_theta_bit_lut(theta_lo, thresholds):
+    """Coarse float-bit buckets contain exact lower-bound starting indices."""
+    empty = np.empty(0, dtype=np.int64)
+    if (thresholds.shape[0] == 0 or not math.isfinite(theta_lo)
+            or theta_lo <= 0.0 or theta_lo > math.pi):
+        return empty, 0
+    first = np.int64(_float64_bits(theta_lo) >> np.uint64(47))
+    last = np.int64(_float64_bits(math.pi) >> np.uint64(47))
+    count = last - first + 1
+    if count < 1 or count > 4096:
+        return empty, 0
+    bits = thresholds.view(np.uint64)
+    lut = np.empty(count, dtype=np.int64)
+    position = 0
+    for bucket in range(count):
+        lower = np.uint64(first + bucket) << np.uint64(47)
+        while position < bits.shape[0] and bits[position] <= lower:
+            position += 1
+        lut[bucket] = position
+    return lut, first
+
+@njit(cache=True, nogil=True, inline='always')
+def bit_lut_theta_index(theta, theta_lo, log_theta_ratio, thresholds, lut, first):
+    if (thresholds.shape[0] == 0 or not math.isfinite(theta)
+            or theta > math.pi):
+        return scalar_theta_index(theta, theta_lo, log_theta_ratio)
+    if theta < theta_lo:
+        return 0
+    if lut.shape[0] == 0:
+        return threshold_theta_index(theta, theta_lo, log_theta_ratio, thresholds)
+    bucket = np.int64(_float64_bits(theta) >> np.uint64(47)) - np.int64(first)
+    if bucket < 0 or bucket >= lut.shape[0]:
+        return threshold_theta_index(theta, theta_lo, log_theta_ratio, thresholds)
+    index = lut[bucket]
+    while index < thresholds.shape[0] and theta >= thresholds[index]:
+        index += 1
+    return index
+
+@njit(cache=True, nogil=True)
+def _prepare_common_pencil_look(pencil_dir, looks, work):
+    """Share powers only when every requested look is bitwise identical."""
+    empty = np.empty((0, 3))
+    if work.shape[0] == 0:
+        return False, empty
+    look_bits = looks.view(np.uint64)
+    first = work[0]
+    for index in range(1, work.shape[0]):
+        d = work[index]
+        if (look_bits[d, 0] != look_bits[first, 0]
+                or look_bits[d, 1] != look_bits[first, 1]
+                or look_bits[d, 2] != look_bits[first, 2]):
+            return False, empty
+    powers = np.empty((pencil_dir.shape[0], 3))
+    _prepare_pencil_look_powers(pencil_dir, looks[first, 0], looks[first, 1],
+                                looks[first, 2], powers)
+    return True, powers
+
+
+@njit(cache=True, nogil=True)
+def _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work, pencil_pos, pencil_dir, pencil_w0, pencil_w2, pencil_t, pencil_major, pencil_var_major, pencil_var_minor, pencil_pos_cov, gauss_tau, gauss_w, coef, ipow, jpow, max_power, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, max_nodes, smoothing_factor, theta_lo, theta_ratio, tau_step, log_r_step, speed_ref, n_blocks, n_recv, n_pen, n_lambda, nb, n_mono, charge_out, bins_out, groups_out, batches_out, mut_min, speed_max, n_values, log_theta_ratio, theta_bins, n_work, compute_bins, batch_tolerance_pe, omission, geometry_ids, representatives, prepared_shape, gauss_tangent, gauss_weighted_sec2, cubic_layout, theta_thresholds, theta_lut, theta_first, common_look, shared_look_powers):
+    """Private receiver scratch with read-only shared source preparation."""
+    # Copies restore private ownership in hot inlined helpers. The source
+    # mathematics and exact hash construction still run once per invocation.
+    prepared_shape = prepared_shape.copy()
+    gauss_tangent = gauss_tangent.copy()
+    gauss_weighted_sec2 = gauss_weighted_sec2.copy()
+    theta_thresholds = theta_thresholds.copy()
+    theta_lut = theta_lut.copy()
     pre = np.zeros((n_lambda, 3))
-    acc = np.zeros((n_lambda, nb, 4))
+    acc = np.zeros((n_lambda, nb if compute_bins else 0, 4))
     charge = np.zeros(n_lambda)
     s_buf = np.empty(max_nodes)
     t_buf = np.empty(max_nodes)
@@ -1100,74 +1728,140 @@ def _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work,
     mom0 = np.empty(n_mono)
     mom2 = np.empty(n_mono)
     keys = np.full(1 << 12, -1, dtype=np.int64)
-    values = np.zeros((1 << 12, n_values))
+    values = np.empty((1 << 12, n_values))
+    geometry = np.empty((representatives.shape[0], 7))
+    geometry_keys = np.empty((representatives.shape[0], 2), dtype=np.int64)
+    geometry_base_keys = np.empty(representatives.shape[0], dtype=np.int64)
+    if common_look:
+        # Copy shared powers once; all receiver-dependent writes stay local.
+        look_powers = shared_look_powers.copy()
+    else:
+        look_powers = np.empty((n_pen, 3))
+    look_bits = looks.view(np.uint64)
+    cached_look = np.empty(3, dtype=np.uint64)
+    look_ready = False
     for index in range(block, n_work, n_blocks):
         d = work[index]
         pre[:, :] = 0.0
         acc[:, :, :] = 0.0
         charge[:] = 0.0
         keys[:] = -1
-        values[:, :] = 0.0
         used = 0
         rx = receivers[d, 0]
         ry = receivers[d, 1]
         rz = receivers[d, 2]
         origin = origins[d]
+        if (not common_look and
+                (not look_ready or cached_look[0] != look_bits[d, 0]
+                 or cached_look[1] != look_bits[d, 1]
+                 or cached_look[2] != look_bits[d, 2])):
+            _prepare_pencil_look_powers(pencil_dir, looks[d, 0], looks[d, 1],
+                                        looks[d, 2], look_powers)
+            cached_look[0] = look_bits[d, 0]
+            cached_look[1] = look_bits[d, 1]
+            cached_look[2] = look_bits[d, 2]
+            look_ready = True
+        _prepare_receiver_geometry(rx, ry, rz, origin, pencil_pos, pencil_t,
+                                   representatives, speed_ref, tau_step,
+                                   log_r_step, geometry, geometry_keys)
+        for geometry_id in range(representatives.shape[0]):
+            geometry_base_keys[geometry_id] = ((geometry_keys[geometry_id, 1] * (1 << 21)
+                                              + geometry_keys[geometry_id, 0])
+                                             * 2 * theta_bins)
+        omission[d, 0] = 0.0
+        omission[d, 1] = 0.0
         for p in range(n_pen):
-            r, theta, sine, cosine, c1, c3 = _pencil_frame(
-                rx - pencil_pos[p, 0], ry - pencil_pos[p, 1], rz - pencil_pos[p, 2],
-                pencil_dir[p, 0], pencil_dir[p, 1], pencil_dir[p, 2],
-                looks[d, 0], looks[d, 1], looks[d, 2])
+            geometry_id = geometry_ids[p]
+            ray = geometry[geometry_id]
+            r = ray[0]
+            r, theta, sine, cosine, c1, c3 = _pencil_frame_from_ray_cached_look(
+                r, ray[1], ray[2], ray[3], pencil_dir[p, 0],
+                pencil_dir[p, 1], pencil_dir[p, 2],
+                looks[d, 0], looks[d, 1], looks[d, 2], look_powers[p, 0])
             # apparent angular shape of the pencil seen from this module:
             # direction covariance (major/minor in the tangent plane) plus the
             # position covariance projected on that plane over r^2; the mean
             # of 1/theta is the exact 2D-Gaussian mean with that covariance
-            cov = pencil_pos_cov[p]
-            bound = (pencil_var_major[p] + pencil_var_minor[p]
-                     + (cov[0] + cov[1] + cov[2]) / (r * r))
-            if sine > 1e-300 and bound < 1e-4 * sine * sine:
+            backward = theta > 0.5 * math.pi
+            bound = 0.0
+            if not backward:
+                bound = (pencil_var_major[p] + pencil_var_minor[p]
+                         + prepared_shape[p, 6] / (r * r))
+            if backward:
+                # The whole backward profile is smooth. Averaging its
+                # isolated 1/sin(theta) factor creates a false antipodal pole.
+                # Keep finite moments; covariance remains an O(C) truncation.
+                weight = 1.0 / r
+                averaged = False
+            elif sine > 1e-300 and bound < 1e-4 * sine * sine:
                 # far from the module direction: the shape correction is
                 # below 1e-4 of the point value
                 factor = 1.0 / sine
                 weight = factor / r
                 averaged = False
             else:
-                factor, theta, averaged, ok = _pencil_shape_factor(
-                    p, r, theta, sine, rx, ry, rz, pencil_pos, pencil_dir,
-                    pencil_major, pencil_var_major, pencil_var_minor, pencil_pos_cov,
-                    smoothing_factor, gauss_tau, gauss_w)
+                factor, theta, averaged, ok = _pencil_shape_factor_from_ray(
+                    p, r, theta, sine, ray[1], ray[2], ray[3],
+                    pencil_major, pencil_var_major, pencil_var_minor, prepared_shape,
+                    smoothing_factor, gauss_tangent, gauss_weighted_sec2)
                 if not ok:
                     continue
                 weight = factor / r
-            if theta < theta_lo:
+            if (theta_thresholds.shape[0] == 0 or not math.isfinite(theta)
+                    or theta > math.pi):
+                i_theta = scalar_theta_index(theta, theta_lo, log_theta_ratio)
+            elif theta < theta_lo:
                 i_theta = 0
+            elif theta_lut.shape[0] > 0:
+                bucket = np.int64(_float64_bits(theta) >> np.uint64(47)) - theta_first
+                i_theta = theta_lut[bucket]
+                while (i_theta < theta_thresholds.shape[0]
+                       and theta >= theta_thresholds[i_theta]):
+                    i_theta += 1
             else:
-                i_theta = 1 + int(math.log(theta / theta_lo) / log_theta_ratio)
-            tau = pencil_t[p] - origin + r / speed_ref
-            i_tau = min(max(int(math.floor(tau / tau_step)) + (1 << 20), 0),
-                        (1 << 21) - 1)
-            i_r = min(max(int(math.floor(math.log(r) / log_r_step)) + (1 << 10), 0),
-                      (1 << 11) - 1)
-            key = ((i_tau * (1 << 11) + i_r) * theta_bins) + i_theta
+                low = 0
+                high = theta_thresholds.shape[0]
+                while low < high:
+                    middle = (low + high) // 2
+                    if theta < theta_thresholds[middle]:
+                        high = middle
+                    else:
+                        low = middle + 1
+                i_theta = low
+            tau = ray[5]
+            # Twenty-one radial bits cover the float64 log-radius range at
+            # useful refinement steps. The former 11-bit field silently
+            # merged every r>exp(1023*.005)~=166 m when log_r_step=.005.
+            # Hemispheres use different moment normalizations and must not
+            # share either a theta group or a (tau,r) quadrature batch.
+            key = geometry_base_keys[geometry_id] + int(backward) * theta_bins + i_theta
             if 2 * (used + 1) > keys.shape[0]:
                 keys, values = _grow(keys, values, used)
             slot = _hash_slot(keys, key)
             if keys[slot] == -1:
                 keys[slot] = key
                 used += 1
-            _fill_moments_averaged(weight * pencil_w0[p], c1, c3, averaged,
-                                   ipow, jpow, max_power, mom0, cpow, spow)
-            _fill_moments_averaged(weight * pencil_w2[p], c1, c3, averaged,
-                                   ipow, jpow, max_power, mom2, cpow, spow)
+                # Only occupied rows are read or moved by _grow. Reset a row
+                # on insertion, preserving the original +0 initialization.
+                values[slot, :] = 0.0
             row = values[slot]
-            for m in range(n_mono):
-                row[m] += mom0[m]
-                row[n_mono + m] += mom2[m]
-            omega = abs(mom0[0])
+            if cubic_layout:
+                omega = _accumulate_cubic_moments_pair_prepared(
+                    weight * pencil_w0[p], weight * pencil_w2[p],
+                    look_powers[p, 0], look_powers[p, 1], look_powers[p, 2],
+                    c3, averaged, row)
+            else:
+                _fill_moments_averaged_pair(weight * pencil_w0[p], weight * pencil_w2[p],
+                                            c1, c3, averaged, ipow, jpow, max_power,
+                                            mom0, mom2, cpow, spow)
+                for m in range(n_mono):
+                    row[m] += mom0[m]
+                    row[n_mono + m] += mom2[m]
+                omega = abs(mom0[0])
             row[2 * n_mono] += omega
             row[2 * n_mono + 1] += omega * theta
             row[2 * n_mono + 2] += omega * r
-            row[2 * n_mono + 3] += omega * (pencil_t[p] - origin)
+            row[2 * n_mono + 3] += omega * ray[4]
             row[2 * n_mono + 4] += omega * tau
             row[2 * n_mono + 5] += omega * tau * tau
         # occupied slots, ordered so that one (tau, r) batch is contiguous
@@ -1184,6 +1878,7 @@ def _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work,
         batches = 0
         while start < used:
             batch_key = order_keys[order[start]] // theta_bins
+            backward = batch_key % 2 == 1
             stop = start
             omega_sum = 0.0
             r_sum = 0.0
@@ -1204,12 +1899,26 @@ def _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work,
                 stop += 1
             if omega_sum > 0.0:
                 r_b = r_sum / omega_sum
+                if batch_tolerance_pe > 0.0:
+                    estimate = _grouped_batch_charge_estimate(
+                        values, order_slots, order, start, stop, n_mono, coef,
+                        r_b, areas[d], g, mus, mut, s0w, s2w, backward)
+                    # There cannot be more batches than occupied groups.
+                    if estimate <= batch_tolerance_pe / used:
+                        omission[d, 0] += 1.0
+                        omission[d, 1] += estimate
+                        start = stop
+                        continue
                 t_b = t_sum / omega_sum
                 tau_mean = tau_sum / omega_sum
                 tau_var = max(tau2_sum / omega_sum - tau_mean * tau_mean, 0.0)
                 theta_small = max(theta_small, 1e-9)
-                sigma = _batch_sigma(r_b, math.sin(theta_small),
-                                     math.tan(0.5 * theta_small), y_g)
+                if backward:
+                    sigma = max(0.5 * r_b * math.sin(theta_small) * y_g,
+                                0.25 * r_b * (1.0 - math.cos(theta_small)))
+                else:
+                    sigma = _batch_sigma(r_b, math.sin(theta_small),
+                                         math.tan(0.5 * theta_small), y_g)
                 n = _batch_grid(r_b, sigma, t_b, h, h_tail, tail_exp, mut_min,
                                 speed_max, edges[nb], s_buf)
                 g0[:n] = 0.0
@@ -1226,21 +1935,28 @@ def _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work,
                     sine = math.sin(theta)
                     _batch_add_moments(n, s_buf, r_b, sine, math.cos(theta), sine,
                                        mom0, mom2, coef, ipow, jpow, max_power, g,
-                                       g0, g2, cpow, spow)
+                                       g0, g2, cpow, spow, backward)
                 _batch_deposit(n, s_buf, g0, g2, r_b, t_b, tail_exp, mus, mut,
                                speed, s0w, s2w, edges, eedge, pre, acc, charge,
                                direct_bins, t_buf, h_buf,
-                               math.sqrt(12.0 * tau_var), 0.0, 0.0, 0.0)
+                               math.sqrt(12.0 * tau_var), 0.0, 0.0, 0.0,
+                               compute_bins)
                 batches += 1
             start = stop
-        charge_out[d] = _finalize(edges, eedge, itab, pre, acc, charge,
-                                  areas[d], bins_out[d])
+        if compute_bins:
+            charge_out[d] = _finalize(edges, eedge, itab, pre, acc, charge,
+                                      areas[d], bins_out[d])
+        else:
+            total_charge = 0.0
+            for lam in range(n_lambda):
+                total_charge += charge[lam]
+            charge_out[d] = areas[d] * total_charge
         groups_out[d] = used
         batches_out[d] = batches
 
 
 @njit(cache=True, parallel=True)
-def grouped_pencils_order1(receivers, looks, areas, origins, work,
+def _grouped_pencils_order1_impl(receivers, looks, areas, origins, work,
                            pencil_pos, pencil_dir, pencil_w0, pencil_w2,
                            pencil_t, pencil_major, pencil_var_major,
                            pencil_var_minor, pencil_pos_cov, gauss_tau, gauss_w,
@@ -1249,7 +1965,8 @@ def grouped_pencils_order1(receivers, looks, areas, origins, work,
                            mus, mut, speed, s0w, s2w, edges, eedge, itab,
                            direct_bins, max_nodes, smoothing_factor,
                            theta_lo, theta_ratio, tau_step, log_r_step, speed_ref,
-                           n_blocks):
+                           n_blocks, compute_bins=True, batch_tolerance_pe=0.0,
+                           omission=None):
     """Per-module merge of pencils into (tau, r, theta) groups; one batch per
     (tau, r) with one profile term per theta group.
 
@@ -1261,7 +1978,11 @@ def grouped_pencils_order1(receivers, looks, areas, origins, work,
     near the cone the ``c3`` moments are azimuth averaged. Groups carry exact acceptance
     moments of both fields and singular-weighted means of theta, r, t and
     tau.  ``work`` lists the modules to evaluate.
-    Returns ``(charge, bins, groups, batches)``.
+    Returns ``(charge, bins, groups, batches)``. With ``compute_bins=False``,
+    the quadrature and charge are unchanged, while histogram deposition is
+    skipped and ``bins`` has shape ``(n_recv, 0)`` (coarse screening).
+    Optional ``omission`` receives skipped-batch counts and continuous-profile
+    absolute-charge estimates in columns 0 and 1 (one row per receiver).
     """
     n_recv = receivers.shape[0]
     n_pen = pencil_pos.shape[0]
@@ -1269,7 +1990,7 @@ def grouped_pencils_order1(receivers, looks, areas, origins, work,
     nb = edges.shape[0] - 1
     n_mono = coef.shape[0]
     charge_out = np.zeros(n_recv)
-    bins_out = np.zeros((n_recv, nb))
+    bins_out = np.zeros((n_recv, nb if compute_bins else 0))
     groups_out = np.zeros(n_recv, dtype=np.int64)
     batches_out = np.zeros(n_recv, dtype=np.int64)
     mut_min = mut.min()
@@ -1277,10 +1998,48 @@ def grouped_pencils_order1(receivers, looks, areas, origins, work,
     n_values = 2 * n_mono + 6
     log_theta_ratio = math.log(1.0 + theta_ratio)
     theta_bins = 2 + int(math.log(math.pi / theta_lo) / log_theta_ratio)
+    # Reject unsupported key resolutions instead of clamping/overflowing.
+    if (log_r_step < 710.0 / ((1 << 20) - 2)
+            or theta_bins > ((1 << 63) - 1) // (2 * (1 << 42))):
+        raise ValueError('grouped radius/angular resolution exceeds integer key range')
     n_work = work.shape[0]
+    omitted = np.zeros((n_recv, 2)) if omission is None else omission
+    if n_work == 0 or n_blocks <= 0:
+        return charge_out, bins_out, groups_out, batches_out
+    # Source-dependent preparation is identical across receiver blocks.
+    # Build once, retain ownership here, and let all blocks read it.
+    geometry_ids, representatives = _exact_pencil_geometry_ids(pencil_pos, pencil_t)
+    prepared_shape = _prepare_pencil_shape(pencil_dir, pencil_major, pencil_pos_cov)
+    gauss_tangent, gauss_weighted_sec2 = _prepare_gauss_inverse(gauss_tau, gauss_w)
+    cubic_layout = _is_cubic_moment_layout(ipow, jpow, max_power)
+    theta_thresholds = build_theta_thresholds(theta_lo, log_theta_ratio, theta_bins)
+    theta_lut, theta_first = build_theta_bit_lut(theta_lo, theta_thresholds)
+    common_look, shared_look_powers = _prepare_common_pencil_look(pencil_dir, looks, work)
     for block in prange(n_blocks):
-        _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work, pencil_pos, pencil_dir, pencil_w0, pencil_w2, pencil_t, pencil_major, pencil_var_major, pencil_var_minor, pencil_pos_cov, gauss_tau, gauss_w, coef, ipow, jpow, max_power, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, max_nodes, smoothing_factor, theta_lo, theta_ratio, tau_step, log_r_step, speed_ref, n_blocks, n_recv, n_pen, n_lambda, nb, n_mono, charge_out, bins_out, groups_out, batches_out, mut_min, speed_max, n_values, log_theta_ratio, theta_bins, n_work)
+        _grouped_pencils_order1_block(block, receivers, looks, areas, origins, work, pencil_pos, pencil_dir, pencil_w0, pencil_w2, pencil_t, pencil_major, pencil_var_major, pencil_var_minor, pencil_pos_cov, gauss_tau, gauss_w, coef, ipow, jpow, max_power, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, max_nodes, smoothing_factor, theta_lo, theta_ratio, tau_step, log_r_step, speed_ref, n_blocks, n_recv, n_pen, n_lambda, nb, n_mono, charge_out, bins_out, groups_out, batches_out, mut_min, speed_max, n_values, log_theta_ratio, theta_bins, n_work, compute_bins, batch_tolerance_pe, omitted, geometry_ids, representatives, prepared_shape, gauss_tangent, gauss_weighted_sec2, cubic_layout, theta_thresholds, theta_lut, theta_first, common_look, shared_look_powers)
     return charge_out, bins_out, groups_out, batches_out
+
+
+
+
+def grouped_pencils_order1(receivers, looks, areas, origins, work, pencil_pos, pencil_dir, pencil_w0, pencil_w2, pencil_t, pencil_major, pencil_var_major, pencil_var_minor, pencil_pos_cov, gauss_tau, gauss_w, coef, ipow, jpow, max_power, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, max_nodes, smoothing_factor, theta_lo, theta_ratio, tau_step, log_r_step, speed_ref, n_blocks, compute_bins=True, batch_tolerance_pe=0.0, omission=None):
+    """Normalize public inputs before entering the compiled grouped core."""
+    # Keep layout and optional-argument normalization in Python. The native
+    # parallel core always receives ordinary bool/float/array arguments.
+    looks = np.ascontiguousarray(looks)
+    compute_bins = bool(compute_bins)
+    batch_tolerance_pe = float(batch_tolerance_pe)
+    if omission is None:
+        omission = np.zeros((receivers.shape[0], 2), dtype=np.float64)
+    result = _grouped_pencils_order1_impl(receivers, looks, areas, origins, work, pencil_pos, pencil_dir, pencil_w0, pencil_w2, pencil_t, pencil_major, pencil_var_major, pencil_var_minor, pencil_pos_cov, gauss_tau, gauss_w, coef, ipow, jpow, max_power, g, y_g, h, h_tail, tail_exp, mus, mut, speed, s0w, s2w, edges, eedge, itab, direct_bins, max_nodes, smoothing_factor, theta_lo, theta_ratio, tau_step, log_r_step, speed_ref, n_blocks, compute_bins, batch_tolerance_pe, omission)
+    grouped_pencils_order1.signatures = _grouped_pencils_order1_impl.signatures
+    return result
+
+
+
+grouped_pencils_order1.py_func = _grouped_pencils_order1_impl.py_func
+grouped_pencils_order1.signatures = _grouped_pencils_order1_impl.signatures
+grouped_pencils_order1.__doc__ = _grouped_pencils_order1_impl.py_func.__doc__
 
 
 # ------------------------------------------ uncompressed point-cone reference

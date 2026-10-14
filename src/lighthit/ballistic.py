@@ -1,7 +1,7 @@
 """Unscattered light with the module acceptance at the true arrival direction.
 
 The closed form of the cone root is the one already used by
-``lighthit.experimental.ballistic_fast``: for each emitting element and each
+``lighthit.ballistic_fast``: for each emitting element and each
 receiver there is at most one point ``a*`` along the element's chord whose
 Cherenkov cone passes through the receiver, and the fluence there is
 
@@ -19,7 +19,7 @@ coefficients, which is exact for a band-limited module response and is the
 same ``alpha`` the scattered orders use -- one definition, not two.
 
 This module is numpy only and always importable; the fused variant lives in
-``lighthit.experimental.ballistic_fast``.
+``lighthit.ballistic_fast``.
 """
 import numpy as np
 from scipy.special import eval_legendre

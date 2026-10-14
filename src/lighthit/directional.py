@@ -1,4 +1,4 @@
-r"""Exact directional-OM transport: the ``(l, lambda, mu)`` kernel.
+r"""Directional-OM transport with finite-rank scattering: the ``(l, lambda, mu)`` kernel.
 
 The cache of :mod:`lighthit.cache` keeps one multipole per degree, which is
 everything a problem with a *single* preferred direction needs: either a
@@ -9,7 +9,7 @@ index alike.
 
 An event is directed and a real optical module is directed, so both directions
 are present at once and that array is no longer enough. What replaces it is
-derived in ``docs/research/directional-om-plan.md`` and summarised here.
+summarised here.
 
 Work in the frame whose polar axis is the source-to-detector direction
 ``r_hat``. The response is then
@@ -656,7 +656,7 @@ def _rotate_into_frame(vectors, cosine, phi):
 
 
 def _real_harmonics(degree, vectors):
-    from .experimental.event_moments import real_spherical_harmonics
+    from .event_moments import real_spherical_harmonics
     return real_spherical_harmonics(degree, vectors)
 
 

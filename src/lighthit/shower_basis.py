@@ -1,19 +1,13 @@
-"""Shower-basis route for scattering order >=2 in the hybrid transport.
+"""Spectral axial-source basis for order >=2 in hybrid transport.
 
-``TransportKernel.transport_hybrid(source, ge2_basis=ShowerBasis())`` keeps
-the direct prompt orders 0+1 unchanged and replaces only the order >=2
-source representation: the shower's cloud-in-cell lattice of thousands of 3D
-cells is replaced by an axial-slice basis of ~10^2 points (cubic Lagrange
-slices along the shower axis, a five-point transverse moment stencil, exact
-real harmonics ``l <= L``, ``|m| <= M`` in the axial frame); see
-:mod:`lighthit._shower_basis` for the formula and
-``docs/research/shower-basis.md`` for the measured errors.
+``TransportKernel.transport_hybrid(source, ge2_basis=ShowerBasis())`` combines
+physical-time prompt orders 0+1 with the directional RTE response for order
+>=2. The source uses cubic axial slices, transverse moments and retained real
+angular harmonics. ``Ge2KernelStore`` prepares the radial splines once and
+supports memory-mapped reuse.
 
-The RTE Green function is the existing directional cache.  Its radial
-spline for order >=2 is prepared once per wavelength and frequency set and
-kept in a :class:`Ge2KernelStore` (in memory, optionally persisted as a
-memory-mapped pack), which removes the per-event spline construction and
-cache reload of the default hybrid.
+Its accuracy against finer bases and the per-band reference is summarised in
+README.md (Accuracy); the fast shower route is :mod:`lighthit.shower`.
 """
 from __future__ import annotations
 
@@ -29,6 +23,7 @@ from .sources import CherenkovTrack, G4Shower, SpectralLightElements, SyntheticS
 __all__ = ["ShowerBasis", "Ge2KernelStore"]
 
 PACK_SCHEMA = "lighthit/ge2-kernel-pack/1"
+_SPECTRAL_APPLY_POINTS = 2048
 
 
 @dataclass(frozen=True)
@@ -39,9 +34,12 @@ class ShowerBasis:
     (cubic Lagrange, fourth order) or 1 (linear).  ``transverse``:
     ``"stencil"`` (zeroth, first and diagonal second transverse moments
     exact) or ``"collapse"`` (every point on the axis).  Slices whose rms
-    transverse extent is below ``stencil_threshold_m`` keep only the axis
-    point.  ``time_step_ns``: lattice for ``exp(i omega t)`` (error at most
-    ``(omega dt)^2 / 8``).  The angular degree and azimuthal band are those
+    transverse extent is below ``stencil_threshold_m`` keep a single point at the total-light
+    centroid. ``time_step_ns``: lattice for ``exp(i omega t)``.
+    ``time_deposit="linear"`` has phase error at most ``(omega dt)^2 / 8``;
+    optional ``"cubic"`` uses four ticks and the bound ``3 (omega dt)^4 / 128``.
+    These are pointwise source-phase bounds, not relative detector-error bounds.
+    The angular degree and azimuthal band are those
     of the kernel configuration (``source_degree``, ``azimuthal_degree``).
     ``radial_high_m`` optionally narrows the per-OM source window inside the
     cache; the omitted zero-frequency light is screened against
@@ -52,6 +50,11 @@ class ShowerBasis:
     ``spectral_fusion=True`` reuses source-to-OM geometry across wavelength
     bands with identical points, at the cost of temporary ``complex64``
     source blocks; it is an explicit speed/memory tradeoff.
+    ``apply_tolerance_pe`` optionally skips negligible source/receiver pairs
+    in the spectral route using an angular/spline norm bound. It bounds the
+    omitted numerical spectrum at each computed frequency, up to floating
+    roundoff, relative to the same cache and source basis. It does not bound
+    transport discretisation or Fourier interpolation error. Zero disables it.
     """
     cell_m: float = 0.25
     axial_order: int = 3
@@ -66,8 +69,12 @@ class ShowerBasis:
     track_transverse: str = "stencil"
     secondary_cell_m: float = 0.5
     spectral_fusion: bool = False
+    apply_tolerance_pe: float = 0.0
+    time_deposit: str = "linear"
 
     def __post_init__(self):
+        if self.time_deposit not in ("linear", "nearest", "cubic"):
+            raise ValueError("time_deposit must be linear, nearest or cubic")
         if not (self.cell_m > 0 and self.stencil_m > 0 and self.time_step_ns > 0
                 and self.stencil_threshold_m >= 0):
             raise ValueError("ShowerBasis lengths and time step must be positive")
@@ -93,6 +100,8 @@ class ShowerBasis:
             raise ValueError("track_transverse must be 'stencil' or 'collapse'")
         if not isinstance(self.spectral_fusion, (bool, np.bool_)):
             raise ValueError("spectral_fusion must be a boolean")
+        if not np.isfinite(self.apply_tolerance_pe) or self.apply_tolerance_pe < 0:
+            raise ValueError("apply_tolerance_pe must be finite and nonnegative")
 
 
 class Ge2KernelStore:
@@ -165,6 +174,7 @@ class Ge2KernelStore:
             subset = dict(prepared,
                           coefficients=prepared["coefficients"][..., select],
                           omega=prepared["omega"][select])
+            subset["coefficients"].setflags(write=False)
             self._bundles[key] = subset
             return subset
         coefficients, absorption, speed = None, [], []
@@ -190,7 +200,8 @@ class Ge2KernelStore:
             absorption.append(full.absorption_per_m)
             speed.append(full.speed_m_per_ns)
             full = cache = None
-        bundle = dict(shared, coefficients=coefficients,
+        coefficients.setflags(write=False)
+        bundle = dict(shared, coefficients=coefficients, _norm_cache={},
                       absorption=np.asarray(absorption, float), speed=np.asarray(speed, float))
         self._bundles[key] = bundle
         return bundle
@@ -203,14 +214,15 @@ class Ge2KernelStore:
         positions within ``indices``.
         """
         from ._directional_numba import PreparedDirectionalKernel
-        bundle = self.bundle(kernel, indices)
+        selected_indices=np.atleast_1d(np.asarray(indices) if frequencies is None else np.asarray(indices)[frequencies])
+        compact=self._bundles.get(self._key(kernel,selected_indices)) if frequencies is not None else None
+        bundle = compact if compact is not None else self.bundle(kernel, indices)
         lam = int(np.flatnonzero(np.isclose(kernel.wavelength.wavelength_nm,
                                             float(wavelength_nm), rtol=0, atol=1e-9))[0])
         coefficients = bundle["coefficients"][lam]
         omega = bundle["omega"]
-        if frequencies is not None:
-            coefficients = coefficients[..., frequencies]
-            omega = omega[frequencies]
+        if frequencies is not None and compact is None:
+            coefficients=coefficients[...,frequencies];omega=omega[frequencies]
         shape, strides = coefficients.shape, coefficients.strides
         view = np.lib.stride_tricks.as_strided(
             coefficients, shape=shape[:4] + (2,) + shape[4:],
@@ -229,7 +241,7 @@ class Ge2KernelStore:
         for number, (key, bundle) in enumerate(self._bundles.items()):
             np.save(directory / f"{number}.npy", bundle["coefficients"])
             meta = {name: (value.tolist() if isinstance(value, np.ndarray) else value)
-                    for name, value in bundle.items() if name != "coefficients"}
+                    for name, value in bundle.items() if name != "coefficients" and not name.startswith("_")}
             index.append({"file": f"{number}.npy",
                           "key": [list(key[0]), key[1], list(key[2])], "meta": meta})
         (directory / "pack.json").write_text(json.dumps(
@@ -251,7 +263,8 @@ class Ge2KernelStore:
             key = (tuple(item["key"][0]), int(item["key"][1]), tuple(item["key"][2]))
             store._bundles[key] = dict(
                 meta, coefficients=np.load(directory / item["file"],
-                                           mmap_mode="r" if mmap else None))
+                                           mmap_mode="r" if mmap else None), _norm_cache={})
+            store._bundles[key]["coefficients"].setflags(write=False)
         return store
 
 
@@ -302,21 +315,27 @@ def _window_report_from_photons(kernel, points, photons, positions, low, high,
     far = np.zeros(len(positions), np.int64)
     near = np.zeros(len(positions), np.int64)
     tail = np.zeros(len(positions), float)
-    for index, receiver in enumerate(positions):
-        radius = np.linalg.norm(points - receiver, axis=1)
-        near[index] = np.count_nonzero(radius < low)
+    # Compact quasi-showers otherwise spend most of this pass in one Python
+    # call per OM. Bound the temporary coordinate array to about 24 MiB.
+    block = max(1, min(len(positions), 1_000_000 // max(len(points), 1)))
+    for start in range(0, len(positions), block):
+        stop = min(start + block, len(positions))
+        radius = np.linalg.norm(points[None] - positions[start:stop, None], axis=2)
+        near[start:stop] = np.count_nonzero(radius < low, axis=1)
         far_mask = radius > high
-        far[index] = np.count_nonzero(far_mask)
-        used[index] = len(points) - near[index] - far[index]
-        distance = radius[far_mask]
-        tail[index] = (10 * area[index] * peak_acceptance * efficiency
-                       * np.sum(photons[far_mask] * np.exp(-absorption * distance)
-                                / (4 * np.pi * distance ** 2)))
+        far[start:stop] = np.count_nonzero(far_mask, axis=1)
+        used[start:stop] = len(points) - near[start:stop] - far[start:stop]
+        distance = np.where(far_mask, radius, 1.)
+        tail[start:stop] = (10 * area[start:stop] * peak_acceptance * efficiency
+                            * np.sum(np.where(far_mask,
+                                photons[None] * np.exp(-absorption * distance)
+                                / (4 * np.pi * distance ** 2), 0.), axis=1))
     return used, far, near, tail
 
 
 def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
-                           prompt_config=None, store=None, representation="basis"):
+                           prompt_config=None, store=None, representation="basis",
+                           source_partition=None, track_stencil_center="axis"):
     """Prompt orders 0+1 and order >=2 on the axial-slice shower basis.
 
     The prompt orders and readout grid follow
@@ -334,7 +353,7 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
     from ._directional_numba import PreparedDirectionalKernel  # noqa: F401 (numba check)
     from ._shower_basis import (apply_multi, compile_axial_slices,
                                 earliest_element_arrival)
-    from .experimental.axial_source import AxisFrame
+    from .axial_source import AxisFrame
     from .readout import inverse_bins
     from .transport import HybridTransportResponse
 
@@ -358,7 +377,12 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
         return _transport_hybrid_spectral_basis(
             kernel, source, basis, frequency_nodes=frequency_nodes,
             prompt_config=prompt_config, store=store,
-            representation=representation)
+            representation=representation, source_partition=source_partition,
+            track_stencil_center=track_stencil_center)
+    if source_partition is not None or track_stencil_center != "axis":
+        raise ValueError("component source policies require spectral transport")
+    if basis.apply_tolerance_pe:
+        raise ValueError("apply_tolerance_pe requires the spectral cone model")
     sample = kernel.medium.sample(kernel.wavelength.wavelength_nm)
     valid = elements.beta * float(np.min(sample["phase_index"])) > 1
     if not np.any(valid):
@@ -393,9 +417,9 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
                 transverse=(basis.track_transverse if label == "axial m=0 track"
                             else basis.transverse), stencil_m=basis.stencil_m,
                 stencil_threshold_m=basis.stencil_threshold_m,
-                time_step_ns=basis.time_step_ns, frame=frame)
+                time_step_ns=basis.time_step_ns, time_deposit=basis.time_deposit, frame=frame)
         else:
-            from .experimental.axial_fast import compile_axial_source_fast
+            from .axial_fast import compile_axial_source_fast
             source0, source2 = (compile_axial_source_fast(
                 item, degree, omega, azimuthal_degree=azimuthal_degree,
                 cell_m=kernel.config.cell_m, element_order=2, frame=frame)
@@ -567,6 +591,9 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
         "prompt_bins": "orders 0 and 1 integrated in physical time",
         "prompt_algorithm": prompt.metadata["prompt_algorithm"],
         "prompt_order1_level": prompt.metadata["order1_level"],
+        "prompt_timings": prompt.metadata.get("timings"),
+        "prompt_batch_screen": prompt.metadata.get("order1_batch_screen"),
+        "prompt_order1_backward_profile": prompt.metadata.get("order1_backward_profile"),
         "inactive_order1_charge_may_be_coarse": bool(np.any(
             np.asarray(prompt.metadata["order1_level"]) == 1)),
     }
@@ -576,7 +603,8 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
 
 
 def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
-                                     prompt_config, store, representation):
+                                     prompt_config, store, representation,
+                                     source_partition=None, track_stencil_center="axis"):
     """Compile the wavelength-dependent cone one band at a time.
 
     The two wavelength-independent Cherenkov yield fields are combined only
@@ -586,7 +614,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
     """
     from ._shower_basis import (apply_multi, apply_multi_spectral, compile_axial_slices,
                                 earliest_element_arrival)
-    from .experimental.axial_source import AxisFrame
+    from .axial_source import AxisFrame
     from .readout import inverse_bins
     from .transport import HybridTransportResponse
 
@@ -619,9 +647,34 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
             pieces.append(("secondary particles", elements.subset(~track),
                            int(kernel.config.azimuthal_degree),
                            basis.secondary_cell_m, basis.transverse))
+    if source_partition is not None:
+        pieces = list(source_partition(elements, basis))
+        rows = np.concatenate([piece.row_index for _, piece, *_ in pieces])
+        if (not np.array_equal(np.sort(rows), np.sort(elements.row_index))
+                or len({label for label, *_ in pieces}) != len(pieces)):
+            raise ValueError("source partition must cover each element once with unique labels")
+    component_share = {label: (float(piece.coefficient0.sum()/elements.coefficient0.sum())
+                              if source_partition is not None else 1./len(pieces))
+                       for label, piece, *_ in pieces}
     pieces = [(label, piece, azimuthal, cell_m, transverse,
                AxisFrame.of(piece.field(0, phase_index=max_phase)))
               for label, piece, azimuthal, cell_m, transverse in pieces]
+    geometry_reference = {
+        label: piece.field(0, phase_index=max_phase)
+        for label, piece, *_ in pieces
+        if (track_stencil_center == "centroid" and basis.track_uid is not None
+            and np.all(piece.uid == basis.track_uid))}
+    def band_pieces():
+        bands = list(enumerate(zip(wavelengths, sample["phase_index"], strict=True)))
+        if source_partition is not None:
+            for info in pieces:
+                for lam, (wavelength, phase) in bands:
+                    yield lam, wavelength, phase, *info
+        else:
+            for lam, (wavelength, phase) in bands:
+                for info in pieces:
+                    yield lam, wavelength, phase, *info
+
     wavelengths = kernel.wavelength.wavelength_nm
     weights = kernel.wavelength.weight_nm
     efficiency = np.asarray(kernel.detector.spectral_weight(wavelengths), float)
@@ -656,28 +709,82 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
         return replace(first, photons=np.ascontiguousarray(
             first_scale * first.photons - second_scale * second.photons))
 
-    def compile_field(field, frame, azimuthal, cell_m, transverse, frequencies):
+    def compile_field(field, frame, azimuthal, cell_m, transverse, frequencies,
+                      point_selection=None, reference_geometry=None):
         if representation == "cells":
-            from .experimental.axial_fast import compile_axial_source_fast
-            return compile_axial_source_fast(
+            from .axial_fast import compile_axial_source_fast
+            compiled = compile_axial_source_fast(
                 field, degree, frequencies, azimuthal_degree=azimuthal,
                 cell_m=kernel.config.cell_m, element_order=2, frame=frame)
+            if point_selection is not None:
+                compiled = replace(compiled, z_m=compiled.z_m[point_selection],
+                                   transverse_m=compiled.transverse_m[point_selection],
+                                   channels=compiled.channels[point_selection])
+            return compiled
         return compile_axial_slices(
             field, degree, frequencies, azimuthal_degree=azimuthal,
             cell_m=cell_m, axial_order=basis.axial_order,
             transverse=transverse, stencil_m=basis.stencil_m,
             stencil_threshold_m=basis.stencil_threshold_m,
-            time_step_ns=basis.time_step_ns, frame=frame)
+            time_step_ns=basis.time_step_ns, time_deposit=basis.time_deposit, frame=frame,
+            point_selection=point_selection,
+            stencil_center="centroid" if reference_geometry is not None else "axis",
+            **({"geometry_reference": reference_geometry} if reference_geometry is not None else {}),
+            channel_dtype=np.complex64 if basis.spectral_fusion else np.complex128)
 
-    def apply_spectral_group(entries, target):
+    shared_points = separate_points = 0
+
+    def apply_spectral_group(entries, target, point_fraction=1.0):
         """Apply consecutive bands with shared points to selected OMs."""
+        nonlocal shared_points, separate_points
         first_lam, first_source, _ = entries[0]
+        count = len(first_source.z_m)
+        if count > _SPECTRAL_APPLY_POINTS:
+            # Leading-row slices are views. Split BEFORE selecting shared
+            # wavelength points, whose fancy indexing otherwise copies entire
+            # multi-GB source blocks, followed by another stacked copy in apply.
+            # Scaling epsilon with point count preserves the per-pair budget.
+            for start in range(0, count, _SPECTRAL_APPLY_POINTS):
+                stop = min(start + _SPECTRAL_APPLY_POINTS, count)
+                part = [(lam, replace(item, z_m=item.z_m[start:stop],
+                         transverse_m=item.transverse_m[start:stop],
+                         channels=item.channels[start:stop]), used)
+                        for lam, item, used in entries]
+                apply_spectral_group(part, target, point_fraction * (stop-start)/count)
+            return
         last_lam = entries[-1][0]
+        if len(entries) > 1:
+            points = first_source.points_m()
+            common = np.ones(len(points), bool)
+            for _, item, _ in entries[1:]:
+                common &= np.all(item.points_m() == points, axis=1)
+            if not np.all(common):
+                # A few wavelength-dependent thin-slice centroids used to
+                # disable fusion for the entire track. Share the identical
+                # points and evaluate only the exceptions separately; no
+                # coordinate or spectral approximation is introduced.
+                def subset(item, mask):
+                    return replace(item, z_m=item.z_m[mask],
+                                   transverse_m=item.transverse_m[mask],
+                                   channels=np.ascontiguousarray(item.channels[mask]))
+                fraction = float(common.mean())
+                if np.any(common):
+                    apply_spectral_group([(lam, subset(item, common), used)
+                                          for lam, item, used in entries], target,
+                                         point_fraction * fraction)
+                for lam, item, used in entries:
+                    apply_spectral_group([(lam, subset(item, ~common), used)], target,
+                                         point_fraction * (1 - fraction))
+                return
+            shared_points += len(points) * len(entries)
+        else:
+            separate_points += len(first_source.z_m)
         is_zero = target.ndim == 1
         frequency_slice = slice(0, 1) if is_zero else slice(None)
+        prepared=store._bundles.get(store._key(kernel,indices[:1]),bundle) if is_zero else bundle
         band = dict(
-            bundle,
-            coefficients=bundle["coefficients"][first_lam:last_lam + 1][
+            prepared,
+            coefficients=prepared["coefficients"][first_lam:last_lam + 1][
                 ..., frequency_slice],
             absorption=bundle["absorption"][first_lam:last_lam + 1],
             speed=bundle["speed"][first_lam:last_lam + 1],
@@ -697,11 +804,15 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
             response = apply_multi(
                 band, first_source, first_source, positions[work], looks[work],
                 alpha, np.ones(1), np.zeros(1), out_scale,
-                radial_window_m=(low, high))
+                radial_window_m=(low, high),
+                absolute_tolerance_pe=basis.apply_tolerance_pe * point_fraction * len(entries)
+                * first_source.summary.get("component_budget_share", 1./len(pieces)) / len(wavelengths))
         else:
             response = apply_multi_spectral(
                 band, [item[1] for item in entries], positions[work],
-                looks[work], alpha, out_scale, radial_window_m=(low, high))
+                looks[work], alpha, out_scale, radial_window_m=(low, high),
+                absolute_tolerance_pe=basis.apply_tolerance_pe * point_fraction * len(entries)
+                * first_source.summary.get("component_budget_share", 1./len(pieces)) / len(wavelengths))
         if is_zero:
             target[work] += response[0].real
         else:
@@ -713,8 +824,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
             lam, compiled, _ = entry
             if pending and (len(pending) >= max_bands
                             or lam != pending[-1][0] + 1
-                            or not np.array_equal(
-                                compiled.points_m(), pending[0][1].points_m())):
+                            or compiled.points_m().shape != pending[0][1].points_m().shape):
                 yield pending
                 pending = []
             pending.append(entry)
@@ -731,53 +841,71 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
     zero_points = {}
     zero_entries = {label: [] for label, *_ in pieces}
     compile_zero_seconds = zero_apply_seconds = 0.0
-    for lam, (wavelength, phase) in enumerate(zip(
-            wavelengths, sample["phase_index"], strict=True)):
-        band = one_band(lam)
-        for label, piece, azimuthal, cell_m, transverse, frame in pieces:
-            field = source_field(piece, float(phase), float(wavelength))
-            if field is None:
-                continue
-            stage = perf_counter()
-            compiled = compile_field(field, frame, azimuthal, cell_m, transverse,
-                                     omega[:1])
-            compile_zero_seconds += perf_counter() - stage
-            photons = (np.sqrt(4 * np.pi)
-                       * np.max(np.abs(compiled.channels[:, :, 0]), axis=1)
-                       * weights[lam])
-            points = compiled.points_m()
-            part_used, part_far, part_near, part_tail = _window_report_from_photons(
-                kernel, points, photons, positions, low, high,
-                float(sample["absorption_per_m"][lam]), float(efficiency[lam]))
-            zero_windows[(lam, label)] = part_used
-            zero_points[(lam, label)] = points
-            used += part_used
-            far += part_far
-            near += part_near
-            tail += part_tail
-            summaries.append({"wavelength_nm": float(wavelength), "name": label,
-                              "elements": len(field), "cells": len(compiled.z_m),
-                              "azimuthal_degree": azimuthal})
-            if basis.spectral_fusion:
-                compiled = replace(compiled, channels=np.ascontiguousarray(
-                    compiled.channels, dtype=np.complex64))
-                zero_entries[label].append((lam, compiled, part_used))
-                continue
-            work = np.flatnonzero(part_used > 0)
-            if len(work):
+    previous_component = None
+    for lam, wavelength, phase, label, piece, azimuthal, cell_m, transverse, frame in band_pieces():
+        if source_partition is not None and basis.spectral_fusion and previous_component != label:
+            if previous_component is not None:
                 stage = perf_counter()
-                detector_scale = (weights[lam] * efficiency[lam] * area[work])[None, :]
-                charge[work, 2] += apply_multi(
-                    band, compiled, compiled, positions[work], looks[work], alpha,
-                    np.ones(1), np.zeros(1), detector_scale,
-                    frequencies=slice(0, 1), radial_window_m=(low, high))[0].real
+                for group in spectral_groups(zero_entries.pop(previous_component), 9):
+                    apply_spectral_group(group, charge[:, 2])
                 zero_apply_seconds += perf_counter() - stage
+                group = None
+            previous_component = label
+        band = one_band(lam)
+        field = source_field(piece, float(phase), float(wavelength))
+        if field is None:
+            continue
+        stage = perf_counter()
+        compiled = compile_field(field, frame, azimuthal, cell_m, transverse,
+                                 omega[:1], reference_geometry=geometry_reference.get(label))
+        compiled.summary["component_budget_share"] = component_share[label]
+        compile_zero_seconds += perf_counter() - stage
+        photons = (np.sqrt(4 * np.pi)
+                   * np.max(np.abs(compiled.channels[:, :, 0]), axis=1)
+                   * weights[lam])
+        points = compiled.points_m()
+        part_used, part_far, part_near, part_tail = _window_report_from_photons(
+            kernel, points, photons, positions, low, high,
+            float(sample["absorption_per_m"][lam]), float(efficiency[lam]))
+        zero_windows[(lam, label)] = part_used
+        zero_points[(lam, label)] = points
+        used += part_used
+        far += part_far
+        near += part_near
+        tail += part_tail
+        if np.any(part_near):
+            raise ValueError(
+                f"{int(np.count_nonzero(part_near))} OMs have source points closer than "
+                f"the validated radial minimum {low:g} m")
+        summaries.append({"wavelength_nm": float(wavelength), "name": label,
+                          "elements": len(field), "cells": len(compiled.z_m),
+                          "azimuthal_degree": azimuthal})
+        if basis.spectral_fusion:
+            compiled = replace(compiled, channels=np.ascontiguousarray(
+                compiled.channels, dtype=np.complex64))
+            zero_entries[label].append((lam, compiled, part_used))
+            continue
+        work = np.flatnonzero(part_used > 0)
+        if len(work):
+            stage = perf_counter()
+            detector_scale = (weights[lam] * efficiency[lam] * area[work])[None, :]
+            charge[work, 2] += apply_multi(
+                band, compiled, compiled, positions[work], looks[work], alpha,
+                np.ones(1), np.zeros(1), detector_scale,
+                frequencies=slice(0, 1), radial_window_m=(low, high),
+                absolute_tolerance_pe=basis.apply_tolerance_pe * component_share[label] / len(wavelengths))[0].real
+            zero_apply_seconds += perf_counter() - stage
     if basis.spectral_fusion:
         for entries in zero_entries.values():
             for group in spectral_groups(entries, len(entries)):
                 stage = perf_counter()
                 apply_spectral_group(group, charge[:, 2])
                 zero_apply_seconds += perf_counter() - stage
+    # These angular tables were needed only for the charge pass. Keeping all
+    # wavelengths alive through prompt processing and the full-frequency pass
+    # unnecessarily increases the peak memory of long events.
+    zero_entries.clear()
+    entries = group = compiled = field = None
     if np.any(near):
         raise ValueError(
             f"{int(np.count_nonzero(near))} OMs have source points closer than "
@@ -808,7 +936,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
                    / (0.299792458 / fastest))
     stage = perf_counter()
     prompt = kernel.transport_prompt(
-        source, prompt_config, selection_extra_charge=charge[:, 2],
+        source, prompt_config, selection_extra_charge=charge[:, 2] + basis.apply_tolerance_pe,
         time_origin_ns=origins if local_origin else None)
     prompt_seconds = perf_counter() - stage
     if not np.array_equal(prompt.relative_time_edges_ns, kernel.config.relative_time_edges_ns):
@@ -816,6 +944,14 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
     if not np.allclose(prompt.time_origin_ns, origins, rtol=0, atol=1e-10):
         raise ValueError("prompt and RTE time origins differ")
     charge[:, :2] = prompt.charge_orders_pe
+    if basis.apply_tolerance_pe and np.any(
+            np.abs(charge.sum(axis=1) - kernel.config.threshold_pe) <= basis.apply_tolerance_pe):
+        # No ambiguous threshold decisions: recompute without pair screening.
+        return _transport_hybrid_spectral_basis(
+            kernel, source, replace(basis, apply_tolerance_pe=0.),
+            frequency_nodes=frequency_nodes, prompt_config=prompt_config,
+            store=store, representation=representation, source_partition=source_partition,
+            track_stencil_center=track_stencil_center)
     computable = (used > 0) | (prompt.charge_pe > 0)
     active = computable & (charge.sum(axis=1) >= kernel.config.threshold_pe)
     if kernel.config.threshold_pe == 0:
@@ -825,46 +961,87 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
     components = np.zeros((len(positions), len(kernel.config.relative_time_edges_ns) - 1, 3))
     compile_full_seconds = full_apply_seconds = 0.0
     pending_by_label = {label: [] for label, *_ in pieces}
-    for lam, (wavelength, phase) in enumerate(zip(
-            wavelengths, sample["phase_index"], strict=True)):
-        band = one_band(lam)
-        for label, piece, azimuthal, cell_m, transverse, frame in pieces:
-            field = source_field(piece, float(phase), float(wavelength))
-            if field is None:
-                continue
-            stage = perf_counter()
-            compiled = compile_field(field, frame, azimuthal, cell_m, transverse,
-                                     omega)
-            compile_full_seconds += perf_counter() - stage
-            if not np.array_equal(compiled.points_m(), zero_points[(lam, label)]):
-                raise ValueError("spectral source points differ between zero and full frequency passes")
-            if basis.spectral_fusion:
-                compiled = replace(compiled, channels=np.ascontiguousarray(
-                    compiled.channels, dtype=np.complex64))
-                pending = pending_by_label[label]
-                max_bands = 9 if azimuthal == 0 else 2
-                if pending and (len(pending) >= max_bands
-                                or lam != pending[-1][0] + 1
-                                or not np.array_equal(
-                                    compiled.points_m(), pending[0][1].points_m())):
+    # Full frequencies are needed only where an active OM can see a point
+    # inside the existing radial window. Charge and the far-tail diagnostic
+    # above still used every point. Union wavelength masks with equal layouts
+    # so this exact sparsity reduction does not disable spectral fusion.
+    full_selection = {}
+    for (_, label), points in zero_points.items():
+        key = (label, len(points))
+        selected = full_selection.setdefault(key, np.zeros(len(points), bool))
+        for receiver in positions[active]:
+            # Include a roundoff guard for the rotation to the local frame
+            # used by the apply kernel at the radial boundary.
+            selected |= np.sum((points - receiver) ** 2, axis=1) <= (high + 1e-8) ** 2
+    previous_component = None
+    for lam, wavelength, phase, label, piece, azimuthal, cell_m, transverse, frame in band_pieces():
+        if source_partition is not None and basis.spectral_fusion and previous_component != label:
+            if previous_component is not None:
+                pending = pending_by_label.pop(previous_component)
+                if pending:
                     stage = perf_counter()
                     apply_spectral_group(pending, spectrum)
                     full_apply_seconds += perf_counter() - stage
-                    pending = []
-                pending.append((lam, compiled, zero_windows[(lam, label)]))
-                pending_by_label[label] = pending
-                continue
-            if not np.any(active):
-                continue
-            work = np.flatnonzero(active & (zero_windows[(lam, label)] > 0))
-            if len(work):
+                pending = []
+            previous_component = label
+        band = one_band(lam)
+        field = source_field(piece, float(phase), float(wavelength))
+        if field is None:
+            continue
+        stage = perf_counter()
+        selected_points = full_selection[(label, len(zero_points[(lam, label)]))]
+        if not np.any(selected_points):
+            continue
+        if basis.spectral_fusion:
+            pending = pending_by_label[label]
+            max_bands = 9 if azimuthal == 0 else 2
+            if pending and (len(pending) >= max_bands
+                            or lam != pending[-1][0] + 1
+                            or int(selected_points.sum()) != len(pending[0][1].z_m)):
+                # Consume complete bands before allocating the next one.
+                # Otherwise a two-band contraction retains a third full
+                # source block throughout its application.
+                stage_apply = perf_counter()
+                apply_spectral_group(pending, spectrum)
+                full_apply_seconds += perf_counter() - stage_apply
+                pending_by_label[label] = []
+                pending = []
+                compiled = None
+            stage = perf_counter()
+        compiled = compile_field(field, frame, azimuthal, cell_m, transverse,
+                                 omega, point_selection=selected_points,
+                                 reference_geometry=geometry_reference.get(label))
+        compiled.summary["component_budget_share"] = component_share[label]
+        compile_full_seconds += perf_counter() - stage
+        if not np.array_equal(compiled.points_m(), zero_points[(lam, label)][selected_points]):
+            raise ValueError("spectral source points differ between zero and full frequency passes")
+        if basis.spectral_fusion:
+            compiled = replace(compiled, channels=np.ascontiguousarray(
+                compiled.channels, dtype=np.complex64))
+            pending = pending_by_label[label]
+            max_bands = 9 if azimuthal == 0 else 2
+            if pending and (len(pending) >= max_bands
+                            or lam != pending[-1][0] + 1
+                            or compiled.points_m().shape != pending[0][1].points_m().shape):
                 stage = perf_counter()
-                detector_scale = (weights[lam] * efficiency[lam] * area[work])[None, :]
-                spectrum[:, work] += apply_multi(
-                    band, compiled, compiled, positions[work], looks[work], alpha,
-                    np.ones(1), np.zeros(1), detector_scale,
-                    radial_window_m=(low, high))
+                apply_spectral_group(pending, spectrum)
                 full_apply_seconds += perf_counter() - stage
+                pending = []
+            pending.append((lam, compiled, zero_windows[(lam, label)]))
+            pending_by_label[label] = pending
+            continue
+        if not np.any(active):
+            continue
+        work = np.flatnonzero(active & (zero_windows[(lam, label)] > 0))
+        if len(work):
+            stage = perf_counter()
+            detector_scale = (weights[lam] * efficiency[lam] * area[work])[None, :]
+            spectrum[:, work] += apply_multi(
+                band, compiled, compiled, positions[work], looks[work], alpha,
+                np.ones(1), np.zeros(1), detector_scale,
+                radial_window_m=(low, high),
+                absolute_tolerance_pe=basis.apply_tolerance_pe * component_share[label] / len(wavelengths))
+            full_apply_seconds += perf_counter() - stage
     if basis.spectral_fusion:
         for pending in pending_by_label.values():
             if pending:
@@ -884,11 +1061,32 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
                         + 1j * CubicSpline(omega, relative.imag, axis=0)(output_omega))
         components[active, :, 2] = inverse_bins(output_omega, relative,
                                                 kernel.config.relative_time_edges_ns)
+    bin_error_bound = np.zeros(len(kernel.config.relative_time_edges_ns) - 1)
+    if basis.apply_tolerance_pe:
+        interpolation = np.eye(len(omega))
+        if len(omega) != len(output_omega):
+            from scipy.interpolate import CubicSpline
+            interpolation = CubicSpline(omega, interpolation, axis=0)(output_omega)
+        # Induced norm of the actual cubic interpolation + bin inversion.
+        # The origin demodulation has unit modulus and needs no extra factor.
+        real_map = inverse_bins(output_omega, interpolation, kernel.config.relative_time_edges_ns)
+        imag_map = inverse_bins(output_omega, 1j * interpolation, kernel.config.relative_time_edges_ns)
+        bin_error_bound = basis.apply_tolerance_pe * np.hypot(real_map, imag_map).sum(axis=0)
     readout_seconds = perf_counter() - stage
     elapsed = perf_counter() - began
     metadata = {
         "elapsed_seconds": elapsed, "rte_elapsed_seconds": elapsed - prompt_seconds,
+        "apply_spectrum_absolute_error_bound_pe": basis.apply_tolerance_pe,
+        "apply_bin_absolute_error_bound_pe": float(bin_error_bound.max()),
+        "apply_bins_l1_error_bound_pe": float(bin_error_bound.sum()),
+        "apply_bound_scope": "omitted pairs at computed frequencies, same numerical cache; floating-roundoff guard",
+        "spectral_geometry_shared_points": shared_points,
+        "spectral_geometry_separate_points": separate_points,
+        "full_source_points_available": sum(len(mask) for mask in full_selection.values()),
+        "full_source_points_kept": sum(int(mask.sum()) for mask in full_selection.values()),
         "ge2_source": "wavelength-dependent axial-slice shower basis",
+        "source_partition_components": len(pieces),
+        "track_stencil_center": track_stencil_center,
         "cone_model": "spectral", "ge2_basis": asdict(basis),
         "ge2_basis_summary": {"max_cells_per_band": max(
             (item["cells"] for item in summaries), default=0),
@@ -924,6 +1122,9 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
         "prompt_bins": "orders 0 and 1 integrated in physical time",
         "prompt_algorithm": prompt.metadata["prompt_algorithm"],
         "prompt_order1_level": prompt.metadata["order1_level"],
+        "prompt_timings": prompt.metadata.get("timings"),
+        "prompt_batch_screen": prompt.metadata.get("order1_batch_screen"),
+        "prompt_order1_backward_profile": prompt.metadata.get("order1_backward_profile"),
         "inactive_order1_charge_may_be_coarse": bool(np.any(
             np.asarray(prompt.metadata["order1_level"]) == 1)),
     }

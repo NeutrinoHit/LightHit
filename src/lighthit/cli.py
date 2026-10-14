@@ -72,7 +72,7 @@ def save_figures(result, raw, smooth, output):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="LightHit: point Green function, per unit effective detector area")
-    parser.add_argument("--config", default="examples/point-green.toml")
+    parser.add_argument("--config", required=True, help="TOML file with medium and solver settings")
     parser.add_argument("--output", default=".build/point-green")
     parser.add_argument("--preset", choices=["quick", "balanced", "refined"])
     parser.add_argument("--repeat", type=int, default=1, help="Number of fresh solves; no hidden warm-cache runs")

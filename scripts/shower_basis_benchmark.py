@@ -1,6 +1,6 @@
 """Shower-basis order >=2 versus the reference hybrid: accuracy and timing.
 
-Reproducible entry point for ``docs/research/shower-basis.md``.  Each
+Reproducible entry point for ``research/documentation/research/shower-basis.md``.  Each
 (kind, event, method) runs in a fresh process, so the peak RSS and the
 first-call costs are those of that method alone.
 

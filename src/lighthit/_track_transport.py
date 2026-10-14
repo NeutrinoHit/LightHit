@@ -94,9 +94,9 @@ def _track_frame(source, AxisFrame):
 def transport_track_directional(kernel, source, *, method):
     """Directional-OM transport specialized to a straight Cherenkov track."""
     from ._directional_numba import PreparedDirectionalKernel
-    from .experimental.axial_fast import compile_axial_source_fast
-    from .experimental.axial_source import AxisFrame
-    from .experimental.ballistic_fast import ballistic_directional_fast
+    from .axial_fast import compile_axial_source_fast
+    from .axial_source import AxisFrame
+    from .ballistic_fast import ballistic_directional_fast
 
     began = perf_counter()
     response = kernel.acceptance()

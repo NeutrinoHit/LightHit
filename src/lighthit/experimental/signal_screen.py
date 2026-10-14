@@ -8,7 +8,7 @@ omega=0 axial evaluation of rejected receivers before any spectrum is skipped.
 """
 import numpy as np
 
-from .axial_source import AxisFrame
+from ..axial_source import AxisFrame
 
 __all__ = ["isotropic_axial_proxy", "screening_candidates"]
 

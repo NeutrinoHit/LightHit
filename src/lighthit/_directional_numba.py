@@ -221,7 +221,7 @@ def _apply_m0(points, receivers, looks, channels, second_channels,
                                 radial_sum[w, order] += weight * radial
                     for w in range(nfreq):
                         if second_scale == 0.0:
-                            value = channels[cell, source_column, w]
+                            value = first_scale * channels[cell, source_column, w]
                         else:
                             value = (first_scale * channels[cell, source_column, w]
                                      - second_scale * second_channels[cell, source_column, w])
@@ -341,7 +341,7 @@ def _apply(points, receivers, looks, channels, second_channels,
                             column = centre + (b - max_m)
                             for w in range(nfreq):
                                 if second_scale == 0.0:
-                                    value = channels[cell, column, w]
+                                    value = first_scale * channels[cell, column, w]
                                 else:
                                     value = (first_scale * channels[cell, column, w]
                                              - second_scale * second_channels[cell, column, w])

@@ -1,7 +1,7 @@
 """Axial-slice shower basis for order >=2 (``transport_hybrid(ge2_basis=...)``).
 
 Lightweight synthetic checks.  The real G4/BGVD validation is
-``scripts/shower_basis/`` and ``docs/research/shower-basis.md``.
+``scripts/shower_basis/``; results are summarised in README.md.
 """
 from dataclasses import replace
 
@@ -82,6 +82,69 @@ def test_time_lattice_error_is_within_its_bound():
         assert np.all(error <= (omega * step) ** 2 / 8 * total + 1e-12 * total[0])
 
 
+@pytest.mark.parametrize("transverse", ["collapse", "stencil"])
+def test_charge_compilation_does_not_need_a_time_lattice(transverse):
+    field = shower().elements.field(0)
+    # A long time span previously allocated a mostly empty slice x time map.
+    field = replace(field, start_ns=field.start_ns * 1000,
+                    end_ns=field.end_ns * 1000)
+    options = dict(azimuthal_degree=2, cell_m=.3, transverse=transverse,
+                   stencil_threshold_m=.03)
+    zero = compile_axial_slices(field, 6, [0.], **options)
+    full = compile_axial_slices(field, 6, [0., .03], **options)
+    np.testing.assert_allclose(zero.points_m(), full.points_m(), rtol=0, atol=1e-12)
+    np.testing.assert_allclose(zero.channels[:, :, 0], full.channels[:, :, 0],
+                               rtol=2e-12, atol=1e-10)
+    assert zero.summary["time_rows"] == zero.summary["slices"]
+    assert full.summary["time_rows"] > zero.summary["time_rows"]
+
+
+@pytest.mark.parametrize("transverse", ["collapse", "stencil"])
+def test_selected_point_compilation_is_an_exact_slice(transverse):
+    field = shower(elements=80).elements.field(0)
+    options = dict(azimuthal_degree=2, cell_m=.3, transverse=transverse)
+    full = compile_axial_slices(field, 6, [0., .1, .3], **options)
+    selected = np.arange(len(full.z_m)) % 3 == 1
+    part = compile_axial_slices(field, 6, [0., .1, .3], point_selection=selected, **options)
+    np.testing.assert_array_equal(part.points_m(), full.points_m()[selected])
+    np.testing.assert_array_equal(part.channels, full.channels[selected])
+    rounded = compile_axial_slices(field, 6, [0., .1, .3], point_selection=selected,
+                                    channel_dtype=np.complex64, **options)
+    np.testing.assert_array_equal(rounded.channels, part.channels.astype(np.complex64))
+    empty = compile_axial_slices(field, 6, [0., .1], point_selection=np.zeros(len(selected), bool), **options)
+    assert empty.channels.shape == (0, full.channels.shape[1], 2)
+
+
+def test_pair_screen_has_an_absolute_spectral_error_bound(small_kernel):
+    from lighthit._shower_basis import apply_multi, apply_multi_spectral
+    k = small_kernel
+    bundle = k.ge2_kernel_store().bundle(k, np.arange(len(k.config.omega_per_ns)))
+    field = shower(elements=50).elements.field(0)
+    source = compile_axial_slices(field, bundle["degree"], bundle["omega"],
+                                  azimuthal_degree=2, cell_m=.5)
+    receivers = source.frame.centre_m + np.array([[8., 1., 3.], [35., 4., 2.]])
+    looks = np.tile([0., 0., 1.], (2, 1))
+    alpha = k.acceptance()["alpha"]
+    scale = np.ones((1, 2))
+    args = (bundle, source, source, receivers, looks, alpha,
+            np.ones(1), np.zeros(1), scale)
+    radial = (3., k.config.radial_range_m[1])
+    ref = apply_multi(*args, radial_window_m=radial)
+    tolerance = float(np.max(abs(ref))) * 10
+    got = apply_multi(*args, radial_window_m=radial, absolute_tolerance_pe=tolerance)
+    assert np.any(got != ref), "test must exercise an actually omitted contribution"
+    assert np.max(abs(got-ref)) <= tolerance
+    # Include complex source coefficients and rounded fused source blocks.
+    fused_ref = apply_multi_spectral(bundle, [source], receivers, looks, alpha, scale,
+                                     radial_window_m=radial)
+    fused = apply_multi_spectral(bundle, [source], receivers, looks, alpha, scale,
+                                 radial_window_m=radial, absolute_tolerance_pe=tolerance)
+    assert np.any(fused != fused_ref)
+    assert np.max(abs(fused-fused_ref)) <= tolerance
+    exact = apply_multi(*args, radial_window_m=radial, absolute_tolerance_pe=0.)
+    np.testing.assert_array_equal(exact, ref)
+
+
 @pytest.fixture(scope="module")
 def small_kernel(tmp_path_factory):
     from lighthit.model import WavelengthQuadrature
@@ -131,6 +194,14 @@ def test_basis_route_keeps_prompt_orders_and_converges_to_the_hybrid(small_kerne
     again = loaded.transport_hybrid(source, frequency_nodes=17,
                                     ge2_basis=lh.ShowerBasis(cell_m=0.25))
     np.testing.assert_allclose(again.components_pe, basis.components_pe, rtol=0, atol=0)
+    cubic = loaded.transport_hybrid(source, frequency_nodes=17,
+        ge2_basis=lh.ShowerBasis(cell_m=.25, time_deposit="cubic", time_step_ns=.5))
+    # Exercise the public transport route, including its absolute-time carrier.
+    np.testing.assert_array_equal(cubic.components_pe[:, :, :2], again.components_pe[:, :, :2])
+    np.testing.assert_allclose(cubic.charge_components_pe, again.charge_components_pe,
+                               rtol=1e-12, atol=1e-15)
+    delta = abs(cubic.components_pe[:, :, 2]-again.components_pe[:, :, 2]).sum()
+    assert delta <= 1e-3 * abs(again.components_pe[:, :, 2]).sum()
 
 
 def test_basis_arguments_are_checked():
@@ -170,15 +241,16 @@ def test_explicit_track_component_keeps_prompt_and_sums_the_rte(small_kernel):
             source, frequency_nodes=17, ge2_basis=lh.ShowerBasis(track_uid=42))
 
 
-def test_wavelength_merged_apply_equals_the_per_wavelength_kernel(tmp_path):
+@pytest.mark.parametrize("source_m", [0, 2])
+def test_wavelength_merged_apply_equals_the_per_wavelength_kernel(tmp_path, source_m):
     from lighthit._shower_basis import apply_multi
     kernel = lh.TransportKernel(
         spectral_medium(), detector(count=6),
-        config(tmp_path, omega_per_ns=np.linspace(0., 1.2, 9), azimuthal_degree=2))
+        config(tmp_path, omega_per_ns=np.linspace(0., 1.2, 9), azimuthal_degree=source_m))
     field0 = shower().elements.field(0)
     field2 = shower().elements.field(2)
     omega = kernel.config.omega_per_ns
-    s0, s2 = compile_axial_slices([field0, field2], 6, omega, azimuthal_degree=2,
+    s0, s2 = compile_axial_slices([field0, field2], 6, omega, azimuthal_degree=source_m,
                                   cell_m=0.5)
     indices = np.arange(len(omega))
     store = lh.Ge2KernelStore()
@@ -198,6 +270,15 @@ def test_wavelength_merged_apply_equals_the_per_wavelength_kernel(tmp_path):
         for lam, w in enumerate(wavelengths))
     np.testing.assert_allclose(merged, separate, rtol=1e-12,
                                atol=1e-12 * np.abs(separate).max())
+    first_only = apply_multi(bundle, s0, s2, positions, looks, alpha,
+                             scale0, np.zeros_like(scale2), out_scale)
+    first_reference = sum(
+        out_scale[lam][None, :] * store.kernel(kernel, w, indices).apply(
+            s0, positions, looks, alpha, source_omega_per_ns=omega,
+            second_source=s2, first_scale=scale0[lam], second_scale=0., ge2_only=True)[:, :, 1]
+        for lam, w in enumerate(wavelengths))
+    np.testing.assert_allclose(first_only, first_reference, rtol=1e-12,
+                               atol=1e-12 * np.abs(first_reference).max())
 
 
 def test_radial_window_matches_explicitly_retained_source_points(small_kernel):
@@ -291,6 +372,31 @@ def test_spectral_cone_basis_matches_two_band_hybrid(tmp_path):
                                basis.charge_components_pe[:, 2], rtol=2e-5, atol=1e-9)
     np.testing.assert_allclose(fused.components_pe[:, :, 2],
                                basis.components_pe[:, :, 2], rtol=2e-5, atol=1e-9)
+
+
+def test_spectral_fusion_keeps_wavelength_dependent_point_exceptions(tmp_path, monkeypatch):
+    import lighthit._shower_basis as sb
+    original = sb.compile_axial_slices
+    def shifted(field, *args, **kwargs):
+        compiled = original(field, *args, **kwargs)
+        z = compiled.z_m.copy()
+        z[0] += 1e-10 * float(field.photons.sum())
+        return replace(compiled, z_m=z)
+    monkeypatch.setattr(sb, "compile_axial_slices", shifted)
+    kernel = lh.TransportKernel(
+        spectral_medium(), detector(count=2),
+        config(tmp_path, omega_per_ns=np.linspace(0., 1.2, 9),
+               scattering_degree=4, source_degree=4, azimuthal_degree=2,
+               radial_nodes=16, threshold_pe=0.0))
+    source = replace(shower(elements=60).elements, cone_model="spectral")
+    basis = lh.ShowerBasis(stencil_threshold_m=0.)
+    independent = kernel.transport_hybrid(source, frequency_nodes=9, ge2_basis=basis)
+    fused = kernel.transport_hybrid(source, frequency_nodes=9,
+                                    ge2_basis=replace(basis, spectral_fusion=True))
+    assert fused.metadata["spectral_geometry_shared_points"] > 0
+    assert fused.metadata["spectral_geometry_separate_points"] > 0
+    np.testing.assert_allclose(fused.spectrum_ge2_pe, independent.spectrum_ge2_pe,
+                               rtol=2e-5, atol=1e-9)
 
 
 def test_fused_spectral_bands_match_individual_bands(tmp_path):

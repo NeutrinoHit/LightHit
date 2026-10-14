@@ -30,5 +30,14 @@ __all__ = [
     "TransportResponse", "HybridTransportResponse", "TransportComponent",
     "PromptConfig", "PromptTransportResponse", "OrderNotComputedError",
     "BGVDModel", "load_bgvd_model", "build", "viewer_payload",
-    "merge_event_viewers", "write_event_viewer",
+    "merge_event_viewers", "write_event_viewer", "MuonTransport", "MuonData",
 ]
+
+
+def __getattr__(name):
+    # The muon route needs Numba; import it only when asked for.
+    if name in ("MuonTransport", "MuonData"):
+        from . import muon
+        return getattr(muon, name)
+    raise AttributeError(f"module 'lighthit' has no attribute {name!r}")
+

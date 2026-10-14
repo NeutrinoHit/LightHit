@@ -127,21 +127,21 @@ def test_the_release_metadata_is_present_and_consistent():
     )
     assert lighthit.__version__ == VERSION
 
-    assert 'license = {text = "BSD-3-Clause"}' in pyproject_text
-    assert "License :: OSI Approved :: BSD License" in pyproject_text
+    assert 'license = "BSD-3-Clause"' in pyproject_text
+    assert 'license-files = ["LICENSE"]' in pyproject_text
 
     licence = (ROOT / "LICENSE").read_text()
     assert licence.startswith("BSD 3-Clause License")
     assert "Dmitry Naumov" in licence
 
-    checklist = (ROOT / "PUBLISHING.md").read_text()
+    checklist = (ROOT / "README.md").read_text()
     assert "LH_VERSION" in checklist
 
 # ---------------------------------------------------------------- end to end
 
 PROJECT_FILES = ("setup.py", "packaging_filter.py", "MANIFEST.in",
                  "pyproject.toml", "README.md", "LICENSE")
-PROJECT_TREES = ("src", "examples")
+PROJECT_TREES = ("src",)
 FORBIDDEN_TOP_LEVEL = {"g4_data", "bgvd_model", "docs", "notebooks",
                        "slides", "scripts", "tests", ".build", "results",
                        "preview", "examples"}
@@ -250,14 +250,16 @@ def test_python_m_build_produces_clean_archives(tmp_path):
                or name.endswith(".dist-info/licenses/LICENSE")
                for name in names), names
     assert top_level == "lighthit"
-    assert "License: BSD-3-Clause" in metadata
-    assert "Classifier: License :: OSI Approved :: BSD License" in metadata
+    assert "License-Expression: BSD-3-Clause" in metadata
     assert not [name for name in names if "packaging_filter" in name]
     assert not [name for name in names if forbidden_archive_member(name)]
     assert "lighthit/examples/synthetic.py" in names
     assert "lighthit/_track_transport.py" in names
     assert "lighthit/_spectral_fold.py" in names
     assert "lighthit/selftest.py" in names
+    for module in ("lighthit/event.py", "lighthit/band_fold.py", "lighthit/shower/api.py",
+                   "lighthit/shower/ge2.py", "lighthit/muon/api.py", "lighthit/ballistic_interval.py"):
+        assert module in names
     assert "lighthit/assets/event_viewer_smoothing.js" in names
     assert "lighthit/tests/test_public_smoke.py" in names
     assert "lighthit-demo = lighthit.examples.synthetic:main" in entry_points

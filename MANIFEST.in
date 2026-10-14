@@ -17,7 +17,9 @@ include src/lighthit/experimental/ballistic_fast.py
 include src/lighthit/experimental/event_moments.py
 include src/lighthit/experimental/g4_source.py
 include src/lighthit/experimental/hdf5_minimal.py
+include src/lighthit/experimental/muon_components.py
 prune docs
+prune research
 prune examples
 prune notebooks
 prune slides

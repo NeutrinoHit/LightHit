@@ -238,7 +238,6 @@ def dense_finite_rank_reference(k, omega_per_ns, medium, scattering_degree,
 #   * the matrix is complex symmetric, so a column of the resolvent is also a
 #     row -- one solve serves both the source and the detector index;
 #   * a_lm depends on m^2, hence G^(m) = G^(-m).
-# See docs/research/directional-om-plan.md, sections 3 and 4.
 # ---------------------------------------------------------------------------
 
 

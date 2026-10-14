@@ -1,432 +1,423 @@
 # LightHit
 
-LightHit computes the expected optical-module response to light propagating in
-a homogeneous scattering medium. It solves the time-dependent radiative
-transfer equation (RTE), including unscattered, once-scattered and
-multiply-scattered light, and returns expected photoelectrons per module and
-per time bin.
+LightHit computes the expected number of photoelectrons that Cherenkov light
+of charged particles (or a calibration flash) produces in every optical module
+(OM) of a neutrino telescope, per time bin. It solves spectral radiative
+transfer in a homogeneous scattering medium and keeps three collision orders
+separate: direct light (order 0), light scattered once (order 1) and light
+scattered two or more times (order >=2). It replaces photon-by-photon
+Monte-Carlo propagation; the charged particles themselves come from Geant4
+(e.g. through NTSim).
 
-The medium, detector and source are ordinary Python objects. There is no global
-initialisation state, so several configurations can safely coexist in one
-program.
+| Source | Route | Orders 0 and 1 | Order >=2 |
+|---|---|---|---|
+| shower (e, gamma, hadrons; nu_e CC, NC) | `lighthit.shower.ShowerTransport` | exact direct light on the G4 steps over the continuous spectrum; once-scattered light from grouped "pencils", all wavelength bands fused | axial shower basis on band-folded RTE kernels |
+| muon with its secondaries | `lighthit.muon.MuonTransport` | exact direct light; primary from finite-track atlases, secondaries grouped | atlases (primary) and point RTE sources (secondaries) |
+| several sources (nu_mu CC, bundles, lists) | `lighthit.event.EventTransport` | each source by its route | each source by its route |
+| isotropic calibration flash | `kernel.transport(IsotropicFlash)` | full directional RTE | full directional RTE |
 
-LightHit is currently an alpha release. Validate numerical settings for your
-medium and geometry before using its results in an analysis.
+All routes return the same response: `charge_pe` per OM (all arrival times),
+`bins_pe` per OM and bin, `components_pe` split by order, `active` (OMs above
+threshold) and `time_origin_ns` (the per-OM clock the bins refer to).
 
-## Installation
+## Install
 
-```bash
-python -m pip install lighthit
-```
-
-Numba acceleration is strongly recommended for tracks, showers and large
-detector arrays:
-
-```bash
-python -m pip install 'lighthit[accelerate]'
-```
-
-For the installed synthetic demonstration, viewer and wheel self-tests:
+Python 3.11 or newer.
 
 ```bash
-python -m pip install 'lighthit[demo,test]'
-lighthit-selftest
+python -m pip install 'lighthit[accelerate]'   # numerical routes need Numba
+lighthit-selftest                               # quick installed-package check
 ```
 
-Python 3.11 or newer is required.
+From a checkout (development):
 
-To run the detector-specific scripts in this repository, install the checkout
-into that environment first: `python -m pip install -e '.[demo,test]'`. A script
-under `examples/` does not automatically import the adjacent `src/` tree; an
-older PyPI installation in the active environment will otherwise be used.
+```bash
+python -m pip install -e '.[accelerate,viewer,test]'
+python -m pytest -q tests
+```
 
-## Quick start
+The first run of each route compiles its Numba kernels (a few minutes, once
+per installation; the compiled code is cached on disk).
 
-The example below defines a spectral medium, two optical modules and a
-monochromatic isotropic flash.
+## 1. A complete example with public inputs
+
+Everything below is artificial (a Baikal-like water and an 8-string, 48-OM
+array shipped with the package), runs in seconds and needs no private data.
+It prepares the tables, then transports one shower, two showers in one event
+and a calibration flash.
+
+```python
+from dataclasses import replace
+import numpy as np
+import lighthit as lh
+from lighthit.examples.synthetic import synthetic_medium_model, baikal_like_detector
+from lighthit.shower import ShowerData, ShowerTransport
+from lighthit.event import EventTransport, SourceComponent
+
+medium = synthetic_medium_model()            # artificial Baikal-like water
+detector = baikal_like_detector(clusters=1)  # 8 strings x 6 OMs, artificial
+config = lh.KernelConfig(
+    omega_per_ns=np.linspace(0.0, 1.2, 65),               # RTE frequencies
+    readout_omega_per_ns=np.linspace(0.0, 1.2, 321),      # readout grid
+    relative_time_edges_ns=np.arange(-60.0, 745.0, 5.0),  # 5 ns bins
+    wavelength_nodes=3, scattering_degree=8, source_degree=8, azimuthal_degree=2,
+    radial_range_m=(2.0, 150.0), radial_nodes=48,
+    k_max_per_m=4.0, k_panel_per_m=0.1, k_order=6,
+    threshold_pe=0.01, cache_directory="demo-cache", cache_policy="build")
+kernel = lh.TransportKernel(medium, detector, config)
+
+centre = lh.describe_geometry(detector).centroid_m
+def shower_at(offset, direction, seed):
+    pose = lh.SourcePose(centre + np.asarray(offset, float), direction)
+    shower = lh.SyntheticShower.gaussian(pose, charged_track_length_m=300.0,
+                                         elements=2000, seed=seed)
+    return replace(shower.elements, cone_model="spectral")   # per-wavelength cone
+first = shower_at([-12.0, 8.0, 0.0], [0.35, -0.15, 0.925], seed=7)
+second = shower_at([20.0, -15.0, 30.0], [-0.30, 0.20, 0.93], seed=8)
+
+# Once: the RTE cache and the >=2 kernel pack (reused by every later event).
+kernel.build(source=first)
+kernel.ge2_kernel_store().save("demo-cache/ge2-pack")
+data = ShowerData.of("demo-cache", "demo-cache/ge2-pack")
+
+# 1. One shower.
+response = ShowerTransport(kernel, data)(first)
+print("shower", int(response.active.sum()), "active OMs,",
+      response.charge_components_pe.sum(axis=0).round(2), "pe in orders 0, 1, >=2")
+
+# 2. Two showers in one event: one clock, OMs selected on the summed charge.
+event = EventTransport(kernel, shower_data=data)
+both = event([SourceComponent("shower", first, label="A"),
+              SourceComponent("shower", second, label="B")])
+print("event", int(both.active.sum()), "active OMs; completed per source:",
+      both.metadata["completion_rounds"][0]["recomputed"])
+
+# 3. An isotropic calibration flash (its own monochromatic table, built once).
+flash = lh.IsotropicFlash.monochromatic(centre + [0.0, 0.0, 30.0], 1e10, 450.0)
+kernel.build(source=flash)
+laser = EventTransport(kernel, laser_kernel=kernel)(flash)
+print("laser", int(laser.active.sum()), "active OMs,", round(float(laser.charge_pe.sum()), 1), "pe")
+
+# 4. Orders 0 and 1 only, without any RTE table. The default PromptConfig sums
+#    direct light over the wavelength nodes and groups each band separately;
+#    the shower route uses the continuous spectrum and fused bands instead.
+prompt = kernel.transport_prompt(first)
+print("prompt", prompt.charge_orders_pe.sum(axis=0).round(2))
+
+# Keep a response and look at it in the browser.
+response.save("shower-response.npz")
+lh.write_event_viewer(lh.viewer_payload(response, source=first, event_id="shower"),
+                      "viewer.html")
+```
+
+Expected output (the last digits may differ between platforms):
+
+```text
+shower 34 active OMs, [66.49 50.68 22.5 ] pe in orders 0, 1, >=2
+event 33 active OMs; completed per source: {'A': 14, 'B': 15}
+laser 48 active OMs, 153762.2 pe
+prompt [67.96 50.31]
+```
+
+`lighthit-demo` (geometry, cache, run) is the same synthetic array as a
+command-line tool.
+
+## 2. Baikal-GVD, stand-alone
+
+### Inputs
+
+* **Medium and detector.** `lh.load_bgvd_model(path, dataset="2021")` reads
+  the water, OM response and geometry from the separately supplied
+  `bgvd-model` package (not distributed). Inside NTSim the same objects come
+  from `ntsim.LightTransport.bgvd_model_from_ntsim` (section 3).
+* **Charged steps.** `lh.SpectralLightElements` (start, direction, chord and
+  true length, beta, times, UID per step) or `lh.G4Shower.from_hdf5`.
+* **Prepared tables**, built once per medium and OM response and reused: the
+  RTE cache (65 frequencies to 1.2 rad/ns, 9 wavelengths), the >=2 kernel
+  pack and, for muons, the primary-track atlases. A manifest next to the cache
+  lists them: `shower-data.json` (`rte_cache`, `ge2_pack`) or
+  `muon-data.json` (those plus the muon atlases), so the routes find them from
+  the kernel alone. The muon atlases are prepared by the LightHit research
+  pipeline and supplied together with the tables.
+
+```python
+import json
+import numpy as np
+import lighthit as lh
+
+model = lh.load_bgvd_model("bgvd-model/bgvd_model", dataset="2021")
+config = lh.KernelConfig(
+    omega_per_ns=np.linspace(0.0, 1.2, 65),
+    readout_omega_per_ns=np.linspace(0.0, 1.2, 321),
+    relative_time_edges_ns=np.arange(-60.0, 745.0, 5.0),
+    cache_directory="tables/lighthit-cache", cache_policy="require")
+kernel = model.kernel(config)
+
+# Once (tens of minutes): build with cache_policy="build", then save the >=2
+# pack and the manifest. Every event job afterwards uses cache_policy="require".
+#   kernel.build(source=some_shower)
+#   kernel.ge2_kernel_store().save("tables/ge2-pack")
+#   json.dump({"rte_cache": "lighthit-cache", "ge2_pack": "ge2-pack"},
+#             open("tables/shower-data.json", "w"))
+```
+
+### A shower from Geant4
+
+```python
+from dataclasses import replace
+from lighthit.shower import ShowerTransport
+
+phase_max = float(np.max(kernel.medium.sample(kernel.wavelength.wavelength_nm)["phase_index"]))
+g4 = lh.G4Shower.from_hdf5("sim_e_100GeV_10.h5", event=5, reference_phase_index=phase_max)
+electron = replace(g4.elements, cone_model="spectral").placed(
+    lh.SourcePose(position_m=[5.0, -269.5, 330.0], direction=[0.35, -0.20, 0.915]))
+
+shower = ShowerTransport(kernel)   # finds shower-data.json / muon-data.json next to the cache
+response = shower(electron)
+print(response.metadata["route"], response.active.sum(), response.charge_components_pe.sum(axis=0))
+```
+
+`reference_phase_index=phase_max` keeps every step that emits at any of the
+wavelengths; the spectral cone then applies each band's own threshold.
+`placed` moves the shower's light centroid and axis to the given pose.
+
+### A muon with its secondaries
+
+Besides the steps, the muon route needs the family table of the secondaries:
+which step descends from which first-generation secondary of the muon
+(`element_family`, aligned with the steps) and the family roots (`uid`,
+`pdgid`, `energy_GeV`, `start_m`, `start_ns`, `creator`). NTSim builds it with
+`ntsim.LightTransport.LightHitTransport.muon_ancestry`.
+
+```python
+with np.load("muon1000.npz") as f:
+    muon_steps = lh.SpectralLightElements(**{k: f[k] for k in f.files if k != "metadata"},
+                                          cone_model="spectral")
+with np.load("muon1000-ancestry.npz") as f:
+    ancestry = {k: f[k] for k in f.files}
+
+muon = lh.MuonTransport(kernel)    # tables from muon-data.json next to the cache
+response = muon(muon_steps, ancestry, primary_uid=0)
+```
+
+### Several sources in one event
+
+```python
+from lighthit.event import EventTransport, SourceComponent
+
+event = EventTransport(kernel)
+response = event([
+    SourceComponent("muon", muon_steps, ancestry, primary_uid=0, label="muon"),
+    SourceComponent("shower", electron, label="vertex shower"),
+])
+print(response.active.sum(), response.metadata["completion_rounds"])
+for part in response.metadata["event_components"]:  # per-source summary
+    print(part["label"], part["kind"], round(part["charge_pe"], 2), "pe")
+```
+
+### Calibration laser
+
+An isotropic monochromatic point flash, all orders through the directional
+RTE. It needs its own point-source cache for that wavelength (built once;
+slow for the full array):
+
+```python
+from lighthit.event import laser_kernel
+
+laser = laser_kernel(model.medium, model.detector, cache_directory="tables/laser-cache",
+                     omega_per_ns=np.linspace(0.0, 1.2, 321), cache_policy="build")
+flash = lh.IsotropicFlash.monochromatic([0.0, -270.0, 360.0], 1e12, 532.0)
+response = EventTransport(kernel, laser_kernel=laser)(flash)
+```
+
+## 3. Inside NTSim
+
+NTSim keeps primary generation and Geant4 propagation and calls LightHit
+instead of photon Monte Carlo (`enable_cherenkov=False`). With the prepared
+tables next to `--cache`, every event is split into its light sources and
+routed automatically; no option is needed.
+
+| Event | LightHit sources | Route |
+|---|---|---|
+| muon | the muon with all its descendants | `lighthit.muon` |
+| electron, photon, hadron | one shower | `lighthit.shower` |
+| nu_e CC, NC (particles at one vertex) | one shower | `lighthit.shower` |
+| nu_mu CC | the muon (with descendants) + the hadronic vertex shower | `lighthit.event` |
+| list of primaries, muon bundle | each muon of at least 20 m; showers grouped by vertex | `lighthit.event` |
+| calibration laser | isotropic flash, no Geant4 | `kernel.transport(IsotropicFlash)` |
+
+Command line (`run/run_lighthit.py` in NTSim; `CACHE` is the prepared RTE
+cache with `muon-data.json` beside it):
+
+```bash
+# electron (shower route)
+python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 \
+  --pdg 11 --energy 100 --position 5 -269.5 330 --direction 0.35 -0.2 0.915 --output out/electron
+
+# muon (muon route)
+python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 \
+  --pdg 13 --energy 1000 --position 5 -269.5 330 --direction 0.2 0.9 0.3 --output out/muon
+
+# nu_e CC final state at one vertex: one shower
+python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 5 -269.5 330 \
+  --particle 11 70 0.35 -0.2 0.915 --particle 211 25 0.45 -0.1 0.88 --particle 2212 5 0.2 -0.3 0.93 \
+  --output out/nue
+
+# nu_mu CC final state: muon + hadronic vertex shower, one event
+python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 5 -269.5 330 \
+  --particle 13 800 0.2 0.9 0.3 --particle 211 150 0.3 0.85 0.4 --particle 2212 50 0.1 0.95 0.2 \
+  --output out/numu
+
+# calibration flash (the laser cache is built once with --build-laser-cache)
+python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 0 -270 360 \
+  --laser 1e12 532 --laser-cache tables/laser-cache --output out/laser
+```
+
+Each run writes `event-<id>-hybrid-<route>.npz` (the response),
+`event-<id>-hybrid-<route>.json` (the metadata below) and `viewer.html`.
+`--muon-route off`, `--shower-route off` or any `--hybrid-*` option keep the
+older hybrid route.
+
+In Python, the same processor in an NTSim chain; `ParticleList` places any set
+of primaries (e.g. a neutrino final state) at their vertices:
 
 ```python
 import numpy as np
 import lighthit as lh
+import ntsim
+from ntsim.event_chain import Chain, EmptyEventSource
+from ntsim.LightTransport import LightHitTransport, bgvd_model_from_ntsim
 
-# Optical properties tabulated versus wavelength.
-medium = lh.SpectralMedium(
-    wavelength_nm=[400.0, 450.0, 500.0],
-    absorption_per_m=[0.030, 0.020, 0.040],
-    scattering_per_m=[0.030, 0.022, 0.017],
-    phase_index=[1.344, 1.339, 1.336],
-    group_index=[1.386, 1.374, 1.367],
-    g=0.9,
-)
+model = bgvd_model_from_ntsim(ntsim.bgvd.Telescope(n_clusters=(1, 2, 3, 4, 5)), ntsim.bgvd.Water())
+kernel = model.kernel(lh.KernelConfig(
+    omega_per_ns=np.linspace(0.0, 1.2, 65), readout_omega_per_ns=np.linspace(0.0, 1.2, 321),
+    relative_time_edges_ns=np.arange(-60.0, 745.0, 5.0),
+    cache_directory=CACHE, cache_policy="require"))
 
-# Response functions receive NumPy arrays and return arrays of the same shape.
-def angular_acceptance(head_on_cosine):
-    return np.ones_like(np.asarray(head_on_cosine, dtype=float))
+primaries = ntsim.primary.ParticleList(                 # nu_e CC: electron + hadrons
+    pdg=(11, 211, 2212), energy=(70.0, 25.0, 5.0),
+    direction=((0.35, -0.20, 0.915), (0.45, -0.10, 0.88), (0.20, -0.30, 0.93)),
+    position=((5.0, -269.5, 330.0),))                   # one vertex, or one per particle
+geant = ntsim.modules.ParticlePropagator(random_seed=42, enable_cherenkov=False,
+                                         cascade_bounds_e=(0.0, 0.0), save_process_name=True)
+light = LightHitTransport(kernel=kernel, output_directory="ntsim-out")
 
-def spectral_efficiency(wavelength_nm):
-    return np.full_like(np.asarray(wavelength_nm, dtype=float), 0.20)
-
-detector = lh.DetectorArray(
-    positions_m=[[20.0, 0.0, 0.0], [35.0, 0.0, 0.0]],
-    orientations=[[-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]],
-    effective_area_m2=0.05,
-    angular_acceptance=angular_acceptance,
-    spectral_efficiency=spectral_efficiency,
-)
-
-source = lh.IsotropicFlash.monochromatic(
-    position_m=[0.0, 0.0, 0.0],
-    photons=1.0e8,
-    wavelength_nm=450.0,
-)
-
-# build() returns a reusable kernel and prepares only the tables this source
-# needs. The same kernel can then transport more compatible events.
-kernel = lh.build(medium, detector, source)
-response = kernel.transport(source)
-
-print(response.charge_pe)   # integrated expected photoelectrons, one per OM
-print(response.bins_pe)     # expected photoelectrons, shape (OM, time bin)
+for event in Chain(primaries, geant, light)(EmptyEventSource()):
+    info = event.header.metadata["lighthit"]      # route, components, active OMs, ...
+    response = light.responses[event.id]          # charge_pe, bins_pe, active, ...
+    print(info["route"], info["active_modules"], info["total_expected_pe"])
+    break
 ```
 
-The first build may take noticeably longer than later event calculations.
-Set `KernelConfig(cache_directory=...)` to reuse transport tables across
-processes.
+`event.header.metadata["lighthit"]` records the route (`lighthit.shower`,
+`lighthit.muon`, `lighthit.event`), the sources found in the event
+(`components`: kind, label, primaries, number of steps, light fraction), the
+active OMs, the total expected photoelectrons and any route substitution
+(`route_fallbacks`). `LightHitTransport(kernel, laser_kernel=...).laser(position,
+photons, wavelength)` returns a flash response without Geant4.
 
-## Sources
-
-The high-level dispatcher accepts:
+## Reading a response
 
 ```python
-flash = lh.IsotropicFlash.monochromatic(
-    position_m=[0, 0, 0], photons=1e8, wavelength_nm=450
-)
-
-track = lh.CherenkovTrack(
-    start_m=[0, 0, -20],
-    direction=[0.2, 0.1, 0.97],
-    length_m=40,
-    beta=1.0,
-)
-
-shower = lh.G4Shower.from_hdf5("event.h5", event=0)
-
-synthetic_shower = lh.SyntheticShower.gaussian(
-    lh.SourcePose(
-        position_m=[25.0, -10.0, -720.0],
-        direction=[0.4, 0.2, -0.89442719],
-        time_ns=0.0,
-    ),
-    charged_track_length_m=300.0,
-)
+response.charge_pe             # (OM,)          all-time expected photoelectrons
+response.bins_pe               # (OM, bin)      photoelectrons in each bin
+response.components_pe         # (OM, bin, 3)   the same split into orders 0, 1, >=2
+response.charge_components_pe  # (OM, 3)
+response.active                # (OM,)          total charge >= threshold
+response.time_origin_ns        # (OM,)          absolute time of each OM's bin zero
+response.relative_time_edges_ns
+response.metadata              # route, timings, selection details
+response.save("event.npz")
 ```
 
-For tracks and showers, `kernel.transport(source)` automatically selects the
-source engine and uses the detector's angular response. A compatible prepared
-wavelength-folded cache is used when present; set
-`KernelConfig(spectral_folded_cache=False)` for the original reference path.
+Bins are defined relative to each OM's origin, a lower bound on the earliest
+possible light arrival. Bin sums can differ from the charge (light outside the
+window). Order >=2 comes from a finite frequency band and may show small
+signed ringing; it is never clipped. OMs below threshold carry estimated
+scattered charges and no bins.
 
-Applications can select any calculated signal without using the CLI:
+## Several sources: one clock, one OM acceptance
 
-```python
-response = kernel.transport(track)
-prompt = response.select("0+1")  # unscattered plus once-scattered
-print(prompt.charge_pe, prompt.bins_pe, prompt.rate_pe_per_ns)
-# Other selectors: 0, 1, ">=2", "all".
-```
+Light adds up, so an event is the sum of its sources, but two things are
+decided for the whole event:
 
-This selects stored components; it does not skip the multiply-scattered solve
-or make the transport itself faster.
+* every OM has one time origin (the earliest possible arrival from any step of
+  the event), and the bins of all sources refer to it;
+* an OM is active when the **sum** of the sources reaches the threshold. Each
+  source is computed with the light of the already computed sources added to
+  its own threshold test (showers first). Then every OM whose summed charge
+  can still reach the threshold (estimated scattered charges inflated by a
+  factor 3) is completed in every source that did not compute it in detail.
 
-For a shower, `transport_hybrid` instead computes orders 0 and 1 with the
-direct physical-time prompt solver and order >=2 with the directional RTE.
-It requires the Numba accelerator and a prepared directional cache. With the
-standard 321-frequency cache, only 65 selected nodes are applied by default:
+An OM seen weakly by the muon and weakly by the vertex shower is therefore
+active with both waveforms. On test events the composed response equals,
+bit for bit, the sum of independent threshold-free calculations of each
+source.
 
-```python
-hybrid = kernel.transport_hybrid(shower, frequency_nodes=65)
-print(hybrid.charge_pe, hybrid.bins_pe)
-```
+## Accuracy and speed
 
-`HybridTransportResponse.spectrum_ge2_pe` contains only the >=2 spectrum on
-the computed frequency grid. Prompt orders have exact time bins but no stored
-nonzero-frequency spectrum. The active OMs receive the full prompt calculation;
-the integrated order-1 charge for screened, inactive OMs is a coarse estimate
-and is identified by `metadata["prompt_order1_level"]`.
-For a screening control, pass
-`prompt_config=lh.PromptConfig(screen=False)`; this evaluates direct order 1
-for every OM and costs more time.
+Measured on NTSim/Geant4 events in five Baikal-GVD clusters (1440 OMs), one
+CPU thread, after compilation. Errors are relative to calculations on the
+original G4 steps or to a finer source basis, not to photon Monte Carlo.
 
-To reduce the cache itself, build it on 65 frequencies and specify a separate
-321-node readout grid. The readout grid is used only after the expensive solve:
+| Event | Time | Previous route |
+|---|---:|---:|
+| electron 100 GeV | 5.5–6.4 s | 25–26 s |
+| electron 1 TeV | 42 s | 105 s |
+| pi+ 100 GeV | 21 s | — |
+| nu_e CC (e 70 + pi 25 + p 5 GeV) | 14 s | — |
+| muon 100 GeV / 1 TeV | 11 / 10 s | — |
+| nu_mu CC (mu 800 + pi 150 + p 50 GeV) | 73 s | — |
 
-```python
-config = lh.KernelConfig(
-    omega_per_ns=np.linspace(0.0, 1.2, 65),
-    readout_omega_per_ns=np.linspace(0.0, 1.2, 321),
-    cache_directory="hybrid-cache",
-    cache_policy="require",
-)
-kernel = lh.TransportKernel(medium, detector, config)
-hybrid = kernel.transport_hybrid(shower, frequency_nodes=65)
-```
+* Direct light is exact on the G4 steps over the continuous spectrum. The
+  earlier nine-wavelength quadrature underestimated it by about 9% for showers
+  (up to 100% on single OMs), because a millimetre step is seen only on its
+  Cherenkov cone.
+* Once-scattered light (grouped) against original-step integration: bin L1
+  at most 3.3% (100 GeV) and 3.1% (1 TeV), charge bias below 0.6%. This is the
+  largest numerical error of the shower calculation.
+* Order >=2 against a finer basis: at most 0.15% bin L1 on 100 GeV electrons,
+  0.4% at 1 TeV and 1% on a hadronic shower.
+* Hadronic showers emit about 3% of their light 50 ns to milliseconds late
+  (neutron captures, decays). That light is read on its own shifted clock, or
+  counted only in the charge when it cannot reach the readout window.
 
-### Shower basis for order >=2
+## Limitations
 
-The order >=2 source of a shower can instead be represented on an
-axial-slice basis: cubic slices along the shower axis (0.25 m), a
-five-point transverse moment stencil and the exact angular harmonics of the
-kernel configuration. For compact showers, orders 0+1, the RTE cache, the
-active-OM rule and the readout are unchanged; only the order >=2 source differs:
+* Point OMs in a homogeneous medium with an HG phase function: no
+  boundaries, shadowing, electronics, noise or trigger.
+* The muon route refuses a primary-track piece whose line passes within 3 m
+  of an OM, which happens at the scattered end of stopping muons; such a muon
+  is then transported by the shower route (`route_fallbacks`), correctly but
+  more slowly.
+* The laser is an isotropic flash; a collimated beam or a measured diffuser
+  pattern is not represented.
+* Tables (RTE cache, >=2 pack, muon atlases) belong to one medium and OM
+  response; a change of either requires new tables.
 
-```python
-basis = lh.ShowerBasis()          # cell_m=0.25, cubic slices, stencil
-hybrid = kernel.transport_hybrid(shower, frequency_nodes=65, ge2_basis=basis)
-```
+## Release
 
-The prepared order >=2 radial splines are kept on the kernel and reused by
-every later event. To start a job without rebuilding them, save them once and
-memory-map them afterwards:
-
-```python
-kernel.ge2_kernel_store().save("ge2-pack")      # after the first event
-kernel.ge2_kernel_store("ge2-pack")             # in a later process
-```
-
-On one BGVD cluster and a 100 GeV electron a warm event took 14 s instead of
-628 s on the same 4-core machine (1.9 instead of 5.6 GiB), with the same active
-OMs, order >=2 charge within 2e-4 and total time-bin L1 within 0.2 % of the
-default hybrid; the basis source is closer to a converged source reference
-than the default one. See `docs/research/shower-basis.md` for the measured
-errors, including 1 TeV electrons and muons with showers.
-
-For a long G4 muon source, the basis now uses a separate 3–300 m source
-window for each OM and sums the zero-frequency charge before selecting active
-modules. An explicitly selected nearly straight track can use the axial
-`m=0` channel while its secondaries keep the shower basis:
-
-```python
-hybrid = kernel.transport_hybrid(
-    muon_event_source, frequency_nodes=65,
-    ge2_basis=lh.ShowerBasis(track_uid=primary_muon_uid))
-```
-
-The track option is an approximation and remains opt-in. See
-`docs/research/long-muon-radial-windows.md` for the NTSim checks, cutoff
-comparison, timing, memory and current limitations.
-
-The same `ShowerBasis` also supports `cone_model="spectral"`: it applies the
-Cherenkov threshold and cone angle separately at every wavelength node.
-The existing RTE cache and prepared kernel pack are reused. On the checked
-100 GeV NTSim electron it took 12.2 s versus 116 s for the spectral hybrid,
-with 26 matching active OMs. See `docs/research/spectral-shower-basis.md`
-for the formula, per-OM accuracy and NTSim run commands.
-The explicitly selected spectral muon route can additionally fuse wavelength
-bands and use 33 of the prepared 65 frequencies; on two checked 100 GeV G4
-muons this preserved the active OMs and kept order >=2 time-bin L1 differences
-below 3% on bright OMs. See `docs/research/muon-fast-spectral.md`.
-
-## Configuring the calculation
-
-Numerical settings are collected in `KernelConfig`:
-
-```python
-config = lh.KernelConfig(
-    wavelength_nodes=9,
-    threshold_pe=0.01,
-    cache_directory="lighthit-cache",
-)
-
-kernel = lh.build(medium, detector, track, config=config)
-response = kernel.transport(track)
-```
-
-For production jobs, prepare the cache explicitly and forbid event processing
-from starting an expensive build unexpectedly:
-
-```python
-build_config = lh.KernelConfig(cache_directory="lighthit-cache")
-kernel = lh.TransportKernel(medium, detector, build_config)
-kernel.build(source=track, progress="console")
-print(kernel.last_build_report.as_dict())
-
-run_config = lh.KernelConfig(
-    cache_directory="lighthit-cache",
-    cache_policy="require",
-)
-kernel = lh.TransportKernel(medium, detector, run_config)
-response = kernel.transport(track)
-```
-
-Repeated `build` calls reuse compatible tables and report that there is nothing
-to do. Pass `force=True` only for an intentional rebuild.
-
-For many independent Cherenkov events on the same medium and OM spectral
-response, an optional second build folds the wavelength quadrature into two
-directional kernels (one for a beta-one straight track). This avoids preparing
-nine large radial splines during each event:
-
-```python
-kernel.build_folded_directional()
-fast_config = lh.KernelConfig(
-    cache_directory="lighthit-cache", cache_policy="require",
-    spectral_folded_cache=True,
-)
-fast_kernel = lh.TransportKernel(medium, detector, fast_config)
-response = fast_kernel.transport(track)
-```
-
-Use the same numerical configuration in both kernels. Once a compatible
-derived cache exists, it is selected automatically; set
-`spectral_folded_cache=False` to force the original nine-wavelength reference.
-Without a derived cache the original path remains available. The shared radial
-interpolation is a numerical approximation, so compare representative events
-against the reference before analysis. On the BGVD 321-frequency profile the
-three prepared arrays occupy about 10 GiB on disk.
-
-Detector coordinates can be inspected without detector-specific assumptions:
-
-```python
-geometry = lh.describe_geometry(detector)
-print(geometry.centroid_m)
-print(geometry.bounds_min_m, geometry.bounds_max_m)
-```
-
-For a point laser, cover every source-to-module distance when preparing its
-cache. This matters for a bright source: modules that could be safely skipped
-at low photon count may contribute above `threshold_pe` at high photon count.
-
-```python
-laser_range = lh.point_source_radial_range(detector, flash.position_m)
-laser_config = lh.KernelConfig(
-    radial_range_m=laser_range,
-    k_panel_per_m=min(0.04, 2 * np.pi / laser_range[1]),
-    cache_directory="laser-cache",
-)
-laser_kernel = lh.build(medium, detector, flash, config=laser_config)
-```
-
-The returned range guarantees geometric coverage. The spatial panel rule
-resolves oscillations at the farthest OM better than the default panel; check
-convergence in `k_panel_per_m`, `radial_nodes` and the frequency grid for the
-medium and geometry being analysed. For several laser positions, choose one
-shared radial range that covers the signals of interest; the cache contains a
-radial transport kernel, not a source-position-specific result.
-
-Important inputs are explicit:
-
-- `SpectralMedium` contains absorption and scattering coefficients in m⁻¹,
-  phase and group refractive indices, and the Henyey–Greenstein parameter `g`.
-- `DetectorArray` contains OM positions, orientations, effective areas,
-  angular acceptance and wavelength-dependent detection efficiency.
-- A detector orientation points from the OM toward a head-on source;
-  `angular_acceptance(+1)` is the head-on response.
-- `spectral_efficiency` should include all wavelength-dependent detection
-  factors required by the application, such as quantum efficiency and optical
-  transmission.
-
-## Reading the response
-
-`kernel.transport(...)` returns a `TransportResponse`.
-
-| Attribute | Meaning |
-|---|---|
-| `charge_pe` | Integrated expected photoelectrons, shape `(OM,)` |
-| `bins_pe` | Expected photoelectrons per relative time bin, shape `(OM, bin)` |
-| `charge_components_pe` | Integrated contributions `[ballistic, one, two-or-more]` |
-| `components_pe` | The same three components per time bin |
-| `active` | OMs for which the full time spectrum was evaluated |
-| `relative_time_edges_ns` | Bin edges relative to each OM's time origin |
-| `time_origin_ns` | One absolute time origin per OM |
-| `metadata` | Method, backend and numerical diagnostics |
-
-Absolute bin edges for every module are
-
-```python
-absolute_edges_ns = (
-    response.time_origin_ns[:, None]
-    + response.relative_time_edges_ns[None, :]
-)
-```
-
-The integrated charge is evaluated independently at zero frequency. A finite
-time window and a finite frequency grid mean that `bins_pe.sum(axis=1)` need
-not equal `charge_pe` exactly. Signed ringing is reported rather than silently
-clipped or renormalised.
-
-Responses can be stored as compressed NumPy files:
-
-```python
-response.save("response.npz")
-```
-
-## Interactive viewer
-
-Install the optional viewer dependency:
+The version is defined only in `src/lighthit/_version.py`.
 
 ```bash
-python -m pip install 'lighthit[viewer]'
+python -m pytest -q tests
+LH_VERSION="$(python -c 'from lighthit._version import VERSION; print(VERSION)')"
+rm -rf dist build
+python -m build --sdist --wheel --outdir dist
+python -m twine check "dist/lighthit-${LH_VERSION}-py3-none-any.whl" "dist/lighthit-${LH_VERSION}.tar.gz"
+git tag -a "v${LH_VERSION}" -m "LightHit ${LH_VERSION}"
+python -m twine upload -u __token__ "dist/lighthit-${LH_VERSION}-py3-none-any.whl" "dist/lighthit-${LH_VERSION}.tar.gz"
 ```
 
-Turn a response into a standalone interactive HTML file:
+The distribution contains the package, its public synthetic example and the
+self-test only: no G4 data, detector model, prepared tables, research scripts
+or documentation sources (`MANIFEST.in` and `packaging_filter.py`).
 
-```python
-payload = lh.viewer_payload(
-    response,
-    source=source,
-    event_id="flash-450nm",
-    label="450 nm calibration flash",
-)
+## Licence and data
 
-viewer_path = lh.write_event_viewer(payload, "lighthit-viewer.html")
-print(viewer_path)
-```
-
-Compatible event payloads can share one viewer:
-
-```python
-combined = lh.merge_event_viewers(laser_payload, track_payload, shower_payload)
-lh.write_event_viewer(combined, "multi-event-viewer.html")
-```
-
-Open `lighthit-viewer.html` in a web browser. It contains the detector geometry,
-integrated charge by scattering order, a selectable per-OM time histogram and a
-time animation. A portable `lighthit-viewer.json` companion is written beside
-the HTML file. The Display selector offers raw bins, a 3 ns Gaussian view, or
-both overlaid on the OM waveform. Each scattering order and `0+1` has its own
-raw and smoothed curve. The Gaussian view redistributes already
-binned integrals under a uniform-within-bin assumption; it is for display and
-does not replace an exact detector timing response or modify saved raw data.
-
-For tracks and showers the animation also shows the source itself: on the
-default detector clock a gold head runs along the muon track, or the shower
-spindle grows along its axis, in step with the time slider, while each OM shows
-its bin at `time_origin + relative time`. The Per-OM origin clock keeps the
-older view in which every OM is shown at its own time zero. The source timing
-is an optional `timing` block of an axis source (`lighthit.viewer.source_timing`
-builds it from light elements); payloads without it stay valid and static.
-
-## Installed synthetic demonstration
-
-The wheel includes one public-data-only Baikal-like example. Its geometry and
-OM response are illustrative and are not a Baikal calibration:
-
-```bash
-lighthit-demo geometry
-lighthit-demo cache --profile quick --cache ./demo-cache --sources all
-lighthit-demo run --profile quick --cache ./demo-cache \
-  --output ./demo-output --sources all
-```
-
-The repository, but not the wheel, contains detector-specific laser, track,
-multi-track and G4-shower examples with explicit source positions and directions.
-
-## Scope
-
-The current model assumes a homogeneous, unbounded medium with elastic
-Henyey–Greenstein scattering. It does not include boundaries, layered media,
-structural shadowing, polarisation, detector electronics, trigger or noise.
-
-## License
-
-LightHit is distributed under the BSD 3-Clause License.
+BSD 3-Clause, see `LICENSE`. The free-moment recursion and free-tail ratios in
+`angular.py` derive from the author's earlier `baikal-rte` code. Optical
+coefficients, the OM response and geometry are read at run time from a
+separately supplied model; no private code, calibration table, G4 event or
+prepared table is distributed. Synthetic media and detectors in this package
+are artificial test inputs, not a calibration.

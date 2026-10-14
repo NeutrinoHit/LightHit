@@ -27,7 +27,7 @@ from scipy.special import roots_legendre
 
 from ..angular import (_degree, coupling_coefficients, resolvent_rows)
 from ..cache import MOMENT_ORDERS
-from .event_moments import real_spherical_harmonics
+from ..event_moments import real_spherical_harmonics
 
 __all__ = ["spherical_quadrature", "khat_quadrature_response",
            "dense_angular_reference", "axisymmetric_reference"]

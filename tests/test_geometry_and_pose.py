@@ -38,7 +38,7 @@ def test_point_source_radial_range_covers_all_modules_independently_of_brightnes
 
 
 def test_bright_laser_example_resolves_spatial_quadrature_at_far_om(tmp_path):
-    from examples.laser_cache import laser_config
+    from lighthit.event import laser_config
 
     config = laser_config(detector(), cache_directory=tmp_path,
                           cache_policy="require")
@@ -48,16 +48,6 @@ def test_bright_laser_example_resolves_spatial_quadrature_at_far_om(tmp_path):
                          max_radius_m=500.)
     assert wider.radial_range_m == (config.radial_range_m[0], 500.)
     assert wider.k_panel_per_m < config.k_panel_per_m
-
-
-def test_laser_example_reports_an_outdated_installed_package(tmp_path, monkeypatch):
-    from examples.laser_cache import laser_config
-
-    monkeypatch.delattr(lh, "point_source_radial_range")
-    with pytest.raises(RuntimeError, match="require LightHit 0.2.0a8 or newer") as exc:
-        laser_config(detector(), cache_directory=tmp_path)
-    assert lh.__file__ in str(exc.value)
-    assert "pip install -e" in str(exc.value)
 
 
 def test_track_elements_are_placed_by_numeric_centroid_axis_and_time():

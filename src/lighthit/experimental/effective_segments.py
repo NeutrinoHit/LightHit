@@ -45,7 +45,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..medium import C_VACUUM_M_PER_NS
-from .axial_source import AxisFrame
+from ..axial_source import AxisFrame
 from .cone_segment import ConeSegment, segment_spectrum
 
 __all__ = ["EffectiveSegments", "fit_effective_segments", "effective_segment_response",
@@ -223,7 +223,7 @@ def full_response(cache, elements, medium, effective, receivers_m, *,
                                            detector_chunk=detector_chunk)
     if ballistic is None:
         try:
-            from .ballistic_fast import vectorised_ballistic_fast as _ballistic
+            from ..ballistic_fast import vectorised_ballistic_fast as _ballistic
         except ImportError:
             import sys
             from pathlib import Path

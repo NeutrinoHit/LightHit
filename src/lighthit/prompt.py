@@ -29,8 +29,7 @@ For one directed photon ("pencil") leaving ``x`` in direction ``s0`` at time
 
 The ``1/rho^2`` of the second flight is absorbed by the change of variables;
 the only singular factor, ``1/sin(theta)``, is integrable over the source
-directions. The derivation and the numerical scheme are in
-``docs/research/prompt-transport.md``. The slow independent reference is
+directions. The slow independent reference is
 :mod:`lighthit.prompt_reference`.
 """
 from __future__ import annotations
@@ -109,6 +108,11 @@ class PromptConfig:
     near-cone geometry, use ``element_method="ring"`` or ``"segment"`` as a
     convergence control.
 
+    Backward pencils use finite ``1/r`` moments and a path Jacobian with the
+    antipodal cancellation performed analytically. Their smooth angular and
+    position covariance corrections are omitted (an O(covariance) error),
+    rather than expanding the singular factor ``1/sin(theta)`` alone.
+
     ``screen`` (grouped algorithm, nonzero threshold): a coarse pass
     (``screen_cell_m``, ``6 * screen_pixel_face**2`` pixels,
     ``screen_ring_nodes``) estimates every module; the full-resolution pass
@@ -116,6 +120,23 @@ class PromptConfig:
     coarse to fine order 1 on the fine modules is reported; if it ever falls
     below ``1/screen_margin`` the fine set is widened with the observed ratio.
     Coarse-only modules keep the coarse order-1 charge and no bins.
+
+    ``batch_charge_tolerance_pe`` optionally omits complete grouped batches
+    with a small analytic absolute-charge estimate, with a budget per OM.
+    This bounds the continuous grouped integrand, not interpolation or
+    front-smearing errors of its numerical histogram. Zero disables it.
+
+    ``fuse_bands`` (grouped algorithm, spectral cone, element sources):
+    elements above Cherenkov threshold in every band are compressed once into
+    pencils of ``6 * fused_pixel_face**2`` pixels sampled with
+    ``fused_ring_nodes`` azimuths, with one frozen cone at the
+    ``s0w``-weighted mean phase index, and grouped once per module for all
+    bands (each band keeps its own optics, yield and clock in the batches).
+    Elements above threshold in only some bands stay per-band units; the
+    coarse screen uses the same units. This replaces nine per-band
+    compressions. It changes the grouping discretisation and was accepted
+    against original-step (``segment``) controls: worst-case error and bias
+    did not increase (README.md, Accuracy). Default off.
 
     ``max_distance_m`` defaults to the kernel's ``radial_range_m[1]``;
     modules farther from every part of the source are omitted with the same
@@ -154,9 +175,18 @@ class PromptConfig:
     screen_cell_m: float = 2.0
     screen_pixel_face: int = 8
     screen_ring_nodes: int = 24
+    batch_charge_tolerance_pe: float = 0.0
     max_distance_m: float | None = None
+    ballistic_method: str = "quadrature"
+    fuse_bands: bool = False
+    fused_pixel_face: int = 64
+    fused_ring_nodes: int = 192
 
     def __post_init__(self):
+        if self.ballistic_method not in ("quadrature", "interval"):
+            raise ValueError("ballistic_method must be quadrature or interval")
+        if not isinstance(self.fuse_bands, (bool, np.bool_)):
+            raise ValueError("fuse_bands must be a boolean")
         positive = ("path_step", "path_step_tail", "tail_exponent", "grade_ratio",
                     "grade_min", "front_width_ns", "panel_max_relative",
                     "phi_w_panel", "cell_m", "screen_cell_m", "smoothing_factor",
@@ -170,7 +200,7 @@ class PromptConfig:
             raise ValueError("grade_ratio must be in (0, 1)")
         for name in ("direct_bins", "a_gauss", "phi_gauss",
                      "phi_uniform", "segment_max_elements",
-                     "pixel_face", "ring_nodes"):
+                     "pixel_face", "ring_nodes", "fused_pixel_face", "fused_ring_nodes"):
             if int(getattr(self, name)) < 1:
                 raise ValueError(f"{name} must be a positive integer")
         for name, minimum in (("max_a_breaks", 3), ("max_path_nodes", 3),
@@ -183,6 +213,9 @@ class PromptConfig:
             raise ValueError("element_method must be auto, segment, grouped or ring")
         if not np.isfinite(self.screen_margin) or self.screen_margin < 1:
             raise ValueError("screen_margin must be finite and >= 1")
+        if (not np.isfinite(self.batch_charge_tolerance_pe)
+                or self.batch_charge_tolerance_pe < 0):
+            raise ValueError("batch_charge_tolerance_pe must be finite and nonnegative")
         if not np.isfinite(self.min_distance_m) or self.min_distance_m < 0:
             raise ValueError("min_distance_m must be finite and nonnegative")
         if self.max_distance_m is not None and (
@@ -446,7 +479,7 @@ def _source_elements(kernel, source):
 
 def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
                      compute_bins_for_all=False, selection_extra_charge=None,
-                     time_origin_ns=None):
+                     time_origin_ns=None, _fine_order1=None):
     """Orders 0 and exactly 1 for ``source`` on ``kernel``'s detector.
 
     See the module docstring for the physics.  Uses the kernel's medium,
@@ -457,6 +490,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         raise ImportError("transport_prompt requires the optional Numba accelerator; "
                           "install lighthit[accelerate]")
     config = config or PromptConfig()
+    fine_order1 = _order1 if _fine_order1 is None else _fine_order1
     if compute_bins_for_all and config.screen:
         config = replace(config, screen=False)
     began = perf_counter()
@@ -489,6 +523,13 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
     original_coefficient = float(elements.coefficient0.sum())
     threshold_phase = (np.max(tables["phase_index"]) if spectral_cone
                        else np.min(tables["phase_index"]))
+    if spectral_cone and config.ballistic_method == "interval":
+        # A valid narrow wavelength interval can lie before the first global
+        # quadrature node. Do not discard its charged step before q0 integrates it.
+        spectral_low, spectral_high = kernel.config.wavelength_range_nm or kernel.medium.wavelength_range_nm
+        native = kernel.medium.wavelength_nm
+        critical_wavelengths = np.r_[spectral_low, native[(native > spectral_low) & (native < spectral_high)], spectral_high]
+        threshold_phase = float(np.max(kernel.medium.sample(critical_wavelengths)["phase_index"]))
     valid = elements.beta * float(threshold_phase) > 1
     if not np.any(valid):
         raise ValueError("source is below Cherenkov threshold over the wavelength range")
@@ -496,6 +537,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         elements = elements.subset(valid)
     dropped = 1 - float(elements.coefficient0.sum()) / original_coefficient
     fastest_group = float(np.min(tables["group_index"]))
+    local_origin = False
     if isinstance(source, CherenkovTrack):
         if source.beta * float(threshold_phase) <= 1:
             raise ValueError("source is below Cherenkov threshold over the wavelength range")
@@ -511,6 +553,17 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         mode = config.element_method
         if mode == "auto":
             mode = "segment" if len(elements) <= config.segment_max_elements else "grouped"
+        source_extent = float(np.linalg.norm(np.ptp(elements.midpoints_m, axis=0)))
+        source_time_span = float(np.max(elements.end_ns) - np.min(elements.start_ns))
+        local_origin = (time_origin_ns is None and (
+            source_extent > float(kernel.config.radial_range_m[1])
+            or source_time_span > 0.5 * float(np.ptp(edges))))
+        if local_origin:
+            from ._shower_basis import earliest_element_arrival
+            origins = earliest_element_arrival(
+                np.ascontiguousarray(positions), np.ascontiguousarray(elements.start_m),
+                np.ascontiguousarray(elements.direction), np.ascontiguousarray(elements.length_m),
+                np.ascontiguousarray(elements.start_ns), fastest_group)
     if time_origin_ns is not None:
         origins = np.asarray(time_origin_ns, float)
         if origins.shape != (len(positions),) or not np.isfinite(origins).all():
@@ -556,7 +609,24 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
     charge = np.zeros((len(positions), 2))
     ballistic = _ballistic_backend()
     fields = _ballistic_fields(source, elements, tables)
-    for lam in range(len(tables["wavelength_nm"])):
+    interval_bins = None
+    interval_metadata = None
+    if config.ballistic_method == "interval":
+        if not spectral_cone:
+            raise ValueError("interval ballistic requires a wavelength-dependent spectral cone")
+        from copy import copy
+        from .ballistic_interval import ballistic_interval
+        local = copy(kernel)
+        if len(work):
+            local.detector = replace(detector, positions_m=positions[work],
+                orientations=detector.orientations[work], effective_area_m2=areas[work],
+                identifiers={key: np.asarray(value)[work] for key, value in detector.identifiers.items()})
+            direct = ballistic_interval(local, elements, time_origin_ns=origins[work], relative_edges_ns=edges)
+            charge[work, 0] = direct.charge_pe
+            interval_bins = np.zeros((len(positions), len(edges)-1))
+            interval_bins[work] = direct.bins_pe
+            interval_metadata = direct.metadata
+    for lam in range(len(tables["wavelength_nm"])) if config.ballistic_method == "quadrature" else ():
         band = kernel.medium.band(float(tables["wavelength_nm"][lam]))
         detector_scale = (tables["weight_nm"][lam] * areas[work]
                           * tables["efficiency"][lam])
@@ -577,12 +647,32 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         order1_bins = np.zeros((len(positions), len(edges) - 1))
         order1_meta = {"order1_spectral_cone": True,
                        "order1_by_wavelength": []}
+        batch_omission = np.zeros((len(positions), 2))
+        spectral_config = replace(
+            config, batch_charge_tolerance_pe=(config.batch_charge_tolerance_pe
+                                              / len(tables["wavelength_nm"])))
         level = np.zeros(len(positions), dtype=np.int8)
         spectral_tasks = []
-        for lam, phase in enumerate(tables["phase_index"]):
-            mask = elements.beta * phase > 1
+        fuse = (config.fuse_bands and mode == "grouped"
+                and not isinstance(source, CherenkovTrack))
+        if fuse:
+            # Shared pencils for the elements emitting in every band, one
+            # frozen cone at the s0w-weighted mean phase index; elements
+            # above threshold in only some bands keep per-band units. Same
+            # units as the muon secondaries (lighthit.muon.secondary_first).
+            from .muon.secondary_first import _evaluation_units
+            band_valid = [elements.beta * phase > 1 for phase in tables["phase_index"]]
+            units = _evaluation_units(tables, band_valid, True)
+        else:
+            units = [dict(bands=[lam], valid=elements.beta * phase > 1, cone=float(phase),
+                          fused=False, tables={key: value[lam:lam + 1]
+                                               for key, value in tables.items()})
+                     for lam, phase in enumerate(tables["phase_index"])]
+        for unit in units:
+            mask = unit["valid"]
             if not np.any(mask):
                 continue
+            phase = unit["cone"]
             subset = elements if np.all(mask) else elements.subset(mask)
             subset = replace(subset, reference_phase_index=float(phase),
                              cone_model="frozen")
@@ -590,44 +680,56 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
                 source, reference_phase_index=float(phase)))
                 if isinstance(source, CherenkovTrack) else
                 _element_segments(subset))
-            single = {key: value[lam:lam + 1] for key, value in tables.items()}
-            spectral_tasks.append((lam, subset, lam_segments, single))
+            task_config = spectral_config
+            if unit["fused"]:
+                task_config = replace(
+                    spectral_config, pixel_face=int(config.fused_pixel_face),
+                    ring_nodes=int(config.fused_ring_nodes),
+                    batch_charge_tolerance_pe=(config.batch_charge_tolerance_pe
+                                               * len(unit["bands"])
+                                               / len(tables["wavelength_nm"])))
+            label = unit["bands"] if unit["fused"] else unit["bands"][0]
+            spectral_tasks.append((label, subset, lam_segments, unit["tables"], task_config))
 
         global_screen = (selection_extra_charge is not None
                          and mode == "grouped" and config.screen and threshold > 0)
         fine_work = work
         coarse_total = None
         if global_screen:
-            for lam, subset, lam_segments, single in spectral_tasks:
+            for lam, subset, lam_segments, single, task_config in spectral_tasks:
                 coarse_charge, _, coarse_meta = _order1(
                     mode, kernel, source, subset, lam_segments,
                     positions, looks, areas, origins, work, single, coef, ipow,
-                    jpow, degree, g, edges, config, charge[:, 0],
+                    jpow, degree, g, edges, task_config, charge[:, 0],
                     coarse_only=True)
                 order1_charge += coarse_charge
+                batch_omission += coarse_meta.pop("order1_batch_omission", 0.)
                 for key, value in coarse_meta["timings"].items():
                     timings[key] = timings.get(key, 0.0) + value
             level[work] = 1
             coarse_total = order1_charge.copy()
             fine_work = work[(charge[work, 0] + extra[work]
                               + config.screen_margin * np.maximum(
-                                  order1_charge[work], 0.0)) >= threshold]
+                                  order1_charge[work] + config.batch_charge_tolerance_pe,
+                                  0.0)) >= threshold]
             order1_meta["order1_global_screen"] = {
                 "enabled": True, "fine_modules": len(fine_work),
                 "coarse_only_modules": len(work) - len(fine_work),
                 "margin": config.screen_margin}
             order1_charge[fine_work] = 0.0
+            batch_omission[fine_work] = 0.0
 
-        for lam, subset, lam_segments, single in spectral_tasks:
+        for lam, subset, lam_segments, single, task_config in spectral_tasks:
             if not len(fine_work):
                 continue
-            lam_charge, lam_bins, lam_meta = _order1(
+            lam_charge, lam_bins, lam_meta = fine_order1(
                 mode, kernel, source, subset, lam_segments,
                 positions, looks, areas, origins, fine_work, single, coef, ipow,
-                jpow, degree, g, edges, replace(config, screen=False),
+                jpow, degree, g, edges, replace(task_config, screen=False),
                 charge[:, 0])
             order1_charge[fine_work] += lam_charge[fine_work]
             order1_bins += lam_bins
+            batch_omission += lam_meta.pop("order1_batch_omission", 0.)
             lam_level = lam_meta.pop("order1_level", None)
             if lam_level is None:
                 lam_level = np.zeros(len(positions), dtype=np.int8)
@@ -636,7 +738,10 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
             for key, value in lam_meta.pop("timings").items():
                 timings[key] = timings.get(key, 0.0) + value
             order1_meta["order1_by_wavelength"].append({
-                "wavelength_nm": float(tables["wavelength_nm"][lam]),
+                "wavelength_nm": (tables["wavelength_nm"][lam].tolist()
+                                  if isinstance(lam, list) else
+                                  float(tables["wavelength_nm"][lam])),
+                "fused_bands": isinstance(lam, list),
                 "source_elements": len(subset), **lam_meta})
         if global_screen and len(fine_work):
             ratio = coarse_total[fine_work] / np.maximum(
@@ -647,18 +752,21 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
                 wider = 1.5 / max(worst, 1e-3)
                 extra_work = work[(level[work] == 1)
                                   & (charge[work, 0] + extra[work]
-                                     + wider * np.maximum(coarse_total[work], 0.0)
+                                     + wider * np.maximum(
+                                         coarse_total[work] + config.batch_charge_tolerance_pe, 0.0)
                                      >= threshold)]
                 if len(extra_work):
                     order1_charge[extra_work] = 0.0
-                    for lam, subset, lam_segments, single in spectral_tasks:
-                        lam_charge, lam_bins, lam_meta = _order1(
+                    batch_omission[extra_work] = 0.0
+                    for lam, subset, lam_segments, single, task_config in spectral_tasks:
+                        lam_charge, lam_bins, lam_meta = fine_order1(
                             mode, kernel, source, subset, lam_segments,
                             positions, looks, areas, origins, extra_work,
                             single, coef, ipow, jpow, degree, g, edges,
-                            replace(config, screen=False), charge[:, 0])
+                            replace(task_config, screen=False), charge[:, 0])
                         order1_charge[extra_work] += lam_charge[extra_work]
                         order1_bins[extra_work] += lam_bins[extra_work]
+                        batch_omission += lam_meta.pop("order1_batch_omission", 0.)
                         for key, value in lam_meta.pop("timings").items():
                             timings[key] = timings.get(key, 0.0) + value
                     level[extra_work] = 2
@@ -666,6 +774,13 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
                 order1_meta["order1_global_screen"]["fine_modules"] = int((level == 2).sum())
                 order1_meta["order1_global_screen"]["coarse_only_modules"] = int((level == 1).sum())
         order1_meta["order1_level"] = level
+        order1_meta["order1_batch_omission"] = batch_omission
+        order1_meta["order1_fused_bands"] = (
+            {"pixel_face": int(config.fused_pixel_face),
+             "ring_nodes": int(config.fused_ring_nodes),
+             "cone_phase_index": float(units[0]["cone"]),
+             "fused_elements": int(np.count_nonzero(units[0]["valid"]))}
+            if fuse else None)
     else:
         order1_charge, order1_bins, order1_meta = _order1(
             mode, kernel, source, elements, segments, positions, looks, areas,
@@ -673,6 +788,31 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
             charge[:, 0], selection_extra_charge=extra)
         timings.update(order1_meta.pop("timings"))
     charge[:, 1] = order1_charge
+    if (config.batch_charge_tolerance_pe > 0 and threshold > 0
+            and np.any(np.abs(charge.sum(axis=1) + extra - threshold)
+                       <= config.batch_charge_tolerance_pe)):
+        # Analytic batch estimates are not numerical-quadrature error bounds;
+        # in particular, avoid knowingly ambiguous OM threshold decisions.
+        result = transport_prompt(
+            kernel, source, replace(config, batch_charge_tolerance_pe=0.),
+            compute_bins_for_all=compute_bins_for_all,
+            selection_extra_charge=selection_extra_charge,
+            time_origin_ns=time_origin_ns, _fine_order1=_fine_order1)
+        result.metadata["order1_batch_screen_fallback"] = "near-threshold OM"
+        result.metadata["order1_batch_screen_requested_tolerance_pe"] = config.batch_charge_tolerance_pe
+        result.metadata["timings"]["elapsed_seconds"] = perf_counter() - began
+        return result
+    batch_omission = order1_meta.pop("order1_batch_omission", np.zeros((len(positions), 2)))
+    order1_meta["order1_batch_screen"] = {
+        "tolerance_pe_per_om": config.batch_charge_tolerance_pe,
+        "skipped_batches_per_om": batch_omission[:, 0].astype(int).tolist(),
+        "omitted_charge_estimate_pe_per_om": batch_omission[:, 1].tolist(),
+        "scope": "absolute integral of the continuous grouped profile; does not bound "
+                 "quadratic time quadrature or front-smearing error"}
+    order1_meta["order1_backward_profile"] = (
+        "grouped-finite-backward-v1: moments w/r, rational 2r/D Jacobian; "
+        "smooth covariance corrections omitted (O(covariance))"
+        if mode == "grouped" else None)
     level = order1_meta.pop("order1_level", None)
     if level is None:
         level = np.zeros(len(positions), dtype=np.int8)
@@ -693,7 +833,9 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
     stage = perf_counter()
     bins = np.zeros((len(positions), len(edges) - 1, 2))
     active_index = work if compute_bins_for_all else np.flatnonzero(active)
-    for lam in range(len(tables["wavelength_nm"])):
+    if interval_bins is not None:
+        bins[active_index, :, 0] = interval_bins[active_index]
+    for lam in range(len(tables["wavelength_nm"])) if config.ballistic_method == "quadrature" else ():
         band = kernel.medium.band(float(tables["wavelength_nm"][lam]))
         detector_scale = (tables["weight_nm"][lam] * areas[active_index]
                           * tables["efficiency"][lam])
@@ -716,6 +858,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         "computed_orders": [0, 1],
         "order_ge2": "not computed",
         "prompt_algorithm": mode,
+        "fine_order1_strategy": getattr(_fine_order1, "name", None),
         "source_type": type(source).__name__,
         "source_elements": len(elements),
         "source_elements_original": original_elements,
@@ -752,11 +895,13 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         "window_charge_pe": {"order0": float(window[:, 0].sum()),
                              "order1": float(window[:, 1].sum())},
         "time_origin": ("caller-supplied per-OM origin" if time_origin_ns is not None
+                        else "earliest local segment and fastest group flight" if local_origin
                         else "earliest straight-track emission and group flight"
                         if isinstance(source, CherenkovTrack) else
                         "earliest element start and fastest group flight"),
-        "ballistic": "identical to TransportKernel.transport: "
-                     + ballistic.__module__ + "." + ballistic.__name__,
+        "ballistic": ("continuous-spectrum-intervals" if config.ballistic_method == "interval" else
+                      "identical to TransportKernel.transport: " + ballistic.__module__ + "." + ballistic.__name__),
+        "ballistic_interval": interval_metadata,
         "backend": "numba",
         "threads": threads,
         "jit_warm_before_call": jit_state,
@@ -782,7 +927,7 @@ def _jit_state():
 def _ballistic_backend():
     if find_spec("numba") is not None:
         try:
-            from .experimental.ballistic_fast import ballistic_directional_fast
+            from .ballistic_fast import ballistic_directional_fast
             return ballistic_directional_fast
         except ImportError:  # pragma: no cover
             pass
@@ -840,8 +985,13 @@ def _min_distance_to_segments(positions, segments):
 
 def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             origins, work, tables, coef, ipow, jpow, degree, g, edges, config,
-            order0_charge, *, coarse_only=False, selection_extra_charge=None):
+            order0_charge, *, coarse_only=False, selection_extra_charge=None, compute_bins=True,
+            stationary_gauss_order=0,stationary_panel_width=1.0):
     from . import _prompt_numba as kernels
+    if not compute_bins and mode != "segment":
+        raise ValueError("explicit charge-only control currently requires segment mode")
+    if stationary_gauss_order and (compute_bins or mode!='segment'):
+        raise ValueError('stationary Gauss is restricted to charge-only segments')
     y_g = (1.0 - abs(g)) / (1.0 + abs(g)) if g != 0 else 1.0
     kappa = -tables["mut"] * tables["speed"]
     eedge = np.exp(np.outer(kappa, edges))
@@ -874,7 +1024,8 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             float(config.panel_max_relative), float(config.phi_w_panel),
             int(config.phi_gauss), int(config.phi_uniform),
             int(config.max_a_breaks), int(config.max_path_nodes),
-            float(config.min_distance_m), _blocks(len(work)))
+            float(config.min_distance_m), _blocks(len(work)), bool(compute_bins),
+            int(stationary_gauss_order),float(stationary_panel_width))
         timings["order1_eval_seconds"] = perf_counter() - stage
         meta.update({
             "order1_quadrature": "tensor rule per segment (a panels graded to the "
@@ -888,6 +1039,10 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             "order1_batches_total": int(batches.sum()),
             "order1_segments_too_close": int(close.sum()),
         })
+        if stationary_gauss_order:
+            meta['order1_quadrature']='positive Gauss in asinh optical path; graded source/azimuth unchanged'
+            meta['stationary_gauss_order']=int(stationary_gauss_order)
+            meta['stationary_panel_width']=float(stationary_panel_width)
         return charge, bins, {"timings": timings, **meta}
     if mode == "ring":
         stage = perf_counter()
@@ -913,8 +1068,9 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
                      "order1_pencils_total": int(pencils.sum())})
         return charge, bins, {"timings": timings, **meta}
     # grouped pencils, optionally screened by a coarse pass
-    def grouped(pencils, targets, merge):
-        return kernels.grouped_pencils_order1(
+    def grouped(pencils, targets, merge, *, compute_bins=True):
+        omission = np.zeros((n, 2))
+        result = kernels.grouped_pencils_order1(
             receivers, looks, areas, origins, np.ascontiguousarray(targets, np.int64),
             pencils["position"], pencils["direction"], pencils["w0"], pencils["w2"],
             pencils["time"], pencils["major"], pencils["var_major"],
@@ -927,7 +1083,9 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             common["direct_bins"], int(config.max_path_nodes),
             float(config.smoothing_factor), float(merge[0]), float(merge[1]),
             float(merge[2]), float(merge[3]), float(np.max(tables["speed"])),
-            _blocks(len(targets)))
+            _blocks(len(targets)), compute_bins,
+            float(config.batch_charge_tolerance_pe), omission)
+        return (*result, omission)
 
     if coarse_only:
         if mode != "grouped":
@@ -939,10 +1097,12 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
         coarse = compress(elements, segments, coarse_config)
         timings["order1_screen_compress_seconds"] = perf_counter() - stage
         stage = perf_counter()
-        coarse_charge, _, _, _ = grouped(
-            coarse, work, (config.merge_theta_min, 0.3, 2.0, 0.1))
+        coarse_charge, _, _, _, omission = grouped(
+            coarse, work, (config.merge_theta_min, 0.3, 2.0, 0.1),
+            compute_bins=False)
         timings["order1_screen_eval_seconds"] = perf_counter() - stage
-        return coarse_charge, np.zeros((n, len(edges) - 1)), {"timings": timings}
+        return coarse_charge, np.zeros((n, len(edges) - 1)), {
+            "timings": timings, "order1_batch_omission": omission}
 
     fine_merge = (config.merge_theta_min, config.merge_theta_ratio,
                   config.merge_tau_ns, config.merge_log_r)
@@ -951,6 +1111,7 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
     charge = np.zeros(n)
     bins = np.zeros((n, len(edges) - 1))
     level = np.zeros(n, dtype=np.int8)          # 0 not computed, 1 coarse, 2 fine
+    omission = np.zeros((n, 2))
     fine_work = work
     if screen:
         stage = perf_counter()
@@ -960,24 +1121,29 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
         coarse = compress(elements, segments, coarse_config)
         timings["order1_screen_compress_seconds"] = perf_counter() - stage
         stage = perf_counter()
-        coarse_charge, _, _, _ = grouped(
-            coarse, work, (config.merge_theta_min, 0.3, 2.0, 0.1))
+        coarse_charge, _, _, _, coarse_omission = grouped(
+            coarse, work, (config.merge_theta_min, 0.3, 2.0, 0.1),
+            compute_bins=False)
         timings["order1_screen_eval_seconds"] = perf_counter() - stage
         charge[work] = coarse_charge[work]
+        omission[work] = coarse_omission[work]
         level[work] = 1
         margin = float(config.screen_margin)
-        extra = (np.zeros(n) if selection_extra_charge is None else
-                 np.asarray(selection_extra_charge, float))
-        fine_work = work[(order0_charge[work] + extra[work]
-                          + margin * coarse_charge[work]) >= threshold]
+        selection_charge = (np.zeros(n) if selection_extra_charge is None else
+                            np.asarray(selection_extra_charge, float))
+        fine_work = work[(order0_charge[work] + selection_charge[work]
+                          + margin * (coarse_charge[work]
+                                      + config.batch_charge_tolerance_pe)) >= threshold]
     stage = perf_counter()
     pencils = compress(elements, segments, config)
     timings["order1_compress_seconds"] = perf_counter() - stage
     stage = perf_counter()
-    fine_charge, fine_bins, groups, batches = grouped(pencils, fine_work, fine_merge)
+    fine_charge, fine_bins, groups, batches, fine_omission = grouped(
+        pencils, fine_work, fine_merge)
     timings["order1_eval_seconds"] = perf_counter() - stage
     charge[fine_work] = fine_charge[fine_work]
     bins[fine_work] = fine_bins[fine_work]
+    omission[fine_work] = fine_omission[fine_work]
     level[fine_work] = 2
     screen_meta = {"enabled": bool(screen)}
     if screen:
@@ -989,12 +1155,16 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             # margin: widen the fine set with the observed ratio and redo
             wider = 1.5 / max(worst, 1e-3)
             candidates = work[(level[work] == 1)
-                              & (order0_charge[work] + wider * coarse_charge[work]
+                              & (order0_charge[work] + selection_charge[work]
+                                 + wider * (coarse_charge[work]
+                                            + config.batch_charge_tolerance_pe)
                                  >= threshold)]
             if len(candidates):
-                extra_charge, extra_bins, _, _ = grouped(pencils, candidates, fine_merge)
+                extra_charge, extra_bins, _, _, extra_omission = grouped(
+                    pencils, candidates, fine_merge)
                 charge[candidates] = extra_charge[candidates]
                 bins[candidates] = extra_bins[candidates]
+                omission[candidates] = extra_omission[candidates]
                 level[candidates] = 2
                 extra = candidates
         coarse_only = work[level[work] == 1]
@@ -1029,6 +1199,9 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
         "order1_ring_nodes_deposited": int(pencils["ring_nodes_deposited"]),
         "order1_screen": screen_meta,
         "order1_level": level,
+        "order1_batch_omission": omission,
+        "order1_backward_profile": "finite 1/r moments and analytic antipodal cancellation; "
+                                   "smooth covariance corrections omitted (O(covariance))",
     })
     return charge, bins, {"timings": timings, **meta}
 

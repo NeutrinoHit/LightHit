@@ -27,7 +27,7 @@ FILTERED_SUBPACKAGE = "lighthit.experimental"
 
 REQUIRED_EXPERIMENTAL = frozenset({
     "__init__", "axial_fast", "axial_source", "ballistic_fast",
-    "event_moments", "g4_source", "hdf5_minimal",
+    "event_moments", "g4_source", "hdf5_minimal", "muon_components",
 })
 
 

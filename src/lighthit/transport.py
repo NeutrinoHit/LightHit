@@ -960,16 +960,16 @@ class TransportKernel:
                                         azimuthal_degree=self.config.source_degree)
 
     def _transport_axial(self, source, *, method, azimuthal_degree=None):
-        from .experimental.axial_source import AxisFrame, AxialSource
+        from .axial_source import AxisFrame, AxialSource
         try:
-            from .experimental.axial_fast import PreparedAxialKernel, compile_axial_source_fast
+            from .axial_fast import PreparedAxialKernel, compile_axial_source_fast
             compiler = compile_axial_source_fast
             backend = "numba axial"
         except ImportError:  # pragma: no cover - no-numba installation
             PreparedAxialKernel = None
             compiler = AxialSource.of
             backend = "numpy axial"
-        from .experimental.ballistic_fast import (vectorised_ballistic_bins_fast,
+        from .ballistic_fast import (vectorised_ballistic_bins_fast,
                                                    vectorised_ballistic_fast)
 
         began = perf_counter()
@@ -1139,9 +1139,9 @@ class TransportKernel:
             from ._track_transport import transport_track_directional
             return transport_track_directional(self, source, method=method)
 
-        from .experimental.axial_source import AxisFrame, AxialSource
+        from .axial_source import AxisFrame, AxialSource
         try:
-            from .experimental.axial_fast import compile_axial_source_fast
+            from .axial_fast import compile_axial_source_fast
             compiler = compile_axial_source_fast
             compile_backend = "numba axial compile"
         except ImportError:  # pragma: no cover - no-numba installation
@@ -1149,7 +1149,7 @@ class TransportKernel:
             compile_backend = "numpy axial compile"
         try:
             from ._directional_numba import PreparedDirectionalKernel
-            from .experimental.ballistic_fast import ballistic_directional_fast
+            from .ballistic_fast import ballistic_directional_fast
             ballistic = ballistic_directional_fast
             apply_backend = "numba directional"
         except ImportError:  # pragma: no cover - no-numba installation

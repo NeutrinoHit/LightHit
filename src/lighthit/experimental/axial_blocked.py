@@ -41,8 +41,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-from .axial_source import channel_index
-from .event_moments import real_spherical_harmonics
+from ..axial_source import channel_index
+from ..event_moments import real_spherical_harmonics
 
 __all__ = ["BlockedAxialKernel"]
 

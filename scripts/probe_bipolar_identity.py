@@ -11,7 +11,7 @@
    fraction, across the whole range of decay rates.
 
 Numbers printed here are the ones quoted in
-``docs/research/directional-om-plan.md`` and in @sec-directional-om.
+``research/documentation/research/directional-om-plan.md`` and in @sec-directional-om.
 """
 from __future__ import annotations
 

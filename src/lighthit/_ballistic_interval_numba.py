@@ -1,0 +1,390 @@
+"""Compiled positive ballistic quadrature on exact spectral support intervals.
+
+All spectral tables share ``panel_edges``; efficiency coefficients are ordinary
+powers of q=(lambda-left)/(right-left). Geometry and time extrema split panels
+before quadrature, so narrow emission intervals or time bins cannot be skipped.
+"""
+import numpy as np
+from numba import njit, prange
+
+_C = 0.299792458
+
+
+@njit(cache=True)
+def _acceptance(alpha, x):
+    """OM acceptance from its Legendre coefficients at cosine ``x``."""
+    result = alpha[0] / (4 * np.pi)
+    previous, current = 1., x
+    if len(alpha) > 1:
+        result += 3 * alpha[1] * current / (4 * np.pi)
+    for ell in range(2, len(alpha)):
+        value = ((2 * ell - 1) * x * current - (ell - 1) * previous) / ell
+        result += (2 * ell + 1) * alpha[ell] * value / (4 * np.pi)
+        previous, current = current, value
+    if result < -1e-12 * max(1., np.sum(np.abs(alpha))):
+        raise ValueError('negative ballistic angular response')
+    return max(0., result)
+
+
+@njit(cache=True)
+def _arrival(lam, left, width, n0, dn, g0, dg, beta, z, rho, tau, t0):
+    """Arrival time of the light emitted at wavelength ``lam`` (phase and group index linear in a panel)."""
+    q = (lam - left) / width
+    n, group = n0 + q * dn, g0 + q * dg
+    v = np.sqrt((beta * n - 1.) * (beta * n + 1.))
+    root, distance = z - rho / v, rho * beta * n / v
+    return t0 + tau * root + distance * group / _C
+
+
+@njit(cache=True)
+def _stationary_cuts(a, b, left, width, n0, dn, g0, dg, beta, tau):
+    """Sorted wavelength endpoints and every internal arrival extremum."""
+    cuts = np.empty(5)
+    cuts[0], count = a, 1
+    if dn != 0.:
+        k = dg / dn
+        h = g0 - k * n0
+        aa = beta ** 3 * k / _C
+        bb = tau * beta ** 2 - 2 * beta * k / _C
+        cc = -beta * h / _C
+        scale = max(abs(aa), abs(bb), abs(cc), 1e-300)
+        aa, bb, cc = aa / scale, bb / scale, cc / scale
+        x1 = n0 + (a - left) / width * dn
+        x2 = n0 + (b - left) / width * dn
+        lo, hi = min(x1, x2), max(x1, x2)
+        bounds = np.empty(3)
+        bounds[0], nb = lo, 1
+        if aa != 0. and -bb / (3 * aa) > 0.:
+            turning = np.sqrt(-bb / (3 * aa))
+            if lo < turning < hi:
+                bounds[nb], nb = turning, nb + 1
+        bounds[nb], nb = hi, nb + 1
+        for index in range(nb - 1):
+            l, r = bounds[index], bounds[index + 1]
+            fl = (aa * l * l + bb) * l + cc
+            fr = (aa * r * r + bb) * r + cc
+            if fl == 0.:
+                root = l
+            elif fr == 0.:
+                root = r
+            elif (fl < 0.) == (fr < 0.):
+                continue
+            else:
+                for iteration in range(64):
+                    mid = (l + r) * .5
+                    if mid == l or mid == r:
+                        break
+                    fm = (aa * mid * mid + bb) * mid + cc
+                    if (fl < 0.) == (fm < 0.):
+                        l, fl = mid, fm
+                    else:
+                        r = mid
+                root = (l + r) * .5
+            lam = left + width * (root - n0) / dn
+            if a < lam < b:
+                duplicate = False
+                for old in range(count):
+                    duplicate = duplicate or abs(cuts[old] - lam) < 1e-12
+                if not duplicate:
+                    cuts[count], count = lam, count + 1
+    cuts[count], count = b, count + 1
+    return np.sort(cuts[:count])
+
+
+@njit(cache=True)
+def _time_root(target, a, b, left, width, n0, dn, g0, dg,
+               beta, z, rho, tau, t0):
+    """Wavelength in [a, b] whose arrival time equals ``target`` (bisection-secant)."""
+    fa = _arrival(a, left, width, n0, dn, g0, dg, beta, z, rho, tau, t0) - target
+    for iteration in range(64):
+        mid = (a + b) * .5
+        if mid == a or mid == b:
+            break
+        fm = _arrival(mid, left, width, n0, dn, g0, dg,
+                      beta, z, rho, tau, t0) - target
+        if (fa < 0.) == (fm < 0.):
+            a, fa = mid, fm
+        else:
+            b = mid
+    return (a + b) * .5
+
+
+@njit(cache=True)
+def _integral(a, b, left, width, n0, dn, e0, de, efficiency,
+              beta, rho, transverse_look, axial_look, coefficient0,
+              coefficient2, length, area, alpha, gx, gw):
+    """Detected charge from the wavelength interval [a, b] (Gauss quadrature)."""
+    total = 0.
+    half, middle = (b - a) * .5, (b + a) * .5
+    for j in range(len(gx)):
+        lam = middle + half * gx[j]
+        q = (lam - left) / width
+        n, extinction = n0 + dn * q, e0 + de * q
+        bn = beta * n
+        v = np.sqrt((bn - 1.) * (bn + 1.))
+        sine, cosine = v / bn, 1. / bn
+        distance = rho / sine
+        angle = min(1., max(-1., transverse_look * sine + axial_look * cosine))
+        response = ((efficiency[3] * q + efficiency[2]) * q + efficiency[1]) * q + efficiency[0]
+        photons = coefficient0 + coefficient2 / (n * n)
+        if response < -1e-12 or photons < -1e-12 * max(1., coefficient0):
+            raise ValueError('negative ballistic spectral weight')
+        total += (gw[j] * max(0., response) * max(0., photons) / (lam * lam)
+                  * np.exp(-extinction * distance) * _acceptance(alpha, angle)
+                  / (2 * np.pi * rho * sine))
+    return total * half * area / length
+
+
+@njit(cache=True)
+def _precheck(om, i, receivers, start, direction, length, coefficient0, beta,
+              global_min, global_max):
+    """Geometry for a pair whose direct spectrum can be nonempty, else ok=False."""
+    if coefficient0[i] == 0. or beta[i] * global_max <= 1.:
+        return False, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.
+    dx = receivers[om, 0] - start[i, 0]
+    dy = receivers[om, 1] - start[i, 1]
+    dz = receivers[om, 2] - start[i, 2]
+    ux, uy, uz = direction[i, 0], direction[i, 1], direction[i, 2]
+    z = dx * ux + dy * uy + dz * uz
+    if z <= 0.:
+        return False, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.
+    cx, cy, cz = dy * uz - dz * uy, dz * ux - dx * uz, dx * uy - dy * ux
+    rho = np.sqrt(cx * cx + cy * cy + cz * cz)
+    if rho == 0.:
+        if z < length[i]:
+            raise ValueError('point receiver lies on emitting track: singular ballistic fluence')
+        return False, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.
+    nmin = np.hypot(z, rho) / (beta[i] * z)
+    nmax = np.inf
+    if z > length[i]:
+        residual_z = z - length[i]
+        nmax = np.hypot(residual_z, rho) / (beta[i] * residual_z)
+    if nmin > global_max or nmax <= global_min:
+        return False, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.
+    return True, dx, dy, dz, ux, uy, uz, z, rho, nmin, nmax
+
+
+@njit(cache=True)
+def _pair_contribution(om, i, row, receivers, looks, areas, start, direction, length,
+                       coefficient0, coefficient2, beta, start_ns, end_ns,
+                       panel_edges, phase_nodes, group_nodes, extinction_nodes,
+                       efficiency_coefficients, alpha, gauss_x, gauss_w,
+                       origins, bin_edges, want_bins, nbin, global_min, monotonic,
+                       nondecreasing, increasing_phase, dx, dy, dz, ux, uy, uz, z, rho,
+                       nmin, nmax, charge, bins, diagnostics):
+    """Spectral and time pieces of one element for one receiver (output row)."""
+    diagnostics[0] += 1
+    lx, ly, lz = looks[om, 0], looks[om, 1], looks[om, 2]
+    transverse_look = ((dx-z*ux)*lx + (dy-z*uy)*ly + (dz-z*uz)*lz) / rho
+    axial_look = ux*lx + uy*ly + uz*lz
+    tau = (end_ns[i] - start_ns[i]) / length[i]
+    first_panel, last_panel = 0, len(panel_edges) - 1
+    if monotonic:
+        lower = nmin if nondecreasing else -nmax
+        upper = nmax if nondecreasing else -nmin
+        # Include the bracketing panel and one guard on either side.
+        # searchsorted handles long plateaus without dropping support.
+        first_panel = max(0, np.searchsorted(increasing_phase, lower, side='left') - 2)
+        last_panel = min(last_panel, np.searchsorted(increasing_phase, upper, side='right') + 1)
+    for panel in range(first_panel, last_panel):
+        left, right = panel_edges[panel], panel_edges[panel + 1]
+        width = right - left
+        n0, dn = phase_nodes[panel], phase_nodes[panel + 1] - phase_nodes[panel]
+        g0, dg = group_nodes[panel], group_nodes[panel + 1] - group_nodes[panel]
+        e0, de = extinction_nodes[panel], extinction_nodes[panel + 1] - extinction_nodes[panel]
+        a, b = left, right
+        if dn == 0.:
+            if n0 < nmin or n0 >= nmax or beta[i] * n0 <= 1.:
+                continue
+        else:
+            q1, q2 = (nmin - n0) / dn, (nmax - n0) / dn
+            a = left + width * max(0., min(q1, q2))
+            b = left + width * min(1., max(q1, q2))
+            if b <= a:
+                continue
+        # Physical geometry excludes the Cherenkov threshold for rho>0.
+        if min(n0 + (a-left)/width*dn, n0 + (b-left)/width*dn) * beta[i] <= 1.:
+            raise ValueError('unresolved near-axis Cherenkov threshold')
+        cuts = np.array([a, b])
+        if want_bins:
+            cuts = _stationary_cuts(a, b, left, width, n0, dn, g0, dg, beta[i], tau)
+        for segment in range(len(cuts) - 1):
+            a, b = cuts[segment], cuts[segment + 1]
+            pieces = np.empty(nbin + 3)
+            pieces[0], count = a, 1
+            if want_bins:
+                ta = _arrival(a, left, width, n0, dn, g0, dg, beta[i], z, rho, tau, start_ns[i]) - origins[row]
+                tb = _arrival(b, left, width, n0, dn, g0, dg, beta[i], z, rho, tau, start_ns[i]) - origins[row]
+                first = np.searchsorted(bin_edges, min(ta, tb), side='right')
+                last = np.searchsorted(bin_edges, max(ta, tb), side='left')
+                for j in range(first, last):
+                    edge_index = j if tb > ta else last - 1 - (j - first)
+                    root = _time_root(bin_edges[edge_index] + origins[row], a, b,
+                                      left, width, n0, dn, g0, dg,
+                                      beta[i], z, rho, tau, start_ns[i])
+                    pieces[count], count = root, count + 1
+            pieces[count], count = b, count + 1
+            for piece in range(count - 1):
+                p, q = pieces[piece], pieces[piece + 1]
+                value = _integral(p, q, left, width, n0, dn, e0, de,
+                                  efficiency_coefficients[panel], beta[i], rho,
+                                  transverse_look, axial_look, coefficient0[i], coefficient2[i],
+                                  length[i], areas[om], alpha, gauss_x, gauss_w)
+                charge[row] += value
+                diagnostics[1] += 1
+                diagnostics[2] += len(gauss_x)
+                if want_bins:
+                    time = _arrival((p+q)*.5, left, width, n0, dn, g0, dg,
+                                    beta[i], z, rho, tau, start_ns[i]) - origins[row]
+                    slot = np.searchsorted(bin_edges, time, side='right') - 1
+                    if 0 <= slot < nbin:
+                        bins[row, slot] += value
+
+@njit(cache=True)
+def interval_kernel(receivers, looks, areas, start, direction, length,
+                    coefficient0, coefficient2, beta, start_ns, end_ns,
+                    panel_edges, phase_nodes, group_nodes, extinction_nodes,
+                    efficiency_coefficients, alpha, gauss_x, gauss_w,
+                    origins, bin_edges, want_bins):
+    """Return charge, bins and counts (geometry pairs, panels, evaluations).
+
+    ``looks`` points along accepted photon propagation (minus OM orientation).
+    This low-level routine assumes finite validated arrays and positive lengths.
+    Bins own their left endpoint; emission segments own [0,length).
+    """
+    nbin = len(bin_edges) - 1 if want_bins else 0
+    charge = np.zeros(len(receivers))
+    bins = np.zeros((len(receivers), nbin))
+    diagnostics = np.zeros(3, dtype=np.int64)
+    global_min, global_max = np.min(phase_nodes), np.max(phase_nodes)
+    nondecreasing, nonincreasing = True, True
+    for index in range(len(phase_nodes) - 1):
+        nondecreasing = nondecreasing and phase_nodes[index + 1] >= phase_nodes[index]
+        nonincreasing = nonincreasing and phase_nodes[index + 1] <= phase_nodes[index]
+    monotonic = nondecreasing or nonincreasing
+    increasing_phase = phase_nodes if nondecreasing else -phase_nodes
+    for om in range(len(receivers)):
+        for i in range(len(start)):
+            if coefficient0[i] == 0. or beta[i] * global_max <= 1.:
+                continue
+            dx = receivers[om, 0] - start[i, 0]
+            dy = receivers[om, 1] - start[i, 1]
+            dz = receivers[om, 2] - start[i, 2]
+            ux, uy, uz = direction[i, 0], direction[i, 1], direction[i, 2]
+            z = dx * ux + dy * uy + dz * uz
+            if z <= 0.:
+                continue
+            cx, cy, cz = dy * uz - dz * uy, dz * ux - dx * uz, dx * uy - dy * ux
+            rho = np.sqrt(cx * cx + cy * cy + cz * cz)
+            if rho == 0.:
+                if z < length[i]:
+                    raise ValueError('point receiver lies on emitting track: singular ballistic fluence')
+                continue
+            nmin = np.hypot(z, rho) / (beta[i] * z)
+            nmax = np.inf
+            if z > length[i]:
+                residual_z = z - length[i]
+                nmax = np.hypot(residual_z, rho) / (beta[i] * residual_z)
+            if nmin > global_max or nmax <= global_min:
+                continue
+            _pair_contribution(om, i, om, receivers, looks, areas, start, direction, length,
+                coefficient0, coefficient2, beta, start_ns, end_ns, panel_edges,
+                phase_nodes, group_nodes, extinction_nodes, efficiency_coefficients,
+                alpha, gauss_x, gauss_w, origins, bin_edges, want_bins, nbin, global_min,
+                monotonic, nondecreasing, increasing_phase, dx, dy, dz, ux, uy, uz, z,
+                rho, nmin, nmax, charge, bins, diagnostics)
+    return charge, bins, diagnostics
+
+
+@njit(cache=True)
+def interval_candidates(receivers, start, direction, length, coefficient0, beta, phase_nodes):
+    """Receiver/element pairs passing the order-independent geometry precheck.
+
+    Pairs are listed receiver-major in element order, the loop order of
+    ``interval_kernel``, so a pair-list evaluation sums identically.
+    """
+    global_min, global_max = np.min(phase_nodes), np.max(phase_nodes)
+    capacity = 1024
+    oms = np.empty(capacity, np.int64)
+    elements = np.empty(capacity, np.int64)
+    count = 0
+    for om in range(len(receivers)):
+        for i in range(len(start)):
+            if coefficient0[i] == 0. or beta[i] * global_max <= 1.:
+                continue
+            dx = receivers[om, 0] - start[i, 0]
+            dy = receivers[om, 1] - start[i, 1]
+            dz = receivers[om, 2] - start[i, 2]
+            ux, uy, uz = direction[i, 0], direction[i, 1], direction[i, 2]
+            z = dx * ux + dy * uy + dz * uz
+            if z <= 0.:
+                continue
+            cx, cy, cz = dy * uz - dz * uy, dz * ux - dx * uz, dx * uy - dy * ux
+            rho = np.sqrt(cx * cx + cy * cy + cz * cz)
+            if rho == 0.:
+                if z < length[i]:
+                    raise ValueError('point receiver lies on emitting track: singular ballistic fluence')
+                continue
+            nmin = np.hypot(z, rho) / (beta[i] * z)
+            nmax = np.inf
+            if z > length[i]:
+                residual_z = z - length[i]
+                nmax = np.hypot(residual_z, rho) / (beta[i] * residual_z)
+            if nmin > global_max or nmax <= global_min:
+                continue
+            if count == capacity:
+                capacity *= 2
+                grown = np.empty(capacity, np.int64); grown[:count] = oms[:count]; oms = grown
+                grown = np.empty(capacity, np.int64); grown[:count] = elements[:count]; elements = grown
+            oms[count] = om
+            elements[count] = i
+            count += 1
+    return oms[:count], elements[:count]
+
+
+@njit(cache=True, parallel=True)
+def interval_kernel_pairs(pair_om, pair_element, pair_row, n_rows, receivers, looks, areas,
+                          start, direction, length, coefficient0, coefficient2, beta,
+                          start_ns, end_ns, panel_edges, phase_nodes, group_nodes,
+                          extinction_nodes, efficiency_coefficients, alpha, gauss_x,
+                          gauss_w, row_origins, bin_edges, want_bins):
+    """``interval_kernel`` restricted to listed pairs; output row per pair."""
+    nbin = len(bin_edges) - 1 if want_bins else 0
+    charge = np.zeros(n_rows)
+    bins = np.zeros((n_rows, nbin))
+    diagnostics = np.zeros(3, dtype=np.int64)
+    global_min, global_max = np.min(phase_nodes), np.max(phase_nodes)
+    nondecreasing, nonincreasing = True, True
+    for index in range(len(phase_nodes) - 1):
+        nondecreasing = nondecreasing and phase_nodes[index + 1] >= phase_nodes[index]
+        nonincreasing = nonincreasing and phase_nodes[index + 1] <= phase_nodes[index]
+    monotonic = nondecreasing or nonincreasing
+    increasing_phase = phase_nodes if nondecreasing else -phase_nodes
+    # Pairs come row-contiguous; every row is summed by one thread in the
+    # original pair order, so the result does not depend on the thread count.
+    runs = [0]
+    for k in range(1, len(pair_row)):
+        if pair_row[k] != pair_row[k - 1]:
+            runs.append(k)
+    runs.append(len(pair_row))
+    bounds = np.array(runs, np.int64)
+    counters = np.zeros((max(len(bounds) - 1, 0), 3), np.int64)
+    for r in prange(len(bounds) - 1):
+        local = counters[r]
+        for k in range(bounds[r], bounds[r + 1]):
+            om, i, row = pair_om[k], pair_element[k], pair_row[k]
+            ok, dx, dy, dz, ux, uy, uz, z, rho, nmin, nmax = _precheck(
+                om, i, receivers, start, direction, length, coefficient0, beta,
+                global_min, global_max)
+            if not ok:
+                continue
+            _pair_contribution(om, i, row, receivers, looks, areas, start, direction, length,
+                coefficient0, coefficient2, beta, start_ns, end_ns, panel_edges,
+                phase_nodes, group_nodes, extinction_nodes, efficiency_coefficients,
+                alpha, gauss_x, gauss_w, row_origins, bin_edges, want_bins, nbin, global_min,
+                monotonic, nondecreasing, increasing_phase, dx, dy, dz, ux, uy, uz, z,
+                rho, nmin, nmax, charge, bins, local)
+    for r in range(counters.shape[0]):
+        for c in range(3):
+            diagnostics[c] += counters[r, c]
+    return charge, bins, diagnostics
