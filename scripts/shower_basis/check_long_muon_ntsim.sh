@@ -4,7 +4,7 @@ set -euo pipefail
 
 seed=${1:-42}
 repository=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-python_bin=${NTSIM_PYTHON:-/Users/dmitrijnaumov/NeutrinoHit/ntsim_env/bin/python}
+python_bin=${NTSIM_PYTHON:-python}
 cache_dir=${NTSIM_LH_CACHE:-"$repository/.build/ntsim-check/lighthit-cache-standard-freq65"}
 pack_dir=${NTSIM_LH_PACK:-"$repository/.build/ntsim-check/ge2-pack-shower-basis-review"}
 output_dir=${2:-"$repository/.build/ntsim-check/long-muon-validation/seed-$seed"}
