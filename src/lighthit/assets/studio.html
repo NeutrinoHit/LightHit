@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LightHit · event viewer</title>
+  <style>__STUDIO_CSS__</style>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span><strong>LIGHTHIT</strong><span class="tag">EVENT VIEWER</span></div>
+      <label class="event-picker"><span>Event</span><select id="event"></select></label>
+      <output id="status" role="status" aria-live="polite">Reading result…</output>
+      <div class="actions">
+        <label class="button ghost" title="Open a viewer JSON file">Open JSON<input id="file" type="file" accept=".json,application/json"></label>
+        <button id="snapshot" class="ghost" title="Save a still image (P)">Still</button>
+        <button id="fullscreen" class="ghost" title="Full screen (F)">⤢</button>
+        <button id="toggle-side" class="ghost" title="Show or hide the side panel (S)">☰</button>
+      </div>
+    </header>
+    <main class="layout">
+      <section class="stage-column">
+        <div id="stage" class="stage">
+          <canvas id="gl"></canvas>
+          <canvas id="hud"></canvas>
+          <div id="tooltip" hidden></div>
+          <div class="view-buttons" aria-label="Camera">
+            <button data-view="auto" title="Frame the event (R)">Event</button>
+            <button data-view="array" title="Frame the whole array (0)">Array</button>
+            <button data-view="side" title="Side view, perpendicular to the source axis (1)">Side</button>
+            <button data-view="top" title="Top view (2)">Top</button>
+            <button data-view="along" title="Look along the source axis (3)">Along</button>
+            <button data-view="follow" title="Follow the moving source (4)">Follow</button>
+          </div>
+          <div id="busy" hidden>
+            <div class="busy-card">
+              <strong id="busy-title">Rendering movie</strong>
+              <div class="progress"><span id="busy-bar"></span></div>
+              <span id="busy-text"></span>
+              <button id="busy-cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div class="transport">
+          <button id="play" class="primary" title="Play or pause (Space)">▶</button>
+          <div class="scrub">
+            <canvas id="activity"></canvas>
+            <input id="time" type="range" min="0" max="1000" step="1" value="0" aria-label="Detector time">
+          </div>
+          <output id="clock">—</output>
+          <label class="compact" title="Real-time seconds for the event part of playback">Play in<select id="play-seconds"><option value="4">4 s</option><option value="8">8 s</option><option value="12" selected>12 s</option><option value="20">20 s</option><option value="40">40 s</option></select></label>
+        </div>
+      </section>
+      <aside id="side" class="side">
+        <nav class="tabs" role="tablist">
+          <button role="tab" data-tab="scene" class="active">Scene</button>
+          <button role="tab" data-tab="movie">Movie</button>
+          <button role="tab" data-tab="module">Module</button>
+          <button role="tab" data-tab="info">Info</button>
+        </nav>
+        <section class="tab active" data-tab="scene">
+          <h3>Signal</h3>
+          <label>Light component<select id="part"><option value="all">Total</option><option value="prompt">Prompt · 0+1</option><option value="0">Unscattered</option><option value="1">One scattering</option><option value="2">Two or more</option></select></label>
+          <label>Time bins<select id="display"><option value="raw">Stored bins</option><option value="smooth">3 ns Gaussian display</option></select></label>
+          <label>Colour<select id="colour"><option value="time">First-light time</option><option value="components">Light components 0 / 1 / ≥2</option><option value="charge">Expected charge</option></select></label>
+          <label>Cluster<select id="cluster"></select></label>
+          <label class="range">Display threshold <output id="threshold-value"></output><input id="threshold" type="range" min="-4" max="1" step="0.05" value="-2"></label>
+          <label class="range">OM size <output id="size-value"></output><input id="size" type="range" min="0.3" max="3" step="0.05" value="1"></label>
+          <label class="range">Arrival flash <output id="flash-value"></output><input id="flash" type="range" min="0" max="3" step="0.05" value="1"></label>
+          <h3>Scene</h3>
+          <div class="checks">
+            <label><input id="show-front" type="checkbox" checked> Light front</label>
+            <label><input id="show-source" type="checkbox" checked> Source</label>
+            <label><input id="show-strings" type="checkbox" checked> Strings</label>
+            <label><input id="show-dark" type="checkbox" checked> Unlit OMs</label>
+            <label><input id="show-floor" type="checkbox" checked> Floor grid</label>
+            <label><input id="show-snow" type="checkbox" checked> Water particles</label>
+          </div>
+          <label class="range">Glow <output id="bloom-value"></output><input id="bloom" type="range" min="0" max="2" step="0.05" value="0.7"></label>
+          <label class="range">Exposure <output id="exposure-value"></output><input id="exposure" type="range" min="0.3" max="3" step="0.05" value="1.2"></label>
+          <label class="range">Front fade length, m <output id="lambda-value"></output><input id="lambda" type="range" min="10" max="300" step="5" value="70"></label>
+          <label class="range">Water haze, m <output id="fog-value"></output><input id="fog" type="range" min="200" max="4000" step="50" value="900"></label>
+        </section>
+        <section class="tab" data-tab="movie">
+          <h3>Format</h3>
+          <label>Frame<select id="movie-size">
+            <option value="1280x720">1280 × 720 · HD</option>
+            <option value="1920x1080" selected>1920 × 1080 · Full HD</option>
+            <option value="2560x1440">2560 × 1440 · QHD</option>
+            <option value="3840x2160">3840 × 2160 · 4K</option>
+            <option value="1080x1080">1080 × 1080 · square</option>
+            <option value="1080x1920">1080 × 1920 · vertical</option>
+          </select></label>
+          <label>Frame rate<select id="movie-fps"><option value="24">24</option><option value="30">30</option><option value="60" selected>60</option></select></label>
+          <h3>Timeline</h3>
+          <label class="range">Opening hold, s <output id="intro-value"></output><input id="intro" type="range" min="0" max="6" step="0.5" value="1.5"></label>
+          <label class="range">Event, s <output id="event-seconds-value"></output><input id="event-seconds" type="range" min="2" max="60" step="1" value="12"></label>
+          <label class="range">Closing orbit, s <output id="outro-value"></output><input id="outro" type="range" min="0" max="12" step="0.5" value="4"></label>
+          <label class="range">Pacing on light <output id="pacing-value"></output><input id="pacing" type="range" min="0" max="0.95" step="0.05" value="0.6"></label>
+          <p class="hint">Pacing slows the clock where light arrives; the on-screen clock always shows true detector time.</p>
+          <h3>Camera</h3>
+          <label>Motion<select id="camera-motion"><option value="orbit" selected>Slow orbit from the current view</option><option value="fixed">Fixed current view</option><option value="keys">Through keyframes</option><option value="follow">Follow the source</option></select></label>
+          <label class="range">Orbit angle, ° <output id="orbit-value"></output><input id="orbit" type="range" min="-180" max="180" step="5" value="50"></label>
+          <label class="range">Push in <output id="zoom-value"></output><input id="zoom" type="range" min="0.5" max="1.3" step="0.05" value="0.85"></label>
+          <div class="row"><button id="key-add">Add keyframe</button><button id="key-clear" class="ghost">Clear</button><output id="key-count">0 keyframes</output></div>
+          <h3>Overlay</h3>
+          <label>Title<input id="title-text" type="text" placeholder="Event label"></label>
+          <label>Subtitle<input id="subtitle-text" type="text" placeholder="Detector · medium"></label>
+          <div class="checks">
+            <label><input id="hud-title" type="checkbox" checked> Title</label>
+            <label><input id="hud-clock" type="checkbox" checked> Clock</label>
+            <label><input id="hud-legend" type="checkbox" checked> Colour scale</label>
+            <label><input id="hud-scale" type="checkbox" checked> Scale bar</label>
+            <label><input id="hud-inset" type="checkbox"> Waveform inset</label>
+            <label><input id="hud-note" type="checkbox" checked> Honesty note</label>
+          </div>
+          <div class="row">
+            <button id="preview" title="Play the full movie timeline here">Preview</button>
+            <button id="render" class="primary">Render MP4</button>
+          </div>
+          <output id="movie-status" class="hint"></output>
+          <a id="movie-download" hidden>Save last movie</a>
+        </section>
+        <section class="tab" data-tab="module">
+          <label>Optical module<select id="module"></select></label>
+          <canvas id="waveform" class="plot"></canvas>
+          <dl id="details"></dl>
+          <h3>All active OMs · detector clock</h3>
+          <canvas id="timemap" class="plot tall"></canvas>
+          <p class="hint">Rows are ordered by first light; colour is signed log density. Click a row to select an OM.</p>
+        </section>
+        <section class="tab" data-tab="info">
+          <div id="info"></div>
+          <h3>Keys</h3>
+          <dl class="keys">
+            <dt>Space</dt><dd>Play / pause</dd><dt>← →</dt><dd>Step the clock</dd><dt>Home / End</dt><dd>First light / full signal</dd>
+            <dt>Drag</dt><dd>Orbit · right or shift-drag pans</dd><dt>Wheel</dt><dd>Zoom</dd><dt>Double-click</dt><dd>Centre on an OM</dd>
+            <dt>R 0 1 2 3 4</dt><dd>Event · array · side · top · along · follow</dd><dt>P</dt><dd>Still image</dd><dt>F / S</dt><dd>Full screen / side panel</dd>
+          </dl>
+        </section>
+      </aside>
+    </main>
+  </div>
+  <script id="result" type="application/json">__RESULT_JSON__</script>
+  <script>__VIEWER_SMOOTHING_JS__</script>
+  <script>__STUDIO_MODEL_JS__</script>
+  <script>__STUDIO_GL_JS__</script>
+  <script>__STUDIO_MOVIE_JS__</script>
+  <script>__STUDIO_APP_JS__</script>
+</body>
+</html>

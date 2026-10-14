@@ -336,6 +336,50 @@ window). Order >=2 comes from a finite frequency band and may show small
 signed ringing; it is never clipped. OMs below threshold carry estimated
 scattered charges and no bins.
 
+## Interactive viewer
+
+A response becomes one offline HTML file (WebGL2, no network access, no Python
+plotting dependency):
+
+```python
+payload = lh.viewer_payload(response, source=first, event_id="shower",
+                            label="synthetic shower")
+lh.write_event_viewer(payload, "lighthit-viewer.html")
+
+# Compatible payloads share one viewer.
+combined = lh.merge_event_viewers(laser_payload, track_payload, shower_payload)
+lh.write_event_viewer(combined, "multi-event-viewer.html")
+```
+
+Open `lighthit-viewer.html` in a current Chrome, Edge or Safari. A portable
+`lighthit-viewer.json` companion is written beside it.
+
+- **Scene.** Every OM glows with its expected photoelectron response,
+  accumulated on the detector clock (`time_origin + relative time`, uniform
+  within each stored bin). Colour shows the first-light time, the mixture of
+  scattering orders 0 / 1 / ≥2, or the charge; size grows with charge and a
+  flash marks the arrival rate. The glow is a mean response, not sampled hits.
+- **Source and light front.** A timed track shows a moving head and its
+  Cherenkov front: light leaves at the Cherenkov angle for `n = 1.34` and travels
+  at `c/n_g` (`medium.group_index` when present, else 1.36), so a β = 1 track
+  carries a cone behind its head. Showers and point sources show an expanding
+  sphere; without stored timing their emission time is estimated from
+  direct-light arrivals. The front and its fade length are illustrative.
+- **Analysis.** The Module tab shows the selected OM's signed waveform by order
+  and a time map of all lit OMs; the 3 ns Gaussian display redistributes binned
+  integrals under a uniform-within-bin assumption and never changes stored data.
+- **Movies and stills.** The Movie tab renders an H.264 MP4 frame by frame
+  (WebCodecs; HD to 4K, square and vertical, 24–60 fps) with an opening hold,
+  an event clock that can slow down where light arrives (the on-screen clock
+  always shows true detector time), a closing orbit and camera keyframes. Still
+  images are saved as PNG up to 4K. Keys: Space, ← →, R, 0–4, P, F, S.
+
+The source timing is an optional `timing` block of an axis source
+(`lighthit.viewer.source_timing` builds it from light elements); payloads
+without it stay valid. The previous Plotly viewer remains available as
+`lh.write_event_viewer(payload, path, legacy=True)` and needs
+`python -m pip install 'lighthit[viewer]'`.
+
 ## Several sources: one clock, one OM acceptance
 
 Light adds up, so an event is the sum of its sources, but two things are

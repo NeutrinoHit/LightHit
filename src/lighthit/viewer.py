@@ -367,12 +367,30 @@ def load_event_result(path):
     return validate_event_viewer(result)
 
 
-def write_event_viewer(result, output_path, *, json_path=None):
-    """Build a standalone HTML viewer and its portable JSON companion."""
-    try:
-        from plotly.offline import get_plotlyjs
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError("Install lighthit[viewer] to build the event viewer") from exc
+def _embedded_payload(result):
+    payload = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    return payload.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+
+def _fill(template, tokens):
+    for token, value in tokens.items():
+        template = template.replace(token, value)
+    return template
+
+
+def write_event_viewer(result, output_path, *, json_path=None, legacy=False):
+    """Build a standalone HTML viewer and its portable JSON companion.
+
+    The default viewer is a WebGL scene with analysis panels and frame-exact
+    MP4 export; it needs no Python plotting package.  ``legacy=True`` builds
+    the previous Plotly viewer, which requires ``lighthit[viewer]``.
+    """
+    get_plotlyjs = None
+    if legacy:
+        try:
+            from plotly.offline import get_plotlyjs
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise ImportError("Install lighthit[viewer] to build the legacy event viewer") from exc
     if isinstance(result, (str, Path)):
         result = load_event_result(result)
     else:
@@ -381,19 +399,28 @@ def write_event_viewer(result, output_path, *, json_path=None):
     output.parent.mkdir(parents=True, exist_ok=True)
     companion = Path(json_path) if json_path is not None else output.with_suffix(".json")
     save_event_result(result, companion)
-    payload = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
-    payload = payload.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
     assets = files("lighthit").joinpath("assets")
-    html = assets.joinpath("event_viewer.html").read_text(encoding="utf-8")
-    for token, value in {
-        "__VIEWER_CSS__": assets.joinpath("event_viewer.css").read_text(encoding="utf-8"),
-        "__PLOTLY_JS__": get_plotlyjs(),
-        "__RESULT_JSON__": payload,
-        "__VIEWER_SMOOTHING_JS__": assets.joinpath("event_viewer_smoothing.js").read_text(encoding="utf-8"),
-        "__VIEWER_SOURCE_JS__": assets.joinpath("event_viewer_source.js").read_text(encoding="utf-8"),
-        "__VIEWER_JS__": assets.joinpath("event_viewer.js").read_text(encoding="utf-8"),
-    }.items():
-        html = html.replace(token, value)
+    read = lambda *parts: assets.joinpath(*parts).read_text(encoding="utf-8")
+    payload = _embedded_payload(result)
+    if legacy:
+        html = _fill(read("legacy", "event_viewer.html"), {
+            "__VIEWER_CSS__": read("legacy", "event_viewer.css"),
+            "__PLOTLY_JS__": get_plotlyjs(),
+            "__RESULT_JSON__": payload,
+            "__VIEWER_SMOOTHING_JS__": read("event_viewer_smoothing.js"),
+            "__VIEWER_SOURCE_JS__": read("event_viewer_source.js"),
+            "__VIEWER_JS__": read("legacy", "event_viewer.js"),
+        })
+    else:
+        html = _fill(read("studio.html"), {
+            "__STUDIO_CSS__": read("studio.css"),
+            "__RESULT_JSON__": payload,
+            "__VIEWER_SMOOTHING_JS__": read("event_viewer_smoothing.js"),
+            "__STUDIO_MODEL_JS__": read("studio_model.js"),
+            "__STUDIO_GL_JS__": read("studio_gl.js"),
+            "__STUDIO_MOVIE_JS__": read("studio_movie.js"),
+            "__STUDIO_APP_JS__": read("studio_app.js"),
+        })
     output.write_text(html, encoding="utf-8")
     return output
 

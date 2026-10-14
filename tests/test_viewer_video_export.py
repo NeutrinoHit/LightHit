@@ -32,7 +32,7 @@ def small_payload():
 def test_generated_viewer_embeds_recording_without_changing_data(tmp_path):
     value = small_payload()
     before = copy.deepcopy(value)
-    output = write_event_viewer(value, tmp_path / "recordable.html")
+    output = write_event_viewer(value, tmp_path / "recordable.html", legacy=True)
     text = output.read_text()
     assert 'id="record-video"' in text
     assert 'id="record-duration"' in text
@@ -52,7 +52,7 @@ def test_generated_viewer_embeds_recording_without_changing_data(tmp_path):
 def test_recording_codec_lifecycle_cancellation_and_failure():
     # Execute only the DOM-independent recording helper from the same asset.
     # Real WebGL capture is a separate browser smoke test, not claimed here.
-    source = (ASSETS / "event_viewer.js").read_text().split("\n(()=>{\nconst $=", 1)[0]
+    source = (ASSETS / "legacy" / "event_viewer.js").read_text().split("\n(()=>{\nconst $=", 1)[0]
     test = r"""
 const assert = require('node:assert/strict');
 const {Recording, supportedTypes, filename, detectorBounds, localSaveEnabled, saveLocal} = LightHitViewerRecording;

@@ -74,7 +74,7 @@ def test_transport_response_converts_to_a_viewer_payload():
 def test_self_contained_viewer_and_safe_json(tmp_path):
     value = payload()
     value["events"][0]["label"] = "</script><script>bad()</script>"
-    path = write_event_viewer(value, tmp_path / "viewer.html")
+    path = write_event_viewer(value, tmp_path / "viewer.html", legacy=True)
     text = path.read_text()
     assert "__VIEWER_JS__" not in text
     assert "__VIEWER_SMOOTHING_JS__" not in text
@@ -87,7 +87,7 @@ def test_self_contained_viewer_and_safe_json(tmp_path):
 
 
 def test_viewer_uses_english_controls_and_small_source_arrows(tmp_path):
-    path = write_event_viewer(payload(), tmp_path / "viewer.html")
+    path = write_event_viewer(payload(), tmp_path / "viewer.html", legacy=True)
     text = path.read_text()
     assert '<html lang="en">' in text
     assert "Open JSON" in text
@@ -161,7 +161,7 @@ def test_viewer_avoids_spread_maximum_on_full_array_heatmaps(tmp_path):
     value["events"][0]["charge_components"] = np.zeros((count, 3)).tolist()
     value["events"][0]["time_origin_ns"] = np.zeros(count).tolist()
     value["events"][0]["active"] = np.zeros(count, bool).tolist()
-    path = write_event_viewer(value, tmp_path / "large-viewer.html")
+    path = write_event_viewer(value, tmp_path / "large-viewer.html", legacy=True)
     text = path.read_text()
     assert "function maxAbs" in text
     assert "Math.max(...raw.flat()" not in text
@@ -253,7 +253,7 @@ def test_invalid_source_timing_is_rejected(bad):
 
 
 def test_viewer_has_a_detector_clock_and_source_animation(tmp_path):
-    path = write_event_viewer(_timed(payload()), tmp_path / "viewer.html")
+    path = write_event_viewer(_timed(payload()), tmp_path / "viewer.html", legacy=True)
     text = path.read_text()
     assert 'id="clock"' in text and "Detector clock" in text
     assert "LightHitViewerSource" in text and "__VIEWER_SOURCE_JS__" not in text
