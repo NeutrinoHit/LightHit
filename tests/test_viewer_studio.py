@@ -50,8 +50,14 @@ def test_default_viewer_is_self_contained_webgl_and_needs_no_plotly(tmp_path, mo
     text = path.read_text()
     assert not re.search(r"__[A-Z_]+_(JS|CSS)__|__RESULT_JSON__", text)
     for marker in ("LightHitStudioGL", "LightHitStudioModel", "LightHitMovie", "LightHitViewerSmoothing",
-                   'getContext("webgl2"', "Render MP4"):
+                   'getContext("webgl2"', "Render MP4", "THREE.WebGLRenderer", "THREE.EffectComposer",
+                   "THREE.OrbitControls"):
         assert marker in text
+    # three.js is inlined once, before the renderer that uses it, with its MIT notice
+    assert text.count("var THREE=") == 1
+    assert text.index("var THREE=") < text.index("const LightHitStudioGL")
+    assert "three.js r160" in text and "Copyright © 2010-2023 three.js authors" in text
+    assert "Permission is hereby granted, free of charge" in text
     assert "Plotly" not in text
     assert "<script src=" not in text and "<link" not in text  # offline: no external resources
     assert "</script><script>bad()" not in text
@@ -59,6 +65,25 @@ def test_default_viewer_is_self_contained_webgl_and_needs_no_plotly(tmp_path, mo
     assert json.loads((tmp_path / "viewer.json").read_text()) == before
     with pytest.raises(ImportError, match="legacy"):
         write_event_viewer(payload(), tmp_path / "legacy.html", legacy=True)
+
+
+def test_vendored_three_is_pinned_licensed_and_safe_to_inline():
+    bundle = (ASSETS / "vendor" / "three.min.js").read_text(encoding="utf-8")
+    licence = (ASSETS / "vendor" / "three.LICENSE").read_text(encoding="utf-8")
+    assert licence.startswith("The MIT License") and "three.js authors" in licence
+    header = bundle[:bundle.index("*/")]
+    assert "npm three@0.160.1" in header
+    for line in licence.strip().splitlines():
+        assert line.strip() in header
+    # nothing in the bundle may end or reopen the inline script element
+    assert not re.search(r"</script|<script|<!--", bundle, re.I)
+    assert not re.search(r"__[A-Z_]+_(JS|CSS)__|__RESULT_JSON__", bundle)
+    # every three.js name the viewer uses is exported by the bundle (esbuild's export map)
+    app = (ASSETS / "studio_app.js").read_text() + (ASSETS / "studio_gl.js").read_text()
+    used = set(re.findall(r"\bTHREE\.([A-Za-z0-9]+)", app))
+    exported = set(re.findall(r"\b([A-Z][A-Za-z0-9]*):\(\)=>", bundle))
+    assert {"WebGLRenderer", "OrbitControls", "EffectComposer"} <= used
+    assert not sorted(used - exported)
 
 
 def test_legacy_viewer_remains_available(tmp_path):

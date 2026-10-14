@@ -80,7 +80,7 @@
   let threshold = 0.01, colourRange = [0, 1], peakVisible = 1, tRef = 0;
   let staticScene = null, snow = null, lastMats = null, dirty = true;
   let playing = false, playU = 0, pace = null, preview = null, exporting = null, tween = null;
-  let keyframes = [], lastMovieUrl = null, hoverIndex = -1;
+  let keyframes = [], lastMovieUrl = null, hoverIndex = -1, controls = null;
   const smoothCache = new WeakMap();
   const camera = {target: [0, 0, 0], azimuth: -1.2, elevation: 0.25, distance: 800, fov: 34 * Math.PI / 180, follow: false};
   const dpr = () => Math.min(2, window.devicePixelRatio || 1);
@@ -680,6 +680,7 @@
 
   function moveCamera(to, seconds = 0.8) {
     stopPreview();
+    syncControls();
     const from = copyCamera(camera);
     let da = to.azimuth - from.azimuth;
     da = ((da + Math.PI) % TAU + TAU) % TAU - Math.PI;
@@ -737,6 +738,7 @@
 
   function startPreview() {
     stopPlay();
+    syncControls();
     preview = {plan: moviePlan(), start: performance.now()};
     $("preview").textContent = "Stop preview";
     document.body.classList.add("presenting");
@@ -877,6 +879,7 @@
 
   function loop(now) {
     if (!exporting) {
+      if (steering && !preview) controls.update();  // a gesture and its inertia
       if (tween) applyTween(clamp((now - tween.start) / 1000 / tween.seconds, 0, 1));
       if (playing) {
         const dt = (now - playing.last) / 1000;
@@ -915,34 +918,78 @@
     return best;
   }
 
+  // Orbit, pan and pinch come from three.js OrbitControls acting on a proxy
+  // camera.  The view model stays (target, azimuth, elevation, distance), so
+  // tweens, keyframes, follow mode and movies are unchanged: the proxy is set
+  // from it before a gesture, and only a gesture and its inertia are read back.
+  let syncing = false, steering = false, held = false;
+  function syncControls() {
+    if (!controls) return;
+    const proxy = controls.object, stage = $("stage");
+    syncing = true;
+    steering = false;
+    const damping = controls.enableDamping;
+    controls.enableDamping = false;  // drop any inertia still in flight
+    controls.update();
+    controls.enableDamping = damping;
+    proxy.fov = camera.fov * 180 / Math.PI;
+    proxy.aspect = stage.clientWidth / Math.max(1, stage.clientHeight);
+    proxy.updateProjectionMatrix();
+    proxy.position.fromArray(eye(camera));
+    controls.target.fromArray(camera.target);
+    controls.update();
+    syncing = false;
+  }
+  function readControls() {
+    if (syncing || !steering) return;
+    const p = controls.object.position.toArray(), t = controls.target.toArray(), d = sub(p, t);
+    const distance = Math.max(norm(d), 1e-6), elevation = Math.asin(clamp(d[2] / distance, -1, 1));
+    let da = Math.atan2(d[1], d[0]) - camera.azimuth;
+    da = ((da + Math.PI) % TAU + TAU) % TAU - Math.PI;
+    const shift = norm(sub(t, camera.target)) / camera.distance;
+    const step = Math.max(Math.abs(da), Math.abs(elevation - camera.elevation), Math.abs(Math.log(distance / camera.distance)), shift);
+    if (step < 1e-5) {
+      if (!held) steering = false;  // the inertia has died out
+      return;
+    }
+    if (shift > 1e-5) camera.follow = false;  // a pan leaves follow mode
+    camera.target = t;
+    camera.azimuth += da;
+    camera.elevation = elevation;
+    camera.distance = distance;
+    tween = null;
+    dirty = true;
+    $("tooltip").hidden = true;
+  }
+
   function setupInput() {
     const stage = $("stage");
     let drag = null;
+    const proxy = new THREE.PerspectiveCamera();
+    proxy.up.set(0, 0, 1);
+    proxy.position.fromArray(eye(camera));
+    controls = new THREE.OrbitControls(proxy, stage);
+    Object.assign(controls, {enableDamping: true, dampingFactor: 0.14, rotateSpeed: 0.8, panSpeed: 1, zoomSpeed: 1,
+      minDistance: 5, maxDistance: 50000, minPolarAngle: Math.PI / 2 - 1.53, maxPolarAngle: Math.PI / 2 + 1.45});
+    controls.addEventListener("change", readControls);
+    controls.addEventListener("start", () => {steering = true; held = true});
+    controls.addEventListener("end", () => {held = false});
+    // Capture-phase listeners run before the controls on the same element;
+    // buttons and the progress card on the stage never start a gesture.
+    const grab = () => {stopPreview(); tween = null; syncControls()};
+    const overlays = ".view-buttons, #busy";
+    stage.addEventListener("pointerdown", e => {if (!e.target.closest(overlays)) grab()}, {capture: true});
+    for (const node of stage.querySelectorAll(overlays)) node.addEventListener("pointerdown", e => e.stopPropagation());
     stage.addEventListener("contextmenu", e => e.preventDefault());
     stage.addEventListener("pointerdown", e => {
-      stopPreview();
-      stage.setPointerCapture(e.pointerId);
-      drag = {x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey, id: e.pointerId};
+      drag = {x: e.clientX, y: e.clientY, moved: 0};
       stage.classList.add("dragging");
     });
     stage.addEventListener("pointermove", e => {
       const rect = stage.getBoundingClientRect();
       if (drag) {
-        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-        drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
-        tween = null;
-        if (drag.pan) {
-          camera.follow = false;
-          const s = camera.distance * Math.tan(camera.fov / 2) * 2 / stage.clientHeight;
-          const az = camera.azimuth, el = camera.elevation;
-          const right = [-Math.sin(az), Math.cos(az), 0];
-          const up = [-Math.sin(el) * Math.cos(az), -Math.sin(el) * Math.sin(az), Math.cos(el)];
-          camera.target = add(add(camera.target, right, -dx * s), up, dy * s);
-        } else {
-          camera.azimuth -= dx * 0.006;
-          camera.elevation = clamp(camera.elevation + dy * 0.005, -1.45, 1.53);
-        }
-        dirty = true;
+        drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
+        drag.x = e.clientX; drag.y = e.clientY;
         $("tooltip").hidden = true;
         return;
       }
@@ -977,13 +1024,14 @@
       if (i < 0) return;
       moveCamera({...copyCamera(camera), target: det().positions_m[i].slice(), distance: Math.min(camera.distance, 220), follow: false});
     });
+    // Wheel and trackpad zoom stay proportional to the scroll distance.
     stage.addEventListener("wheel", e => {
       e.preventDefault();
-      stopPreview();
-      tween = null;
+      e.stopImmediatePropagation();
+      grab();
       camera.distance = clamp(camera.distance * Math.exp(e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), 5, 50000);
       dirty = true;
-    }, {passive: false});
+    }, {passive: false, capture: true});
     document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => moveCamera(fit(b.dataset.view)));
     window.addEventListener("keydown", e => {
       if (e.target.closest("input[type=text],select") || e.metaKey || e.ctrlKey) return;

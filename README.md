@@ -350,8 +350,9 @@ scattered charges and no bins.
 
 ## Interactive viewer
 
-A response becomes one offline HTML file (WebGL2, no network access, no Python
-plotting dependency):
+A response becomes one offline HTML file (WebGL2 through an inlined three.js
+r160 build, MIT licence notice included; no network access, no Python plotting
+dependency):
 
 ```python
 payload = lh.viewer_payload(response, source=first, event_id="shower",

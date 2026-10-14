@@ -381,8 +381,9 @@ def _fill(template, tokens):
 def write_event_viewer(result, output_path, *, json_path=None, legacy=False):
     """Build a standalone HTML viewer and its portable JSON companion.
 
-    The default viewer is a WebGL scene with analysis panels and frame-exact
-    MP4 export; it needs no Python plotting package.  ``legacy=True`` builds
+    The default viewer is a three.js (WebGL2) scene with analysis panels and
+    frame-exact MP4 export; three.js is inlined from the package, so the page
+    works offline and needs no Python plotting package.  ``legacy=True`` builds
     the previous Plotly viewer, which requires ``lighthit[viewer]``.
     """
     get_plotlyjs = None
@@ -417,6 +418,7 @@ def write_event_viewer(result, output_path, *, json_path=None, legacy=False):
             "__RESULT_JSON__": payload,
             "__VIEWER_SMOOTHING_JS__": read("event_viewer_smoothing.js"),
             "__STUDIO_MODEL_JS__": read("studio_model.js"),
+            "__THREE_JS__": read("vendor", "three.min.js"),
             "__STUDIO_GL_JS__": read("studio_gl.js"),
             "__STUDIO_MOVIE_JS__": read("studio_movie.js"),
             "__STUDIO_APP_JS__": read("studio_app.js"),

@@ -261,6 +261,9 @@ def test_python_m_build_produces_clean_archives(tmp_path):
                    "lighthit/shower/ge2.py", "lighthit/muon/api.py", "lighthit/ballistic_interval.py"):
         assert module in names
     assert "lighthit/assets/event_viewer_smoothing.js" in names
+    # the default viewer inlines a pinned three.js build; its MIT licence ships with it
+    assert "lighthit/assets/vendor/three.min.js" in names
+    assert "lighthit/assets/vendor/three.LICENSE" in names
     assert "lighthit/tests/test_public_smoke.py" in names
     assert "lighthit-demo = lighthit.examples.synthetic:main" in entry_points
     assert "lighthit-selftest = lighthit.selftest:main" in entry_points
@@ -273,4 +276,5 @@ def test_python_m_build_produces_clean_archives(tmp_path):
     assert experimental == sorted(REQUIRED_EXPERIMENTAL)
     assert {"LICENSE", "setup.py", "packaging_filter.py"} <= set(inside)
     assert "src/lighthit/_track_transport.py" in inside
+    assert {"src/lighthit/assets/vendor/three.min.js", "src/lighthit/assets/vendor/three.LICENSE"} <= set(inside)
     assert not [name for name in inside if forbidden_archive_member(name)]

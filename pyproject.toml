@@ -42,7 +42,7 @@ where = ["src"]
 include = ["lighthit*"]
 
 [tool.setuptools.package-data]
-lighthit = ["py.typed", "assets/*.html", "assets/*.js", "assets/*.css", "assets/legacy/*.html", "assets/legacy/*.js", "assets/legacy/*.css"]
+lighthit = ["py.typed", "assets/*.html", "assets/*.js", "assets/*.css", "assets/legacy/*.html", "assets/legacy/*.js", "assets/legacy/*.css", "assets/vendor/*.js", "assets/vendor/three.LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
