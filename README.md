@@ -39,6 +39,11 @@ python -m pytest -q tests
 The first run of each route compiles its Numba kernels (a few minutes, once
 per installation; the compiled code is cached on disk).
 
+Quick-start notebook with stored output: `notebooks/lighthit-standalone.ipynb`
+(the example of section 1, then Baikal-GVD with the internal data bundle
+`lighthit-bgvd-data`). For NTSim see `examples/LightHit/lighthit-in-ntsim.ipynb`
+in the NTSim repository.
+
 ## 1. A complete example with public inputs
 
 Everything below is artificial (a Baikal-like water and an 8-string, 48-OM

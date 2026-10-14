@@ -30,3 +30,6 @@ _book/
 /preview/
 docs/*.html
 slides/*.html
+
+# Output of the quick-start notebook
+notebooks/lighthit-demo-output/
