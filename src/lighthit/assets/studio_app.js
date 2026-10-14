@@ -236,7 +236,57 @@
     return {kind: "flash", age: time - s.emission.t, at: s.emission.position};
   }
 
-  function compose(time) {
+  // A shower shows its direction: the light-carrying body grows along the
+  // axis on the detector clock (stored timing), its brightness following the
+  // light profile, and an arrow points ahead from its front; the arrow keeps
+  // a minimum size on screen (``mpp`` is metres per pixel at
+  // the view centre).  Without timing the whole axis is drawn.  Display only.
+  const SHOWER = [1.0, 0.82, 0.55];
+  function perpendicular(d) {
+    const a = Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+    let e1 = [d[1] * a[2] - d[2] * a[1], d[2] * a[0] - d[0] * a[2], d[0] * a[1] - d[1] * a[0]];
+    const l = norm(e1); e1 = e1.map(x => x / l);
+    return [e1, [d[1] * e1[2] - d[2] * e1[1], d[2] * e1[0] - d[0] * e1[2], d[0] * e1[1] - d[1] * e1[0]]];
+  }
+  function arrowhead(lines, tip, dir, length, alpha, px) {
+    const [e1, e2] = perpendicular(dir), r = 0.36 * length, base = add(tip, dir, -length);
+    for (const [a, b] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      const foot = add(add(base, e1, a * r), e2, b * r);
+      lines.push(...foot, ...tip, ...SHOWER, 0.12 * alpha, ...SHOWER, alpha, 1.8 * px);
+    }
+  }
+  function showerAxis(s, time, lines, glows, px, mpp) {
+    const length = 2 * s.half, fin = Math.max(clamp(0.3 * length, 3, 16), 12 * px * mpp);
+    const ray = Math.max(3 * length, 30, 110 * px * mpp);
+    const pointer = (from, alpha) => {
+      const tip = add(from, s.direction, ray);
+      lines.push(...from, ...tip, ...SHOWER, 0.7 * alpha, ...SHOWER, 0.45 * alpha, 1.8 * px);
+      arrowhead(lines, tip, s.direction, fin, alpha, px);
+    };
+    if (!s.points) {
+      const n = 24;
+      for (let k = 0; k < n; k++) {
+        const w = Math.sin(Math.PI * (k + 0.5) / n);
+        lines.push(...add(s.start, s.direction, k / n * length), ...add(s.start, s.direction, (k + 1) / n * length),
+                   ...SHOWER, 0.08 + 0.5 * w, ...SHOWER, 0.08 + 0.5 * w, (1.5 + 4 * w) * px);
+      }
+      pointer(s.end, 0.7);
+      return null;
+    }
+    const pts = s.points, head = Model.headAt(s, time);
+    if (!head) return null;
+    for (let k = 0; k + 1 < pts.length && pts[k].t <= time; k++) {
+      const p = pts[k], q = pts[k + 1], to = q.t <= time ? q.xyz : head.xyz;
+      const w = Math.sqrt(Math.max(0, 0.5 * (p.w + q.w))), alpha = (0.35 + 0.65 * Math.exp(-(time - p.t) / 60)) * (0.06 + 0.9 * w);
+      lines.push(...p.xyz, ...to, ...SHOWER, alpha, ...SHOWER, alpha, (1.5 + 5 * w) * px);
+    }
+    pointer(head.xyz, head.done ? 0.7 : 0.95);
+    if (!head.done) glows.push(...head.xyz, 2.0, 1.0, 0.9, 0.75, 4);
+    return head;
+  }
+
+  function compose(time, cam) {
+    const mpp = 2 * cam.distance * Math.tan(cam.fov / 2) / Math.max(1, glCanvas.height);
     omState = Model.stateAt(model, time, omState);
     const glows = [], additive = [], shells = [];
     const size = S.size, flash = S.flash, colourMode = S.colour, px = dpr();
@@ -294,11 +344,14 @@
         } else if (st.kind === "flash") {
           headPoint = st.at;
           if (S["show-source"]) {
-            const glow = 0.5 + 6 * Math.exp(-st.age / 25);
+            if (s.kind === "shower") headPoint = showerAxis(s, time, additive, glows, px, mpp)?.xyz || st.at;
             if (s.points) {
-              for (const p of s.points) if (p.w > 0.02) glows.push(...p.xyz, 1.0 + 3.5 * Math.sqrt(p.w), 1.0, 0.82, 0.55, glow * Math.sqrt(p.w));
+              // each part of the shower flares when the growing front reaches it
+              for (const p of s.points) {
+                if (p.w > 0.02 && p.t <= time) glows.push(...p.xyz, 0.8 + 2.4 * Math.sqrt(p.w), ...SHOWER, (0.15 + 6 * Math.exp(-(time - p.t) / 25)) * Math.sqrt(p.w));
+              }
             } else {
-              glows.push(...st.at, 3, 1.0, 0.86, 0.6, glow);
+              glows.push(...st.at, 3, 1.0, 0.86, 0.6, 0.5 + 6 * Math.exp(-st.age / 25));
             }
           }
           if (S["show-front"]) {
@@ -312,6 +365,7 @@
           }
         } else if (st.kind === "static" && S["show-source"]) {
           const at = s.kind === "point" ? s.position : s.centre;
+          if (s.kind === "shower") showerAxis(s, time, additive, glows, px, mpp);
           glows.push(...at, 2.5, 1.0, 0.8, 0.5, 1.2);
         }
       }
@@ -430,7 +484,7 @@
       ctx.fillText(text, w - m, m + 24 * k);
       ctx.fillStyle = "rgba(170,195,220,0.8)"; ctx.font = `${13 * k}px Inter, system-ui, sans-serif`;
       const s = primarySource();
-      ctx.fillText(s?.timing ? "detector clock · since source start" : s?.emission ? "detector clock · since emission (estimated)" : "detector clock · since first light", w - m, m + 46 * k);
+      ctx.fillText(s?.timing ? "detector clock · since source start" : s?.emission ? `detector clock · since emission${s.emission.estimated ? " (estimated)" : ""}` : "detector clock · since first light", w - m, m + 46 * k);
       const f = clamp((info.time - model.t0) / (model.t1 - model.t0), 0, 1);
       ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(120,150,180,0.25)"; ctx.fillRect(w - m - 220 * k, m + 56 * k, 220 * k, 2.5 * k);
@@ -502,7 +556,7 @@
 
   function render(time, cam, {width, height} = {}) {
     if (width) {glCanvas.width = width; glCanvas.height = height}
-    const {scene, head} = compose(time);
+    const {scene, head} = compose(time, cam);
     const view = copyCamera(cam);
     if (view.follow && head) view.target = head;
     const mats = renderer.render(scene, glCamera(view));
@@ -638,7 +692,7 @@
     p("The glow of an OM is the <strong>expected</strong> photoelectron response from radiative transfer, accumulated on the detector clock; it is not a sampled hit. " +
       "Glow sizes use the positive part of the selected signal; waveforms and the time map keep signed Fourier bins.");
     if (s) {
-      const timing = s.timing ? "emission times from the stored axial timing" : s.emission ? "emission time estimated from direct-light arrivals (display only)" : "no emission time";
+      const timing = s.timing ? "emission times from the stored axial timing" : s.emission ? (s.emission.estimated ? "emission time estimated from direct-light arrivals (display only)" : "stored emission time") : "no emission time";
       p(`Source: ${esc(s.label)} · ${timing}.`);
     }
     const thetaC = Math.acos(1 / model.phaseIndex) * 180 / Math.PI;

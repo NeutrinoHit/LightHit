@@ -97,7 +97,10 @@ const LightHitStudioModel = (() => {
   // source may get an emission time estimated from direct-light arrivals.
   function sourceInfo(source) {
     if (!source) return null;
-    if (source.type === "point") return {kind: "point", position: source.position_m, label: source.label || "Point source"};
+    if (source.type === "point") {
+      return {kind: "point", position: source.position_m, label: source.label || "Point source",
+              time: Number.isFinite(source.time_ns) ? source.time_ns : null};
+    }
     const shape = source.shape || "line", dir = source.direction, half = source.extent_m || 40;
     const timing = source.timing && source.timing.s_m && source.timing.s_m.length >= 2 ? source.timing : null;
     const info = {kind: shape === "spindle" ? "shower" : "track", label: source.label || (shape === "spindle" ? "Shower" : "Track"),
@@ -172,7 +175,9 @@ const LightHitStudioModel = (() => {
     }
     const sources = (event.sources || []).map(sourceInfo).filter(Boolean);
     for (const s of sources) {
-      if (s.kind === "point" || (s.kind === "shower" && !s.timing)) {
+      if (s.kind === "point" && s.time !== null) {
+        s.emission = {t: s.time, estimated: false, position: s.position};
+      } else if (s.kind === "point" || (s.kind === "shower" && !s.timing)) {
         const centre = s.kind === "point" ? s.position : s.centre;
         const t = estimateEmission(det.positions_m, rows, edges, origins, centre, ng);
         if (Number.isFinite(t)) s.emission = {t, estimated: true, position: centre};

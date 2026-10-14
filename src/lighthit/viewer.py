@@ -7,7 +7,8 @@ bins are preserved; the viewer applies a signed-log colour transform only for
 display and never changes stored values.
 
 Axis sources may carry an optional ``timing`` block (emission time along the
-axis on the detector clock, the same clock as ``time_origin_ns``).  The viewer
+axis on the detector clock, the same clock as ``time_origin_ns``); a point
+source may carry its emission ``time_ns`` on that clock.  The viewer
 uses it to animate a moving track head or a growing shower spindle in step
 with the detector response; older payloads without it stay valid and static.
 """
@@ -73,7 +74,7 @@ def _display_source(source):
                           SyntheticShower)
     if isinstance(source, IsotropicFlash):
         return [{"type": "point", "position_m": source.position_m.tolist(),
-                 "label": "isotropic flash"}]
+                 "time_ns": float(source.time_ns), "label": "isotropic flash"}]
     if isinstance(source, CherenkovTrack):
         direction = np.asarray(source.direction, float)
         direction /= np.linalg.norm(direction)
@@ -130,7 +131,7 @@ def _display_primary_track(source, track_uid):
     trajectory. Neither secondary emission times nor secondary yield influence
     its geometry or head timing; all physics arrays remain untouched.
     """
-    elements = getattr(source, "elements", None)
+    elements = getattr(source, "elements", source)
     if elements is None or not hasattr(elements, "uid"):
         return None
     selected = np.asarray(elements.uid) == track_uid
@@ -181,8 +182,71 @@ def _display_primary_track(source, track_uid):
     return display
 
 
+def _weighted_quantiles(values, weights, quantiles):
+    order = np.argsort(values)
+    cumulative = np.cumsum(weights[order])
+    return np.interp(np.asarray(quantiles) * cumulative[-1], cumulative, values[order])
+
+
+def _display_spindle(elements, label):
+    """Shower display axis from its own light elements.
+
+    The centre and axis are the light-weighted centroid and principal axis of
+    the steps, oriented along the mean step direction; the spindle spans the
+    central 99 % of the light along that axis, so a few stray steps do not
+    stretch it.  Timing is the straight-front fit of :func:`source_timing`.
+    """
+    if elements is None or not len(getattr(elements, "length_m", ())):
+        return None
+    weights = np.asarray(elements.coefficient0, float)
+    if not np.isfinite(weights).all() or np.any(weights < 0) or weights.sum() <= 0:
+        return None
+    from .sources import _principal_axis
+    centre, axis = _principal_axis(elements)
+    along = (elements.midpoints_m - centre) @ axis
+    low, high = _weighted_quantiles(along, weights, (0.005, 0.995))
+    half = max(0.5 * float(high - low), 1.0)
+    centre = centre + 0.5 * float(low + high) * axis
+    display = {"type": "axis", "shape": "spindle", "label": str(label),
+               "position_m": centre.tolist(), "direction": axis.tolist(), "extent_m": half}
+    timing = source_timing(elements, centre, axis, half)
+    if timing is not None:
+        display["timing"] = timing
+    return display
+
+
+def _display_item(source):
+    """Display one source: an event component, raw light elements or a public type."""
+    from .event import SourceComponent
+    from .sources import SpectralLightElements
+    if isinstance(source, SourceComponent):
+        if source.kind == "muon":
+            track = _display_primary_track(source.source, int(source.primary_uid))
+            if track is not None:
+                track["label"] = source.label or "muon track"
+                return [track]
+            return []
+        spindle = _display_spindle(source.source, source.label or "shower")
+        return [spindle] if spindle is not None else []
+    if isinstance(source, SpectralLightElements):
+        spindle = _display_spindle(source, "shower")
+        return [spindle] if spindle is not None else []
+    return _display_source(source)
+
+
 def _display_sources(source, metadata):
-    """Display a selected primary muon independently of its secondary light."""
+    """Display markers of the sources, and a selected primary muon on its own.
+
+    ``source`` is one object or a list.  Event components (and a list) are
+    shown as given: a muon component as its own straight track, a shower as a
+    spindle.  For a single other object a primary muon named in the response
+    metadata is shown as a track independently of its secondary light.
+    """
+    from .event import SourceComponent
+    if isinstance(source, (list, tuple)):
+        return [display for item in source for display in _display_item(item)]
+    if isinstance(source, SourceComponent):
+        return _display_item(source)
     track_uid = _display_track_uid(metadata)
     if track_uid is not None:
         track = _display_primary_track(source, track_uid)
@@ -195,15 +259,19 @@ def _display_sources(source, metadata):
                         and automatic.get("reason") == "dominant_straight_muon")):
                 track["label"] = "G4 muon track"
             return [track]
-    return _display_source(source)
+    return _display_item(source)
 
 
 def viewer_payload(response, *, source=None, event_id="event", label=None,
                    detector_label="detector"):
     """Convert one :class:`TransportResponse` into portable viewer data.
 
-    Unknown source types remain fully viewable as detector responses; only the
-    optional source marker is omitted. Additional events can be appended to the
+    ``source`` is one source or a list of them, as transported: a
+    :class:`lighthit.event.SourceComponent` (a muon becomes a straight track
+    fitted to its own steps, a shower a spindle), ``SpectralLightElements``
+    (a spindle), ``CherenkovTrack``, ``G4Shower``, ``SyntheticShower`` or
+    ``IsotropicFlash``.  Unknown source types remain fully viewable as
+    detector responses; only the optional source marker is omitted. Additional events can be appended to the
     returned ``events`` list before passing it to :func:`write_event_viewer`.
     """
     detector = response.detector
@@ -302,6 +370,8 @@ def validate_event_viewer(result):
             position = np.asarray(source.get("position_m"), float)
             if position.shape != (3,) or not np.isfinite(position).all():
                 raise ValueError(f"event {identifier}: invalid source position")
+            if source.get("time_ns") is not None and not np.isfinite(float(source["time_ns"])):
+                raise ValueError(f"event {identifier}: source time_ns must be finite")
             if source["type"] == "axis":
                 if source.get("shape", "line") not in ("line", "track", "spindle"):
                     raise ValueError(f"event {identifier}: invalid source display shape")

@@ -243,7 +243,7 @@ from lighthit.event import laser_kernel
 
 laser = laser_kernel(model.medium, model.detector, cache_directory="tables/laser-cache",
                      omega_per_ns=np.linspace(0.0, 1.2, 321), cache_policy="build")
-flash = lh.IsotropicFlash.monochromatic([0.0, -270.0, 360.0], 1e12, 532.0)
+flash = lh.IsotropicFlash.monochromatic([-62.0, -385.0, 361.0], 1e15, 532.0)
 response = EventTransport(kernel, laser_kernel=laser)(flash)
 ```
 
@@ -286,8 +286,8 @@ python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 5 
   --output out/numu
 
 # calibration flash (the laser cache is built once with --build-laser-cache)
-python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 0 -270 360 \
-  --laser 1e12 532 --laser-cache tables/laser-cache --output out/laser
+python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position -62 -385 361 \
+  --laser 1e15 532 --laser-cache tables/laser-cache --output out/laser
 ```
 
 Each run writes `event-<id>-hybrid-<route>.npz` (the response),
@@ -381,8 +381,15 @@ Open `lighthit-viewer.html` in a current Chrome, Edge or Safari. A portable
   Cherenkov front: light leaves at the Cherenkov angle for `n = 1.34` and travels
   at `c/n_g` (`medium.group_index` when present, else 1.36), so a β = 1 track
   carries a cone behind its head. Showers and point sources show an expanding
-  sphere; without stored timing their emission time is estimated from
+  sphere; a shower also shows its axis, growing along its direction, and an
+  arrow pointing ahead. Without stored timing their emission time is estimated from
   direct-light arrivals. The front and its fade length are illustrative.
+- **Sources.** Pass what you transported as `source=`, one object or a list:
+  `lh.viewer_payload(response, source=components)` with the event's
+  `SourceComponent` list draws each muon as a straight track fitted to its own
+  steps (with its timing) and each shower as a spindle along its light-weighted
+  axis; `SpectralLightElements`, `G4Shower`, `SyntheticShower`, `CherenkovTrack`
+  and `IsotropicFlash` are shown as well.
 - **Analysis.** The Module tab shows the selected OM's signed waveform by order
   and a time map of all lit OMs; the 3 ns Gaussian display redistributes binned
   integrals under a uniform-within-bin assumption and never changes stored data.

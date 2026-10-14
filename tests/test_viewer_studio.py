@@ -178,3 +178,12 @@ console.log(JSON.stringify({dir:s.direction,mid:M.headAt(s,3),before:M.headAt(s,
     np.testing.assert_allclose(out["mid"]["xyz"], [0, 0, 1])
     assert out["before"] is None and out["after"]["done"] is True
     np.testing.assert_allclose(out["start"], [0, 0, 2])
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is unavailable")
+def test_point_source_uses_its_stored_emission_time():
+    data = payload()
+    data["events"][0]["sources"] = [{"type": "point", "position_m": [10.0, 0.0, 0.0], "time_ns": 42.5}]
+    out = node(f"""
+const m=M.build({json.dumps(data)},0);console.log(JSON.stringify(m.sources[0].emission))""")
+    assert out == {"t": 42.5, "estimated": False, "position": [10.0, 0.0, 0.0]}

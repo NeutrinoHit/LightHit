@@ -385,3 +385,59 @@ def test_primary_viewer_fix_preserves_detector_response_arrays():
     for name, array in before.items():
         np.testing.assert_array_equal(getattr(response, name), array)
     np.testing.assert_array_equal(result["events"][0]["components"], before["components_pe"])
+
+
+def _spectral(elements):
+    from dataclasses import replace
+    return replace(elements, cone_model="spectral")
+
+
+def _vertex_shower():
+    from lighthit import SourcePose, SyntheticShower
+    pose = SourcePose([30., 10., -20.], [0.6, 0., 0.8])
+    return _spectral(SyntheticShower.gaussian(pose, charged_track_length_m=200.0,
+                                              elements=400, seed=3).elements)
+
+
+def test_muon_and_shower_components_give_a_track_and_a_spindle():
+    from lighthit.event import SourceComponent
+    from lighthit.viewer import _display_sources
+    muon = _spectral(_mixed_muon_source().elements)
+    shower = _vertex_shower()
+    components = [SourceComponent("muon", muon, {"element_family": np.zeros(len(muon), int)},
+                                  primary_uid=0, label="muon"),
+                  SourceComponent("shower", shower, label="vertex shower")]
+    # explicit components win over any track named in the response metadata
+    track, spindle = _display_sources(components, {"track_uid": 2})
+    assert track["shape"] == "track" and track["track_uid"] == 0 and track["label"] == "muon"
+    np.testing.assert_allclose(track["position_m"], [2., -4., 50.], atol=1e-12)
+    assert track["extent_m"] == pytest.approx(50.) and max(track["timing"]["t_ns"]) < 350.
+    assert spindle["shape"] == "spindle" and spindle["label"] == "vertex shower"
+    np.testing.assert_allclose(spindle["direction"], [0.6, 0., 0.8], atol=0.02)
+    np.testing.assert_allclose(spindle["position_m"], shower.centroid_m, atol=1.0)
+    assert 1.0 <= spindle["extent_m"] < shower.extent_m
+    t = np.asarray(spindle["timing"]["t_ns"])
+    assert np.all(np.diff(t) > 0)  # grows along the axis, forwards in time
+    # one component alone, and raw light elements, are accepted as well
+    assert _display_sources(components[1], {}) == [spindle]
+    raw = _display_sources(shower, {})[0]
+    assert raw["shape"] == "spindle" and raw["position_m"] == spindle["position_m"]
+
+
+def test_viewer_payload_takes_a_list_of_sources():
+    from lighthit.event import SourceComponent
+    value = payload()["events"][0]
+    detector = DetectorArray(payload()["detector"]["positions_m"], [[0., 0., 1.]]*2, .05,
+                             lambda x: np.ones_like(np.asarray(x, float)),
+                             lambda w: np.ones_like(np.asarray(w, float)))
+    response = SimpleNamespace(
+        detector=detector, relative_time_edges_ns=np.array([-1., 0., 1., 2.]),
+        time_origin_ns=np.array([10., 11.]), active=np.array([True, False]),
+        components_pe=np.asarray(value["components"]),
+        charge_components_pe=np.asarray(value["charge_components"]), metadata={})
+    flash = IsotropicFlash.monochromatic([0., 0., 5.], 1e9, 450.)
+    sources = viewer_payload(response, source=[SourceComponent("shower", _vertex_shower()), flash],
+                             event_id="list")["events"][0]["sources"]
+    assert [s["type"] for s in sources] == ["axis", "point"]
+    assert sources[1]["time_ns"] == 0.0  # a flash keeps its emission time
+    assert sources[0]["label"] == "shower"
