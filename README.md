@@ -130,6 +130,10 @@ command-line tool.
   the water, OM response and geometry from the separately supplied
   `bgvd-model` package (not distributed). Inside NTSim the same objects come
   from `ntsim.LightTransport.bgvd_model_from_ntsim` (section 3).
+  `model.save("bgvd-model.npz")` stores a loaded model in one file (arrays and
+  response tables, no code) and `lh.load_model("bgvd-model.npz")` reads it back
+  without the package; the internal data bundle `lighthit-bgvd-data` ships its
+  model this way (`model/bgvd-model.npz`).
 * **Charged steps.** `lh.SpectralLightElements` (start, direction, chord and
   true length, beta, times, UID per step) or `lh.G4Shower.from_hdf5`.
 * **Prepared tables**, built once per medium and OM response and reused: the
@@ -139,6 +143,14 @@ command-line tool.
   `muon-data.json` (those plus the muon atlases), so the routes find them from
   the kernel alone. The muon atlases are prepared by the LightHit research
   pipeline and supplied together with the tables.
+* **Tables follow the physics, not the labels.** A table is found by the
+  water coefficients at its wavelength, `g`, the solver settings and the grid;
+  provenance strings play no part. The bundle's tables therefore serve
+  `load_model`, `load_bgvd_model` and NTSim's model alike. Tables written by
+  0.3.0a1 (whose names included the provenance) are still read: by their old
+  name, or by the coefficients stored inside them. The laser table also
+  depends on the detector extent (its radial range), so it is shared only
+  between models with the same geometry.
 
 ```python
 import json

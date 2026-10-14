@@ -24,7 +24,7 @@ from .directional import CouplingTable
 FORMAT = "lighthit/spectral-folded-directional/1"
 
 
-def _profile(kernel):
+def _profile(kernel, raw_keys=None):
     if kernel.config.cache_directory is None:
         raise ValueError("a cache directory is required for spectral folding")
     wavelengths = np.asarray(kernel.wavelength.wavelength_nm, float)
@@ -33,7 +33,8 @@ def _profile(kernel):
     detection = np.asarray(kernel.detector.spectral_weight(wavelengths), float)
     if detection.shape != wavelengths.shape or not np.isfinite(detection).all():
         raise ValueError("detector spectral efficiency must match wavelength nodes")
-    raw_keys = [kernel._directional_cache_key(float(w)) for w in wavelengths]
+    if raw_keys is None:
+        raw_keys = [kernel._directional_cache_key(float(w)) for w in wavelengths]
     reference_wavelength = float(np.clip(500., wavelengths[0], wavelengths[-1]))
     reference = kernel.medium.band(reference_wavelength)
     payload = {
@@ -52,14 +53,38 @@ def _profile(kernel):
     return Path(kernel.config.cache_directory).expanduser().resolve(), payload, signature
 
 
+def _stored_profile(kernel):
+    """Profile of an existing folded cache, also under earlier table keys.
+
+    Folded caches written by LightHit <= 0.3.0a1 are named after directional
+    keys that included the medium's provenance; the physics-only name is tried
+    first, then those, then the names of the directional tables actually found.
+    """
+    wavelengths = [float(w) for w in kernel.wavelength.wavelength_nm]
+    candidates = [None, [kernel._directional_cache_key(w, legacy=True) for w in wavelengths]]
+    stored = [kernel._stored_table("directional", w) for w in wavelengths]
+    if all(path is not None for path in stored):
+        candidates.append([path.stem[len("directional-"):] for path in stored])
+    first = None
+    for raw_keys in candidates:
+        profile = _profile(kernel, raw_keys)
+        first = first or profile
+        directory, _, signature = profile
+        if (directory / f"directional-folded-{signature}" / "metadata.json").is_file():
+            return profile
+    return first
+
+
 def folded_cache_path(kernel):
-    directory, _, signature = _profile(kernel)
+    directory, _, signature = _stored_profile(kernel)
     return directory / f"directional-folded-{signature}"
 
 
-def _original_files(directory, keys):
-    files = [directory / f"directional-{key}.npz" for key in keys]
-    missing = [str(path) for path in files if not path.is_file()]
+def _original_files(kernel):
+    wavelengths = [float(w) for w in kernel.wavelength.wavelength_nm]
+    files = [kernel._stored_table("directional", w) for w in wavelengths]
+    missing = [str(kernel._table_path("directional", kernel._directional_cache_key(w)))
+               for w, path in zip(wavelengths, files) if path is None]
     if missing:
         raise FileNotFoundError(
             "build the directional wavelength caches before spectral folding: "
@@ -102,7 +127,7 @@ def build_folded_cache(kernel, *, progress=True, frequency_block=32):
     published only after all three prepared arrays and metadata are complete.
     """
     began = perf_counter()
-    directory, profile, signature = _profile(kernel)
+    directory, profile, signature = _stored_profile(kernel)
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"directional-folded-{signature}"
     if (destination / "metadata.json").is_file():
@@ -114,7 +139,7 @@ def build_folded_cache(kernel, *, progress=True, frequency_block=32):
     if not isinstance(frequency_block, int) or frequency_block < 1:
         raise ValueError("frequency_block must be a positive integer")
 
-    files = _original_files(directory, profile["raw_keys"])
+    files = _original_files(kernel)
     original_radii, omega, degree, acceptance_degree, pairs = _same_grid(files)
     midpoints = np.sqrt(original_radii[:-1] * original_radii[1:])
     radii = np.sort(np.r_[original_radii,
@@ -232,7 +257,7 @@ class FoldedKernels:
 
 
 def load_folded_cache(kernel):
-    directory, profile, signature = _profile(kernel)
+    directory, profile, signature = _stored_profile(kernel)
     destination = directory / f"directional-folded-{signature}"
     metadata_path = destination / "metadata.json"
     if not metadata_path.is_file():

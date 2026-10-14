@@ -124,6 +124,7 @@ class Ge2KernelStore:
     def __init__(self, dtype=np.complex64):
         self.dtype = np.dtype(dtype)
         self._bundles = {}
+        self._adopted = set()
 
     def __len__(self):
         return len(self._bundles)
@@ -147,9 +148,31 @@ class Ge2KernelStore:
                       for w in kernel.wavelength.wavelength_nm),
                 int(kernel.config.source_degree), tuple(int(i) for i in indices))
 
+    def _adopt(self, kernel):
+        """Re-key bundles saved under earlier names of this kernel's tables.
+
+        Packs written by LightHit <= 0.3.0a1 name each wavelength by a
+        directional key that also hashed the medium's provenance. A bundle
+        whose every key is an alias of this kernel's table (legacy key, or the
+        name of the directional table found for it) is moved to the current key.
+        """
+        aliases = getattr(kernel, "_directional_cache_aliases", None)
+        if aliases is None or not self._bundles:
+            return
+        current = self._key(kernel, ())[0]
+        if current in self._adopted:
+            return
+        self._adopted.add(current)
+        names = [aliases(float(w)) for w in kernel.wavelength.wavelength_nm]
+        for key in list(self._bundles):
+            if (key[0] != current and len(key[0]) == len(names)
+                    and all(name in known for name, known in zip(key[0], names))):
+                self._bundles.setdefault((current,) + key[1:], self._bundles.pop(key))
+
     def bundle(self, kernel, indices):
         """The stacked order >=2 spline of every kernel wavelength (built once)."""
         from ._directional_numba import PreparedDirectionalKernel
+        self._adopt(kernel)
         key = self._key(kernel, indices)
         if key in self._bundles:
             return self._bundles[key]
@@ -214,6 +237,7 @@ class Ge2KernelStore:
         positions within ``indices``.
         """
         from ._directional_numba import PreparedDirectionalKernel
+        self._adopt(kernel)
         selected_indices=np.atleast_1d(np.asarray(indices) if frequencies is None else np.asarray(indices)[frequencies])
         compact=self._bundles.get(self._key(kernel,selected_indices)) if frequencies is not None else None
         bundle = compact if compact is not None else self.bundle(kernel, indices)

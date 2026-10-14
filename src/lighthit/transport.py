@@ -363,6 +363,8 @@ class TransportKernel:
         }
         self._acceptance = None
         self._directional_caches = {}
+        self._table_files = {}
+        self._table_index = {}
         self._ge2_store = None
         self.last_build_report = CacheBuildReport()
 
@@ -431,13 +433,109 @@ class TransportKernel:
                                 "full_alpha": alpha}
         return self._acceptance
 
-    def _cache_key(self, wavelength_nm):
-        band = self.medium.band(wavelength_nm)
-        payload = {"medium": asdict(band), "settings": asdict(self._solver_settings()),
+    def _band_key(self, wavelength_nm, *, legacy=False):
+        """The band coefficients that define a table, without labels.
+
+        ``legacy`` reproduces LightHit <= 0.3.0a1, whose keys also hashed the
+        medium's provenance string; tables written then keep those names.
+        """
+        band = asdict(self.medium.band(wavelength_nm))
+        if not legacy:
+            band.pop("provenance")
+        return band
+
+    def _cache_key(self, wavelength_nm, *, legacy=False):
+        payload = {"medium": self._band_key(wavelength_nm, legacy=legacy),
+                   "settings": asdict(self._solver_settings()),
                    "omega": self.config.omega_per_ns.tolist(),
                    "range": list(self.config.radial_range_m),
                    "nodes": self.config.radial_nodes, "phase": "flight"}
         return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:20]
+
+    _TABLE_PREFIX = {"multipole": "transport", "directional": "directional"}
+
+    def _table_key(self, kind, wavelength_nm, *, legacy=False):
+        if kind == "multipole":
+            return self._cache_key(wavelength_nm, legacy=legacy)
+        return self._directional_cache_key(wavelength_nm, legacy=legacy)
+
+    def _table_path(self, kind, key):
+        if self.config.cache_directory is None:
+            return None
+        directory = Path(self.config.cache_directory).expanduser().resolve()
+        return directory / f"{self._TABLE_PREFIX[kind]}-{key}.npz"
+
+    def _stored_tables(self, kind):
+        """Grid and metadata of every ``kind`` table in the cache directory."""
+        if kind not in self._table_index:
+            entries = []
+            path = self._table_path(kind, "*")
+            for candidate in (sorted(path.parent.glob(path.name)) if path else ()):
+                try:
+                    with np.load(candidate, allow_pickle=False) as data:
+                        entries.append((candidate, json.loads(str(data["metadata"])),
+                                        np.asarray(data["radii_m"], float),
+                                        np.asarray(data["omega_per_ns"], float)))
+                except (OSError, ValueError, KeyError):
+                    continue
+            self._table_index[kind] = entries
+        return self._table_index[kind]
+
+    def _table_matches(self, kind, wavelength_nm, metadata, radii, omega):
+        band = dict(metadata.get("medium") or {})
+        band.pop("provenance", None)
+        if (band != self._band_key(wavelength_nm)
+                or metadata.get("settings") != asdict(self._solver_settings())
+                or metadata.get("radial_phase") != "flight"):
+            return False
+        if kind == "directional" and (
+                metadata.get("detector_angular_model") != "exact_m_blocks"
+                or metadata.get("acceptance_degree") != self.acceptance()["degree"]):
+            return False
+        low, high = self.config.radial_range_m
+        grid = CacheGrid.geometric(low, high, self.config.radial_nodes,
+                                   self.config.omega_per_ns)
+        return (np.array_equal(omega, grid.omega_per_ns)
+                and radii.shape == grid.radii_m.shape
+                and np.allclose(radii, grid.radii_m, rtol=1e-12, atol=0))
+
+    def _stored_table(self, kind, wavelength_nm):
+        """Existing table file of ``kind`` for this wavelength, or None.
+
+        The physics-only key is tried first, then the legacy key (which also
+        hashed the medium's provenance), then any table in the directory whose
+        stored band coefficients, solver settings and grid equal this kernel's.
+        The last step lets tables prepared with one model object serve another
+        with the same water and settings but a different provenance label.
+        """
+        wavelength_nm = float(wavelength_nm)
+        memo = (kind, wavelength_nm)
+        if memo in self._table_files and self._table_files[memo].is_file():
+            return self._table_files[memo]
+        if self.config.cache_directory is None:
+            return None
+        found = None
+        for legacy in (False, True):
+            path = self._table_path(kind, self._table_key(kind, wavelength_nm, legacy=legacy))
+            if path.is_file():
+                found = path
+                break
+        if found is None:
+            found = next((path for path, metadata, radii, omega in self._stored_tables(kind)
+                          if self._table_matches(kind, wavelength_nm, metadata, radii, omega)),
+                         None)
+        if found is not None:
+            self._table_files[memo] = found
+        return found
+
+    def _directional_cache_aliases(self, wavelength_nm):
+        """Every key under which this kernel's directional table may be stored."""
+        keys = [self._directional_cache_key(wavelength_nm),
+                self._directional_cache_key(wavelength_nm, legacy=True)]
+        stored = self._stored_table("directional", wavelength_nm)
+        if stored is not None:
+            keys.append(stored.stem[len("directional-"):])
+        return tuple(dict.fromkeys(keys))
 
     @staticmethod
     def _notify_cache(progress, event):
@@ -508,16 +606,14 @@ class TransportKernel:
                 "multipole", wavelength_nm, "memory", path=entry.path,
                 elapsed_seconds=entry.elapsed_seconds))
             return self._caches[key]
-        path = None
-        if self.config.cache_directory is not None:
-            directory = Path(self.config.cache_directory).expanduser().resolve()
-            path = directory / f"transport-{key}.npz"
-        if path is not None and path.exists() and not force:
-            cache = ResponseCache.load(path)
-            entry = CacheBuildEntry("multipole", wavelength_nm, "loaded", str(path),
+        path = self._table_path("multipole", key)
+        stored = None if force else self._stored_table("multipole", wavelength_nm)
+        if stored is not None:
+            cache = ResponseCache.load(stored)
+            entry = CacheBuildEntry("multipole", wavelength_nm, "loaded", str(stored),
                                     perf_counter() - began)
             self._notify_cache(progress, CacheProgress(
-                "multipole", wavelength_nm, "loaded", path=str(path),
+                "multipole", wavelength_nm, "loaded", path=str(stored),
                 elapsed_seconds=entry.elapsed_seconds))
         else:
             can_build = (self.config.cache_policy == "build"
@@ -542,6 +638,7 @@ class TransportKernel:
                 radial_phase="flight")
             if path is not None:
                 self._atomic_cache_save(cache, path)
+                self._table_files[("multipole", wavelength_nm)] = path
             entry = CacheBuildEntry("multipole", wavelength_nm, "built",
                                     None if path is None else str(path),
                                     perf_counter() - began)
@@ -553,9 +650,9 @@ class TransportKernel:
         self._caches[key] = cache
         return cache
 
-    def _directional_cache_key(self, wavelength_nm):
-        band = self.medium.band(wavelength_nm)
-        payload = {"medium": asdict(band), "settings": asdict(self._solver_settings()),
+    def _directional_cache_key(self, wavelength_nm, *, legacy=False):
+        payload = {"medium": self._band_key(wavelength_nm, legacy=legacy),
+                   "settings": asdict(self._solver_settings()),
                    "omega": self.config.omega_per_ns.tolist(),
                    "range": list(self.config.radial_range_m),
                    "nodes": self.config.radial_nodes, "phase": "flight",
@@ -577,16 +674,14 @@ class TransportKernel:
                 "directional", wavelength_nm, "memory",
                 elapsed_seconds=entry.elapsed_seconds))
             return self._directional_caches[key]
-        path = None
-        if self.config.cache_directory is not None:
-            directory = Path(self.config.cache_directory).expanduser().resolve()
-            path = directory / f"directional-{key}.npz"
-        if path is not None and path.exists() and not force:
-            cache = DirectionalCache.load(path)
-            entry = CacheBuildEntry("directional", wavelength_nm, "loaded", str(path),
+        path = self._table_path("directional", key)
+        stored = None if force else self._stored_table("directional", wavelength_nm)
+        if stored is not None:
+            cache = DirectionalCache.load(stored)
+            entry = CacheBuildEntry("directional", wavelength_nm, "loaded", str(stored),
                                     perf_counter() - began)
             self._notify_cache(progress, CacheProgress(
-                "directional", wavelength_nm, "loaded", path=str(path),
+                "directional", wavelength_nm, "loaded", path=str(stored),
                 elapsed_seconds=entry.elapsed_seconds))
         else:
             can_build = (self.config.cache_policy == "build"
@@ -613,6 +708,7 @@ class TransportKernel:
                 radial_phase="flight")
             if path is not None:
                 self._atomic_cache_save(cache, path)
+                self._table_files[("directional", wavelength_nm)] = path
             entry = CacheBuildEntry("directional", wavelength_nm, "built",
                                     None if path is None else str(path),
                                     perf_counter() - began)

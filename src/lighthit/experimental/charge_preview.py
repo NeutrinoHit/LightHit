@@ -87,6 +87,7 @@ def _operator_lanes(first, ge2, degree):
 
 def load_charge_operators(kernel, ge2_store, first_pack_directory, degree):
     """Read existing compatible packs only; never prepare or write a pack."""
+    ge2_store._adopt(kernel)
     key = ge2_store._key(kernel, np.arange(len(kernel.config.omega_per_ns)))
     if key not in ge2_store._bundles:
         raise ValueError("prepared >=2 store does not contain the kernel grid")
@@ -94,7 +95,10 @@ def load_charge_operators(kernel, ge2_store, first_pack_directory, degree):
     header = json.loads((directory / "first-collision.json").read_text())
     if header.get("kind") != "experimental-first-collision-only-v1":
         raise ValueError("expected a separately labelled first-collision pack")
-    if header.get("key") != [list(key[0]), key[1], list(key[2])]:
+    stored = header.get("key") or [[], None, None]
+    names = [kernel._directional_cache_aliases(float(w)) for w in kernel.wavelength.wavelength_nm]
+    if (stored[1:] != [key[1], list(key[2])] or len(stored[0]) != len(names)
+            or not all(name in known for name, known in zip(stored[0], names))):
         raise ValueError("first-collision pack belongs to a different numerical kernel")
     first = dict(header["meta"], coefficients=np.load(directory / "first-collision.npy", mmap_mode="r"))
     for name in ("pair_lambda", "pair_mu", "omega", "log_r", "absorption", "speed"):

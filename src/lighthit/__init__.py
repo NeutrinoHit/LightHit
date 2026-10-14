@@ -14,7 +14,7 @@ from .transport import (KernelConfig, CacheProgress, CacheBuildEntry,
                         TransportComponent)
 from .prompt import PromptConfig, PromptTransportResponse, OrderNotComputedError
 from .shower_basis import ShowerBasis, Ge2KernelStore
-from .bgvd import BGVDModel, load_bgvd_model
+from .bgvd import BGVDModel, OMResponse, load_bgvd_model, load_model
 from .api import build
 from .viewer import viewer_payload, merge_event_viewers, write_event_viewer
 
@@ -29,7 +29,7 @@ __all__ = [
     "CacheProgress", "CacheBuildEntry", "CacheBuildReport", "TransportKernel",
     "TransportResponse", "HybridTransportResponse", "TransportComponent",
     "PromptConfig", "PromptTransportResponse", "OrderNotComputedError",
-    "BGVDModel", "load_bgvd_model", "build", "viewer_payload",
+    "BGVDModel", "OMResponse", "load_bgvd_model", "load_model", "build", "viewer_payload",
     "merge_event_viewers", "write_event_viewer", "MuonTransport", "MuonData",
 ]
 
