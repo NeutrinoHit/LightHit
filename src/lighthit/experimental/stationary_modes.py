@@ -5,7 +5,7 @@ is truncated at degree N. Its positive eigenvalue sum eliminates the oscillatory
 radial integral, but needs its own N-convergence study. No free-tail closure is
 claimed here. It returns charge and outward current, not a time profile or a
 full angular distribution. The construction is related to classical transport
-spectral/rotated-reference-frame methods; see research/documentation/research/absorption.md.
+spectral/rotated-reference-frame methods.
 """
 from dataclasses import dataclass
 from time import perf_counter

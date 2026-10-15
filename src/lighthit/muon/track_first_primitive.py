@@ -519,8 +519,9 @@ class TrackFirstAtlasStore:
 
     All small charge prefixes are resident. Time CDFs load on demand through a
     bounded LRU; charge queries never open a time row. The frozen manifest ties
-    every file to the same optical/grid contract. Construction is in the
-    event-independent build_universal_track_first.py research script.
+    every file to the same optical/grid contract. The atlas is built once per
+    medium and detector response (``build_track_first_atlas``); the build
+    driver is not part of the package.
     """
     def __init__(self,directory,*,max_resident_rows=2):
         """Open a row directory; charge prefixes are read at once, time rows on demand."""

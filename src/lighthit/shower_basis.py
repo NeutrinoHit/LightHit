@@ -7,7 +7,7 @@ angular harmonics. ``Ge2KernelStore`` prepares the radial splines once and
 supports memory-mapped reuse.
 
 Its accuracy against finer bases and the per-band reference is summarised in
-README.md (Accuracy); the fast shower route is :mod:`lighthit.shower`.
+docs/accuracy.md; the fast shower route is :mod:`lighthit.shower`.
 """
 from __future__ import annotations
 

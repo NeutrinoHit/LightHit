@@ -136,7 +136,7 @@ class PromptConfig:
     coarse screen uses the same units. This replaces nine per-band
     compressions. It changes the grouping discretisation and was accepted
     against original-step (``segment``) controls: worst-case error and bias
-    did not increase (README.md, Accuracy). Default off.
+    did not increase (docs/accuracy.md). Default off.
 
     ``max_distance_m`` defaults to the kernel's ``radial_range_m[1]``;
     modules farther from every part of the source are omitted with the same

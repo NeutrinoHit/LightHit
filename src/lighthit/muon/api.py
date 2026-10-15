@@ -4,8 +4,7 @@ This is the route used by default for G4 muon tracks: exact direct light from
 the original steps, finite-track atlases for the primary, grouped physical-time
 first scattering of all secondaries with the spectral bands fused, and point
 RTE sources for multiple scattering, with weak packet–OM pairs omitted.
-Accuracy and speed of these choices are recorded in
-README.md (Accuracy).
+Measured accuracy and speed of these choices: docs/accuracy.md.
 """
 from dataclasses import replace
 

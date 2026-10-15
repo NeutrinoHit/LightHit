@@ -1,7 +1,6 @@
 """Axial-slice shower basis for order >=2 (``transport_hybrid(ge2_basis=...)``).
 
-Lightweight synthetic checks.  The real G4/BGVD validation is
-``scripts/shower_basis/``; results are summarised in README.md.
+Lightweight synthetic checks; measured G4/BGVD accuracy is in docs/accuracy.md.
 """
 from dataclasses import replace
 

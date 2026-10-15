@@ -1,6 +1,6 @@
 """Optional private-water adapter: code only, no calibration arrays.
 
-The API matches BaikalWater fields used by the supplied baikal-rte adapter.
+It reads the BaikalWater fields of a private bgvd_model checkout.
 This stage does NOT import OpticalModule: detector efficiency is identically 1.
 """
 from hashlib import sha256

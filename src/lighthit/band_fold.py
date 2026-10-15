@@ -25,7 +25,7 @@ re-fits the folded kernels as cubics in log r on the radial intervals of the
 pack (optionally subdivided), relative to a common attenuation and flight
 phase, in the format of :class:`lighthit.shower_basis.Ge2KernelStore` bundles.
 
-Approximations, each measured on G4 showers (README.md, Accuracy):
+Approximations, each measured on G4 showers (docs/accuracy.md):
 the band interpolation (relative column residual ``residual(beta)``, at most
 1.4e-4 for beta > 0.8 with the default three bands, up to a few per cent only
 at the Cherenkov threshold), the cubic re-fit of the folded radial kernels,

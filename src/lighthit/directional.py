@@ -173,7 +173,7 @@ class CouplingTable:
             for l in range(L_s + 1):
                 for J in range(abs(l - lam), l + lam + 1):
                     if (l + lam + J) % 2:
-                        continue          # parity rule, derived in the note
+                        continue          # l + lambda + J odd: the coupling vanishes by parity
                     triple_lambda.append(lam)
                     triple_l.append(l)
                     triple_J.append(J)

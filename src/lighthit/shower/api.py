@@ -14,7 +14,7 @@ This is the route used by default for electromagnetic and hadronic showers
   only for OMs whose threshold decision depends on it.
 
 Accuracy and speed of each choice, against original-step and finer-basis
-controls, are summarised in README.md (Accuracy). The previous
+controls: docs/accuracy.md. The previous
 per-band route is ``TransportKernel.transport_hybrid(source, ge2_basis=ShowerBasis())``.
 """
 from __future__ import annotations

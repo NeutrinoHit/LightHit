@@ -8,7 +8,7 @@ stores the radial contraction so that an arbitrary number of later
 geometries costs a contraction instead of a solve.
 
 What is stored is one step earlier than a response. The spatial inversion of
-@sec-spatial is a sum over multipoles,
+the spatial inversion is a sum over multipoles,
 
     K(r, nu, omega) = sum_l M_l(r, omega) P_l(nu),
     M_l(r, omega) = i^l sqrt((2l+1)/2) integral k^2 j_l(kr) h_l(k, omega) dk
@@ -17,7 +17,7 @@ What is stored is one step earlier than a response. The spatial inversion of
 and it is the moments ``M_l`` that are cached, not the sum. Keeping the
 multipole index open is what makes one cache serve two different detectors,
 since the weight applied to ``M_l`` is the only thing that distinguishes
-them (@sec-om-acceptance):
+them:
 
 * a directed flash read by an isotropic detector weights ``M_l`` by
   ``P_l(nu)``, with ``nu`` the cosine between the emission direction and the

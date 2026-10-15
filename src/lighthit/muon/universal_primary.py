@@ -72,6 +72,9 @@ class DirectGe2:
         """Load the pack once and keep its bundle."""
         from ..shower_basis import Ge2KernelStore
         if self.bundle is None:
+            if self.directory is None:
+                raise ValueError('direct >=2 fallback needs a pack: pass fallback_pack '
+                                 '(MuonTransport passes the ge2_pack of muon-data.json)')
             wall,cpu=perf_counter(),process_time()
             store = Ge2KernelStore.load(self.directory)
             self.bundle = next(b for b in store._bundles.values() if len(b['omega']) == 65)
@@ -137,7 +140,7 @@ class UniversalPrimaryResult:
 
 
 def transport_universal_primary(kernel, source, first_store, ge2_store, *, primary_uid=0,
-        tail_budget_pe=1e-6, fallback_pack='.build/ntsim-check/ge2-pack-shower-basis-review',
+        tail_budget_pe=1e-6, fallback_pack=None,
         selection_margin=1.05, time_origin_ns=None, progress=None,
         batch_beta_charge=True, beta_cell_m=.25, first_cubature=None, ge2_beta_atlas=None, first_beta_atlas=None,
         direct_ge2_quadrature='fixed12',q1_charge_gauss_order=0,q1_charge_panel_width=1.5,

@@ -1,14 +1,13 @@
 """Numba-fused replacement for ``ResponseCache.moments_at`` / ``_contract``.
 
-``ResponseCache.moments_at`` (``cache.py:289-339``) rebuilds a
+``ResponseCache.moments_at`` rebuilds a
 ``scipy.interpolate.CubicSpline`` the first time a given ``(degree,
 frequency_index)`` key is asked for, and even once that object is cached,
 every call still evaluates it and materialises a fresh (frequency, points,
 degree, order) array. That function is the shared hot path behind four
 different routes: ``KernelChannels.multipoles`` (hence ``direct_response``
 and ``evaluate_moments``'s ``KernelChannels.channels``) and
-``cone_segment.py``'s ``_scatter``. It is the "spline" item named in the
-axial-route profiling of chapter 9, paid again by every one of them.
+``cone_segment.py``'s ``_scatter``, and every one of them pays for it.
 
 ``PreparedMultipoles`` builds the Horner coefficients of the same
 log-radius cubic spline once, over the full degree and frequency range --

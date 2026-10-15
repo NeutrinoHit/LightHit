@@ -33,7 +33,7 @@ which reduces the source to ``L+1`` channels instead of ``(L+1)^2``; keeping
 ``|m| <= M`` restores the leading azimuthal correlation at ``(2M+1)`` channels
 per degree. A shower is azimuthally symmetric in distribution but not in any
 one realisation, so ``M`` is a measurable choice rather than a matter of
-principle -- see ``scripts/compare_event_bases.py``.
+principle.
 
 Two things follow that are the point of the whole construction. The source
 needs a number of channels linear rather than quadratic in the angular degree.

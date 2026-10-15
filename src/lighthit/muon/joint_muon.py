@@ -19,7 +19,8 @@ class JointMuonConfig:
     packet-OM pairs omitted under a certified bound (``first_*``). Secondary >=2:
     point RTE sources applied in float32 batches, with predicted weak pairs omitted
     (``ge2_*``). ``first_backend='atlas'``, ``ge2_backend='basis'`` and
-    ``ge2_operator='scalar'`` select earlier research alternatives.
+    ``ge2_operator='scalar'`` select alternative implementations, not used
+    by :class:`lighthit.muon.MuonTransport`.
     """
     z_step_m: float = .5
     photon_mu_step: float = .03
@@ -434,4 +435,4 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
                      'finite source bins need response convergence',
                      '>=2 shares existing finite RTE frequency/radial/angular approximations'])
     return HybridTransportResponse(kernel.detector,omega,kernel.config.relative_time_edges_ns,
-        spectrum,components,charge,origins,active,'hybrid-joint-muon-experimental',metadata)
+        spectrum,components,charge,origins,active,'joint-muon',metadata)

@@ -1,7 +1,7 @@
 """Prompt transport: scattering orders 0 and exactly 1 without the RTE cache.
 
-Lightweight synthetic checks only; real G4/BGVD validation is in
-``scripts/prompt_benchmark.py`` (not part of the test suite).
+Lightweight synthetic checks only; measured G4/BGVD accuracy is in
+docs/accuracy.md.
 """
 from dataclasses import replace
 

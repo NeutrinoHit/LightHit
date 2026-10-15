@@ -18,7 +18,7 @@ def evaluate_secondary_first(kernel, full_source, packets, receiver_indices,
     """Return secondary Q1 charge, bins and measurements on supplied receivers.
 
     The spectral budget denominator includes all emitting original elements,
-    including the primary, exactly as in MuonFineStrategy. Each band applies
+    including the primary. Each band applies
     Cherenkov threshold before constructing the packet support sphere.
     Original coefficients go to the prompt evaluator; its spectral tables
     apply lambda^-2, wavelength quadrature, QE and detector area once.
@@ -161,7 +161,7 @@ def evaluate_secondary_first(kernel, full_source, packets, receiver_indices,
         row['charge_pe_per_om'] = row['charge_pe_per_om'].tolist()
     return q, bins, dict(cpu_s=process_time()-cpu, wall_s=perf_counter()-began,
         packets=details, wavelengths=wavelength, config=asdict(config),
-        orders=[1], first_backend='legacy-grouped', prompt_radius_m=float(radius_m),
+        orders=[1], first_backend='grouped', prompt_radius_m=float(radius_m),
         receiver_indices=ids.tolist(), order1_batch_omission=omissions.tolist(),
         compression_included_in_apply_cpu=True,
         source_representation=('original spectral secondary elements, grouped separately by packet; '
@@ -169,7 +169,7 @@ def evaluate_secondary_first(kernel, full_source, packets, receiver_indices,
                                   if fuse_bands else 'one unit per band')),
         ballistic_computed=False, primary_computed=False,
         wavelength_yield_applied_twice=False,
-        limitation='inherits legacy grouping, quadrature and empirical batch omission estimates',
+        limitation='grouping, quadrature and batch omission of the grouped prompt solver',
         **({'fused_bands': fused_row} if fuse_bands else {}),
         **({'packet_skip': skip_meta} if skip_epsilon > 0. else {}))
 

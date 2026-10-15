@@ -1,9 +1,10 @@
 """What goes into the distribution, in one place that both setup.py and a test import.
 
-The package ships the experimental modules its public engines import at
-runtime and no others. Other experimental reference, Monte-Carlo cross-check
-and research modules stay in the repository; top-level reference modules are
-not filtered.
+The package ships a fixed allowlist of experimental modules and no others:
+compatibility names of modules that moved out of ``lighthit.experimental``
+and ``muon_components``, which NTSim imports. Other experimental reference,
+Monte-Carlo cross-check and research modules stay in the repository;
+top-level modules are not filtered.
 
 Two things have to be true for that to hold, and only the first is obvious:
 
