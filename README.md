@@ -14,7 +14,7 @@ Monte-Carlo propagation; the charged particles themselves come from Geant4
 | shower (e, gamma, hadrons; nu_e CC, NC) | `lighthit.shower.ShowerTransport` | exact direct light on the G4 steps over the continuous spectrum; once-scattered light from grouped "pencils", all wavelength bands fused | axial shower basis on band-folded RTE kernels |
 | muon with its secondaries | `lighthit.muon.MuonTransport` | exact direct light; primary from finite-track atlases, secondaries grouped | atlases (primary) and point RTE sources (secondaries) |
 | several sources (nu_mu CC, bundles, lists) | `lighthit.event.EventTransport` | each source by its route | each source by its route |
-| isotropic calibration flash | `kernel.transport(IsotropicFlash)` | full directional RTE | full directional RTE |
+| isotropic calibration flash | `kernel.transport(IsotropicFlash)` | exact direct light; order 1 exact for a constant acceptance, else from the multipole table | multipole RTE table at the flash wavelength |
 
 All routes return the same response: `charge_pe` per OM (all arrival times),
 `bins_pe` per OM and bin, `components_pe` split by order, `active` (OMs above
@@ -33,7 +33,7 @@ From a checkout (development):
 
 ```bash
 python -m pip install -e '.[accelerate,viewer,test]'
-python -m pytest -q tests
+python -m pytest -q tests src/lighthit/tests
 ```
 
 The first run of each route compiles its Numba kernels (a few minutes, once
@@ -43,6 +43,18 @@ Quick-start notebook with stored output: `notebooks/lighthit-standalone.ipynb`
 (the example of section 1, then Baikal-GVD with the internal data bundle
 `lighthit-bgvd-data`). For NTSim see `examples/LightHit/lighthit-in-ntsim.ipynb`
 in the NTSim repository.
+
+## Documentation
+
+`docs/` describes the code as it is, module by module (not shipped on PyPI):
+`docs/README.md` (map and layers), `transport-kernel.md`, `shower-route.md`,
+`muon-route.md`, `event-and-laser.md`, `sources-and-models.md`, `viewer.md`,
+`experimental.md` (status of every experimental module), `accuracy.md`
+(measured accuracy and what the tests check), `known-issues.md`.
+
+All event routes need sources with `cone_model="spectral"` (a separate cone
+for every wavelength band); the source classes default to `"frozen"`, hence the
+`replace(..., cone_model="spectral")` in the examples.
 
 ## 1. A complete example with public inputs
 
@@ -80,8 +92,8 @@ def shower_at(offset, direction, seed):
 first = shower_at([-12.0, 8.0, 0.0], [0.35, -0.15, 0.925], seed=7)
 second = shower_at([20.0, -15.0, 30.0], [-0.30, 0.20, 0.93], seed=8)
 
-# Once: the RTE cache and the >=2 kernel pack (reused by every later event).
-kernel.build(source=first)
+# Once: the RTE tables and the >=2 kernel pack (reused by every later event).
+kernel.build(source=first)                   # builds the pack too (cache_directory is set)
 kernel.ge2_kernel_store().save("demo-cache/ge2-pack")
 data = ShowerData.of("demo-cache", "demo-cache/ge2-pack")
 
@@ -131,50 +143,49 @@ command-line tool.
 
 ### Inputs
 
-* **Medium and detector.** `lh.load_bgvd_model(path, dataset="2021")` reads
-  the water, OM response and geometry from the separately supplied
-  `bgvd-model` package (not distributed). Inside NTSim the same objects come
-  from `ntsim.LightTransport.bgvd_model_from_ntsim` (section 3).
-  `model.save("bgvd-model.npz")` stores a loaded model in one file (arrays and
-  response tables, no code) and `lh.load_model("bgvd-model.npz")` reads it back
-  without the package; the internal data bundle `lighthit-bgvd-data` ships its
-  model this way (`model/bgvd-model.npz`).
+* **Medium and detector.** `lh.load_model("bgvd-model.npz")` reads a stored
+  model: water, OM response and geometry. The internal data bundle
+  `lighthit-bgvd-data` ships the five-cluster model NTSim uses
+  (`model/bgvd-model.npz`). `lh.load_bgvd_model(path, dataset="2021")` reads
+  the private `bgvd-model` package directly; `model.save(path)` stores a loaded
+  model. Inside NTSim the same objects come from
+  `ntsim.LightTransport.bgvd_model_from_ntsim` (section 3).
 * **Charged steps.** `lh.SpectralLightElements` (start, direction, chord and
   true length, beta, times, UID per step) or `lh.G4Shower.from_hdf5`.
 * **Prepared tables**, built once per medium and OM response and reused: the
-  RTE cache (65 frequencies to 1.2 rad/ns, 9 wavelengths), the >=2 kernel
-  pack and, for muons, the primary-track atlases. A manifest next to the cache
-  lists them: `shower-data.json` (`rte_cache`, `ge2_pack`) or
-  `muon-data.json` (those plus the muon atlases), so the routes find them from
-  the kernel alone. The muon atlases are prepared by the LightHit research
-  pipeline and supplied together with the tables.
-* **Tables follow the physics, not the labels.** A table is found by the
-  water coefficients at its wavelength, `g`, the solver settings and the grid;
-  provenance strings play no part. The bundle's tables therefore serve
-  `load_model`, `load_bgvd_model` and NTSim's model alike. Tables written by
-  0.3.0a1 (whose names included the provenance) are still read: by their old
-  name, or by the coefficients stored inside them. The laser table also
-  depends on the detector extent (its radial range), so it is shared only
-  between models with the same geometry.
+  RTE tables (65 frequencies to 1.2 rad/ns, 9 wavelengths), the >=2 kernel pack
+  and, for muons, five atlases of the primary track. A manifest next to the
+  cache lists them (`shower-data.json`: `rte_cache`, `ge2_pack`;
+  `muon-data.json`: those plus the atlases), so the routes find them from the
+  kernel alone. The atlases come with the data bundle; their build functions
+  are in `lighthit.muon` (see `docs/muon-route.md`).
+* **Tables follow the physics, not the labels.** A table is found by the water
+  coefficients at its wavelength, `g`, the solver settings and the grid, so
+  the bundle's tables serve `load_model`, `load_bgvd_model` and NTSim's model
+  alike. The laser table also depends on the detector extent.
 
 ```python
-import json
+import os
+from pathlib import Path
 import numpy as np
 import lighthit as lh
 
-model = lh.load_bgvd_model("bgvd-model/bgvd_model", dataset="2021")
+DATA = Path(os.environ["LIGHTHIT_DATA"])          # the unpacked lighthit-bgvd-data
+model = lh.load_model(DATA / "model" / "bgvd-model.npz")
 config = lh.KernelConfig(
     omega_per_ns=np.linspace(0.0, 1.2, 65),
     readout_omega_per_ns=np.linspace(0.0, 1.2, 321),
     relative_time_edges_ns=np.arange(-60.0, 745.0, 5.0),
-    cache_directory="tables/lighthit-cache", cache_policy="require")
+    cache_directory=DATA / "tables" / "rte-cache", cache_policy="require")
 kernel = model.kernel(config)
 
-# Once (tens of minutes): build with cache_policy="build", then save the >=2
-# pack and the manifest. Every event job afterwards uses cache_policy="require".
-#   kernel.build(source=some_shower)
+# Tables for another medium or OM response (tens of minutes, once; with
+# `import json` and `from dataclasses import replace`):
+#   kernel = model.kernel(replace(config, cache_directory="tables/rte-cache",
+#                                 cache_policy="build"))
+#   kernel.build(source=some_shower)                      # RTE tables + >=2 pack
 #   kernel.ge2_kernel_store().save("tables/ge2-pack")
-#   json.dump({"rte_cache": "lighthit-cache", "ge2_pack": "ge2-pack"},
+#   json.dump({"rte_cache": "rte-cache", "ge2_pack": "ge2-pack"},
 #             open("tables/shower-data.json", "w"))
 ```
 
@@ -185,7 +196,8 @@ from dataclasses import replace
 from lighthit.shower import ShowerTransport
 
 phase_max = float(np.max(kernel.medium.sample(kernel.wavelength.wavelength_nm)["phase_index"]))
-g4 = lh.G4Shower.from_hdf5("sim_e_100GeV_10.h5", event=5, reference_phase_index=phase_max)
+g4 = lh.G4Shower.from_hdf5(DATA / "events" / "geant4-electron-100GeV.h5", event=5,
+                           reference_phase_index=phase_max)
 electron = replace(g4.elements, cone_model="spectral").placed(
     lh.SourcePose(position_m=[5.0, -269.5, 330.0], direction=[0.35, -0.20, 0.915]))
 
@@ -207,10 +219,10 @@ which step descends from which first-generation secondary of the muon
 `ntsim.LightTransport.LightHitTransport.muon_ancestry`.
 
 ```python
-with np.load("muon1000.npz") as f:
+with np.load(DATA / "events" / "muon-1TeV-steps.npz") as f:
     muon_steps = lh.SpectralLightElements(**{k: f[k] for k in f.files if k != "metadata"},
                                           cone_model="spectral")
-with np.load("muon1000-ancestry.npz") as f:
+with np.load(DATA / "events" / "muon-1TeV-ancestry.npz") as f:
     ancestry = {k: f[k] for k in f.files}
 
 muon = lh.MuonTransport(kernel)    # tables from muon-data.json next to the cache
@@ -234,15 +246,17 @@ for part in response.metadata["event_components"]:  # per-source summary
 
 ### Calibration laser
 
-An isotropic monochromatic point flash, all orders through the directional
-RTE. It needs its own point-source cache for that wavelength (built once;
-slow for the full array):
+An isotropic monochromatic point flash, here between clusters 1, 2 and 4.
+It uses a multipole table at its own wavelength on a kernel whose radial range
+covers the detector (`laser_kernel`); the bundle has the 532 nm table, another
+wavelength needs `laser.build(source=flash)` once (about a minute):
 
 ```python
 from lighthit.event import laser_kernel
 
-laser = laser_kernel(model.medium, model.detector, cache_directory="tables/laser-cache",
-                     omega_per_ns=np.linspace(0.0, 1.2, 321), cache_policy="build")
+laser = laser_kernel(model.medium, model.detector,
+                     cache_directory=DATA / "tables" / "laser-cache", bin_ns=5.0,
+                     omega_per_ns=np.linspace(0.0, 1.2, 321), cache_policy="require")
 flash = lh.IsotropicFlash.monochromatic([-62.0, -385.0, 361.0], 1e15, 532.0)
 response = EventTransport(kernel, laser_kernel=laser)(flash)
 ```
@@ -425,40 +439,23 @@ source.
 
 ## Accuracy and speed
 
-Measured on NTSim/Geant4 events in five Baikal-GVD clusters (1440 OMs), one
-CPU thread, after compilation. Errors are relative to calculations on the
-original G4 steps or to a finer source basis, not to photon Monte Carlo.
-
-| Event | Time | Previous route |
-|---|---:|---:|
-| electron 100 GeV | 5.5–6.4 s | 25–26 s |
-| electron 1 TeV | 42 s | 105 s |
-| pi+ 100 GeV | 21 s | — |
-| nu_e CC (e 70 + pi 25 + p 5 GeV) | 14 s | — |
-| muon 100 GeV / 1 TeV | 11 / 10 s | — |
-| nu_mu CC (mu 800 + pi 150 + p 50 GeV) | 73 s | — |
-
-* Direct light is exact on the G4 steps over the continuous spectrum. The
-  earlier nine-wavelength quadrature underestimated it by about 9% for showers
-  (up to 100% on single OMs), because a millimetre step is seen only on its
-  Cherenkov cone.
-* Once-scattered light (grouped) against original-step integration: bin L1
-  at most 3.3% (100 GeV) and 3.1% (1 TeV), charge bias below 0.6%. This is the
-  largest numerical error of the shower calculation.
-* Order >=2 against a finer basis: at most 0.15% bin L1 on 100 GeV electrons,
-  0.4% at 1 TeV and 1% on a hadronic shower.
-* Hadronic showers emit about 3% of their light 50 ns to milliseconds late
-  (neutron captures, decays). That light is read on its own shifted clock, or
-  counted only in the charge when it cannot reach the readout window.
+Measured during development on Geant4 events in five Baikal-GVD clusters
+(1440 OMs), one CPU thread: a 100 GeV electron in about 6 s, 1 TeV in 42 s, a
+1 TeV muon in 10 s, a nu_mu CC event in 73 s. Order 0 is exact on the Geant4
+steps; the largest numerical error is the grouped order 1 (at most about 3%
+bin L1 against original-step integration). Against NTSim's photon Monte Carlo
+on one 100 GeV electron: LightHit 5.89 pe in about 6 s; three Monte-Carlo runs
+5.48-5.86 pe (+- 0.23 statistical each) in about 320 s. Details, and what the tests check: `docs/accuracy.md`.
 
 ## Limitations
 
 * Point OMs in a homogeneous medium with an HG phase function: no
   boundaries, shadowing, electronics, noise or trigger.
 * The muon route refuses a primary-track piece whose line passes within 3 m
-  of an OM, which happens at the scattered end of stopping muons; such a muon
-  is then transported by the shower route (`route_fallbacks`), correctly but
-  more slowly.
+  of an OM, which happens at the scattered end of stopping muons.
+  `EventTransport` (and NTSim) then transports that muon by the shower route
+  (`route_fallbacks`), correctly but more slowly; `MuonTransport` called
+  directly raises.
 * The laser is an isotropic flash; a collimated beam or a measured diffuser
   pattern is not represented.
 * Tables (RTE cache, >=2 pack, muon atlases) belong to one medium and OM
@@ -469,7 +466,7 @@ original G4 steps or to a finer source basis, not to photon Monte Carlo.
 The version is defined only in `src/lighthit/_version.py`.
 
 ```bash
-python -m pytest -q tests
+python -m pytest -q tests src/lighthit/tests
 LH_VERSION="$(python -c 'from lighthit._version import VERSION; print(VERSION)')"
 rm -rf dist build
 python -m build --sdist --wheel --outdir dist
