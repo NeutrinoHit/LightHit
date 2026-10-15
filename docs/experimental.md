@@ -49,7 +49,7 @@ Many tests still import through these names.
 | `joint_first`, `joint_first_atlas` | one-scatter CDF and its universal atlas (`JointMuonConfig(first_backend="atlas")`) | superseded (default `first_backend="grouped"`) | test_joint_first, test_joint_first_atlas |
 | `prompt_backward` | backward next-event Monte Carlo for one scattering | reference; no caller | test_prompt |
 | `local_source_rank` | low-rank diagnosis of source coefficients | unused | test_local_source_rank |
-| `spectral_response_basis` | positive empirical wavelength cubature | unused | test_spectral_response_basis |
+| `spectral_response_basis` | positive empirical wavelength cubature | used to build the beta < 1 order-1 table of the muon route (the learned cubature behind `primary_first_beta`); no runtime caller | test_spectral_response_basis |
 | `stationary_pencils` | all-time first-scattering charge of grouped pencils | unused | test_stationary_pencils |
 | `axial_blocked` | numpy reordered axial apply | unused, untested | none |
 
@@ -59,7 +59,7 @@ Unused or superseded and not needed by NTSim: `axial_blocked`,
 `ballistic_spectral`, `charge_preview` with `detector_tree`, `smart_muon`,
 `primary_prompt`, `joint_first`, `joint_first_atlas` (with the `atlas` option
 of `JointMuonConfig` and its parameters), `local_source_rank`,
-`spectral_response_basis`, `stationary_pencils`, `signal_screen`,
+`stationary_pencils`, `signal_screen`,
 `spline_fast`; and the 20 `lighthit.muon` aliases once the tests import the new
 names. The Monte-Carlo and coordinate-space references (`crossing_mc`,
 `shell_mc`, `stationary_modes`, `segment_reference`, `directional_reference`,
