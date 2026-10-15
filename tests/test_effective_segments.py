@@ -98,11 +98,8 @@ def test_narrow_track_error_shrinks_as_segments_grow(elements, cache):
 
 
 def test_ballistic_column_is_exact_and_independent_of_segment_count(elements, cache):
-    import sys
-    from pathlib import Path
+    from lighthit.experimental.effective_segments import vectorised_ballistic as reference_ballistic
     medium = synthetic_medium()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-    from run_shower_moments import vectorised_ballistic as reference_ballistic
     exact = reference_ballistic(elements, RECEIVERS, medium, elements.cone_cosine)
     for k in (1, 8):
         effective = fit_effective_segments(elements, k)

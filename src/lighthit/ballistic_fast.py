@@ -1,14 +1,10 @@
 """Numba-fused unscattered (ballistic) response -- same closed form, no arrays.
 
-``scripts/run_shower_moments.py::vectorised_ballistic`` already evaluates the
-exact, closed-form order-0 term of @eq-ballistic-fluence -- no cache lookup,
-no angular sum, one root per (element, receiver) pair. But it is still written
-as a numpy reduction over all elements *per receiver*, which means every one
-of ``along``, ``impact``, ``root``, ``distance`` and ``weight`` is a full
-221 393-long array, allocated and read back from RAM, 576 times over. That is
-the same memory-bound pattern diagnosed for the scattered orders -- just with
-nothing to interpolate, so there is no reason for it to cost more than a
-handful of flops per pair.
+``lighthit.experimental.effective_segments.vectorised_ballistic`` already evaluates the
+exact, closed-form order-0 fluence of straight radiating elements -- no
+cache lookup, no angular sum, one root per (element, receiver) pair -- as a
+numpy reduction over all elements *per receiver*, which allocates and reads
+back several element-length arrays for every receiver.
 
 This module is that formula as one fused loop: the running sum for a receiver
 lives in a scalar accumulator, nothing indexed by (element, receiver) is ever
@@ -31,7 +27,7 @@ except ImportError as exc:  # pragma: no cover - exercised only without numba
     raise ImportError(
         "ballistic_fast needs numba (pip install 'lighthit[accelerate]'); "
         "the uncompiled formula lives in "
-        "scripts/run_shower_moments.py:vectorised_ballistic"
+        "lighthit.experimental.effective_segments.vectorised_ballistic"
     ) from exc
 
 __all__ = ["vectorised_ballistic_fast", "vectorised_ballistic_bins_fast",
@@ -144,7 +140,7 @@ def vectorised_ballistic_fast(elements, receivers, medium, cone_cosine):
     """Drop-in, numba-fused replacement for ``vectorised_ballistic``.
 
     Same signature, same return (one real number per receiver, the ballistic
-    charge of @eq-ballistic-fluence summed over every element). Verified
+    charge of every element summed). Verified
     against the numpy version to float64 precision on synthetic data in
     ``tests/test_ballistic_fast.py``.
     """

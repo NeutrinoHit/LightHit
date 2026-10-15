@@ -12,8 +12,8 @@ from lighthit.experimental.ballistic_fast import (vectorised_ballistic_fast,
 
 def _reference_ballistic(elements, receivers, medium, cone_cosine):
     """The numpy formula this module replaces, kept local so the test does
-    not depend on importing a script (@eq-ballistic-fluence, as written in
-    ``scripts/run_shower_moments.py::vectorised_ballistic``)."""
+    not depend on another module (the same formula as
+    ``lighthit.experimental.effective_segments.vectorised_ballistic``)."""
     total = np.zeros(len(receivers))
     sine = np.sqrt(np.maximum(1 - cone_cosine ** 2, 0.0))
     for index, receiver in enumerate(receivers):

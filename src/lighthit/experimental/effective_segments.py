@@ -1,11 +1,11 @@
 """Method 7: fit a stored shower to a chosen number of straight segments.
 
-@sec-cone-segment already has an exact closed form for one straight Cherenkov
+``cone_segment`` already has an exact closed form for one straight Cherenkov
 segment -- ballistic in closed form, orders 1 and >=2 by a short Gauss
 quadrature against the cached multipoles, both cheap because there is only
 one track and a handful of receivers to serve. The question this module
 answers is what happens when that machinery is asked to stand in for a real,
-curved, 221 393-element shower: how many straight pieces does it take, and
+curved shower of many thousand elements: how many straight pieces does it take, and
 what does each extra piece cost against what it buys.
 
 The shower is cut along its own photon-weighted axis (:class:`AxisFrame`,
@@ -183,7 +183,7 @@ def effective_segment_response(cache, effective, receivers_m, *, longitudinal_or
     Returns ``(frequency, receiver, 3)``: ballistic, finite-L order 1,
     order >=2 -- the same three columns :func:`segment_spectrum` returns for
     one segment, because the response is linear in the source and this is
-    exactly the superposition @sec-segment-event already checks (rotating,
+    exactly the superposition ``tests/test_segment_event.py`` checks (rotating,
     translating, delaying and splitting a segment all recover the whole).
     """
     receivers = np.atleast_2d(np.asarray(receivers_m, float))
@@ -201,7 +201,7 @@ def full_response(cache, elements, medium, effective, receivers_m, *,
     """The response this method should actually be used for.
 
     Column 0 (ballistic) is *not* taken from the segment fit: it is the
-    exact per-element closed form of @eq-ballistic-fluence, computed on the
+    exact per-element closed form, computed on the
     real elements directly (``ballistic_fast.vectorised_ballistic_fast`` if
     numba is available, else the numpy ``vectorised_ballistic``). Measured
     directly (see ``fit_effective_segments`` and the accompanying tests): a
@@ -225,11 +225,31 @@ def full_response(cache, elements, medium, effective, receivers_m, *,
         try:
             from ..ballistic_fast import vectorised_ballistic_fast as _ballistic
         except ImportError:
-            import sys
-            from pathlib import Path
-            sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
-            from run_shower_moments import vectorised_ballistic as _ballistic
+            _ballistic = vectorised_ballistic
         ballistic = _ballistic(elements, receivers, medium, elements.cone_cosine)
     out = scattered.copy()
     out[:, :, 0] = ballistic[None, :]
     return out
+
+
+def vectorised_ballistic(elements, receivers, medium, cone_cosine):
+    """Unscattered (order 0) sum over all elements, plain numpy reference.
+
+    ``lighthit.ballistic_fast.vectorised_ballistic_fast`` is the fused Numba
+    version of the same closed form and is checked against this function.
+    """
+    total = np.zeros(len(receivers))
+    sine = np.sqrt(np.maximum(1 - cone_cosine ** 2, 0.0))
+    for index, receiver in enumerate(receivers):
+        relative = receiver[None, :] - elements.start_m
+        along = np.einsum("ij,ij->i", relative, elements.direction)
+        impact = np.sqrt(np.maximum(np.einsum("ij,ij->i", relative, relative)
+                                    - along ** 2, 1e-300))
+        root = along - impact * cone_cosine / sine
+        distance = impact / sine
+        lit = (root >= 0) & (root < elements.length_m)
+        weight = np.where(lit, elements.photons / np.maximum(elements.length_m, 1e-300)
+                          * np.exp(-medium.extinction_per_m * distance)
+                          / (2 * np.pi * impact * sine), 0.0)
+        total[index] = weight.sum()
+    return total
