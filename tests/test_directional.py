@@ -536,7 +536,8 @@ def test_build_makes_only_the_tables_the_method_will_read(tmp_path):
     assert directional.cache_kinds("isotropic") == ("multipole",)
     assert directional.cache_kinds("all") == ("multipole", "directional")
     directional.build()
-    assert len(directional._directional_caches) == 2
+    # the tables are on disk; the >=2 pack built from them holds their >=2 part
+    assert len(directional.ge2_kernel_store()) == 1
     assert directional._caches == {}
     assert not list(tmp_path.glob("transport-*.npz"))
     assert len(list(tmp_path.glob("directional-*.npz"))) == 2
@@ -550,7 +551,7 @@ def test_build_makes_only_the_tables_the_method_will_read(tmp_path):
 
     both = directional_kernel(tmp_path)
     both.build(method="all")
-    assert len(both._caches) == 2 and len(both._directional_caches) == 2
+    assert len(both._caches) == 2 and len(both.ge2_kernel_store()) == 1
 
     # a source resolves the choice exactly rather than by guessing
     flash = directional_kernel(tmp_path)

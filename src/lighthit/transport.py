@@ -753,7 +753,7 @@ class TransportKernel:
         return self.wavelength.wavelength_nm
 
     def build(self, wavelengths_nm=None, *, method="auto", source=None,
-              force=False, progress=None):
+              force=False, progress=None, ge2=True):
         """Build the tables ``method`` needs, at the wavelengths it will read.
 
         ``method="auto"`` builds what an element source would use on this
@@ -763,6 +763,13 @@ class TransportKernel:
         instead of guessing, ``method="isotropic"`` before a flash, or
         ``method="all"`` for both tables. An explicit ``wavelengths_nm``
         overrides what ``source`` would have chosen.
+
+        When the directional tables of every kernel wavelength are built, the
+        kernel has a ``cache_directory`` and ``ge2`` is true, the order >=2
+        kernel pack over all frequencies is prepared too
+        (``ge2_kernel_store()``), so that ``ge2_kernel_store().save(path)``
+        writes a complete pack. The directional tables then stay on disk and
+        leave memory; the pack holds their order >=2 part.
 
         Building the multipole table and then transporting with the directional
         kernel was doing the expensive half of the work twice; so was building
@@ -796,6 +803,12 @@ class TransportKernel:
                     float(wavelength), force=force, progress=reporter,
                     allow_build=True, entries=entries)
         self.last_build_report = CacheBuildReport(tuple(entries))
+        if ge2 and self.config.cache_directory is not None and "directional" in kinds and np.array_equal(
+                np.unique(wavelengths), np.unique(self.wavelength.wavelength_nm)):
+            # The order >=2 pack over every frequency; routes take their
+            # frequency subsets from it, and ge2_kernel_store().save() writes it.
+            self.ge2_kernel_store().bundle(
+                self, np.arange(len(self.config.omega_per_ns)))
         self._write_cache_manifest(
             method=method, kinds=kinds, wavelengths=wavelengths,
             report=self.last_build_report)

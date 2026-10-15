@@ -1,7 +1,6 @@
 """Shower route (lighthit.shower) and band-folded order >=2 kernels.
 
-Synthetic inputs only; the G4/BGVD controls are in
-README.md (Accuracy).
+Synthetic inputs only; measured G4/BGVD accuracy is in docs/accuracy.md.
 """
 from dataclasses import replace
 
@@ -185,3 +184,28 @@ def test_delayed_copy_is_the_same_light_on_a_shifted_clock(kernel4):
     np.testing.assert_allclose(copy[:, 50:], alone.components_pe[:, :-50, 2], rtol=1e-9,
                                atol=1e-12 * scale)
     assert np.max(np.abs(pair.components_pe[:, :, 2] - expected)) <= 1e-6 * scale
+
+
+def test_build_prepares_a_saveable_ge2_pack(tmp_path):
+    """build() fills the >=2 pack, so the saved pack is complete and reusable."""
+    from lighthit.shower_basis import Ge2KernelStore
+
+    def kernel():
+        return lh.TransportKernel(
+            spectral_medium(), detector(count=5),
+            config(tmp_path / "cache", wavelength_nodes=4, omega_per_ns=np.linspace(0., 1.2, 9),
+                   scattering_degree=4, source_degree=4, azimuthal_degree=2,
+                   radial_nodes=16, threshold_pe=0.0))
+
+    source = shower()
+    built = kernel().build(source=source)
+    assert len(built.ge2_kernel_store()) == 1
+    built.ge2_kernel_store().save(tmp_path / "pack")
+    loaded = Ge2KernelStore.load(tmp_path / "pack")
+    assert len(loaded) == 1
+    settings = ShowerConfig(frequency_nodes=9)
+    first = transport_shower(built, source, config=settings)
+    again = transport_shower(kernel(), source, config=settings, store=loaded)
+    np.testing.assert_allclose(again.bins_pe, first.bins_pe, rtol=1e-12, atol=1e-15)
+    flash = lh.IsotropicFlash.monochromatic([12., 3., 0.], 1e6, 450.)
+    assert len(kernel().build(source=flash).ge2_kernel_store()) == 0   # one line: no pack
