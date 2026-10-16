@@ -895,6 +895,57 @@ def test_element_algorithms_agree_on_a_small_shower(tmp_path):
                                   segment.charge_orders_pe[:, 0])
 
 
+PENCIL_FIELDS = ("position", "direction", "w0", "w2", "time", "major",
+                 "var_major", "var_minor", "pos_cov")
+
+
+def test_compression_does_not_depend_on_its_cell_ranges(monkeypatch):
+    from lighthit import prompt
+    elements = lh.SyntheticShower.gaussian(
+        lh.SourcePose([12., 3., 0.], [0.3, 0.2, 0.93], 0.),
+        charged_track_length_m=20., elements=400, seed=5).elements
+    segments = prompt._element_segments(elements)
+    settings = PromptConfig(pixel_face=16, ring_nodes=48)
+    whole = prompt.compress(elements, segments, settings)
+    # one cell per range at most: many ranges, run in parallel
+    monkeypatch.setattr(prompt, "_COMPRESS_RANGE_NODES", settings.ring_nodes)
+    split = prompt.compress(elements, segments, settings)
+    for name in PENCIL_FIELDS:
+        np.testing.assert_array_equal(split[name], whole[name])
+    # a single table filled in element order gives the same pencils
+    start = np.ascontiguousarray(elements.start_m, float)
+    direction = np.ascontiguousarray(elements.direction, float)
+    length = np.asarray(elements.length_m, float)
+    ends = start + length[:, None] * direction
+    origin = np.minimum(start.min(0), ends.min(0)) - settings.cell_m
+    high = np.maximum(start.max(0), ends.max(0)) + settings.cell_m
+    dims = np.ceil((high - origin) / settings.cell_m).astype(np.int64) + 1
+    arrays = (start, direction, length, np.asarray(elements.coefficient0, float),
+              np.asarray(elements.coefficient2, float), np.asarray(segments.cone, float),
+              np.asarray(elements.start_ns, float), np.asarray(elements.end_ns, float))
+    a_step = 0.5 * settings.cell_m
+    _, element, sub = kernels.subsegment_cells(start, direction, length, arrays[6], arrays[7],
+                                               settings.cell_m, a_step, origin, dims)
+    keys, rows = kernels.compress_subsegments(
+        *arrays, settings.cell_m, settings.pixel_face, settings.ring_nodes, a_step, origin,
+        dims, element, sub, 1 << 16)
+    single = kernels.finish_pencils(keys, rows, np.argsort(keys))
+    for name, value in zip(PENCIL_FIELDS, single):
+        np.testing.assert_array_equal(whole[name], value)
+    assert np.sum(whole["w0"]) == pytest.approx(np.sum(elements.coefficient0), rel=1e-12)
+
+
+def test_grouped_blocks_keep_their_scratch_within_the_budget(monkeypatch):
+    from lighthit import prompt
+    monkeypatch.setattr(prompt, "_thread_count", lambda: 8)
+    assert prompt._grouped_blocks(100, 1000) == prompt._blocks(100)
+    pencils = 3_000_000
+    blocks = prompt._grouped_blocks(100, pencils)
+    assert 1 <= blocks < 8
+    assert blocks * prompt._GROUPED_BYTES_PER_PENCIL * pencils <= prompt._GROUPED_SCRATCH_BYTES
+    assert prompt._grouped_blocks(100, 10 ** 9) == 1
+
+
 def graded_nodes(low, high, count, power=3):
     """Gauss-Legendre in t with x = low + (high-low) t^power: graded at low."""
     t, w = np.polynomial.legendre.leggauss(count)

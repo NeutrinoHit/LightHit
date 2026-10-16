@@ -50,6 +50,12 @@ from .sources import (CherenkovTrack, G4Shower, SpectralLightElements,
                       SyntheticShower)
 
 C_M_PER_NS = 0.299792458
+#: Ring nodes deposited per compression range (bounds its hash table).
+_COMPRESS_RANGE_NODES = 1 << 18
+#: Private scratch per pencil of one grouped receiver block, and the bound
+#: on the scratch of the blocks running at once.
+_GROUPED_BYTES_PER_PENCIL = 160
+_GROUPED_SCRATCH_BYTES = 1 << 30
 
 __all__ = ["PromptConfig", "PromptTransportResponse", "PromptComponent",
            "transport_prompt", "OrderNotComputedError"]
@@ -920,7 +926,7 @@ def _jit_state():
     except ImportError:  # pragma: no cover
         return False
     names = ("segment_order1", "grouped_pencils_order1", "rings_order1",
-             "compress_elements")
+             "compress_subsegments")
     return {name: bool(getattr(getattr(numba_kernels, name), "signatures", ())) for name in names}
 
 
@@ -1083,7 +1089,7 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             common["direct_bins"], int(config.max_path_nodes),
             float(config.smoothing_factor), float(merge[0]), float(merge[1]),
             float(merge[2]), float(merge[3]), float(np.max(tables["speed"])),
-            _blocks(len(targets)), compute_bins,
+            _grouped_blocks(len(targets), len(pencils["w0"])), compute_bins,
             float(config.batch_charge_tolerance_pe), omission)
         return (*result, omission)
 
@@ -1215,6 +1221,25 @@ def _blocks(count):
     return int(max(1, min(count, 4 * threads)))
 
 
+def _grouped_blocks(count, pencils):
+    """Receiver blocks of the grouped kernel, limited by their private scratch.
+
+    Every running block holds about ``_GROUPED_BYTES_PER_PENCIL`` bytes per
+    pencil (geometry, keys, shape and look tables); with many pencils fewer
+    blocks run so that together they stay within ``_GROUPED_SCRATCH_BYTES``.
+    Each OM is still computed by one block.
+    """
+    blocks = _blocks(count)
+    try:
+        threads = _thread_count()
+    except ImportError:  # pragma: no cover
+        threads = 1
+    per_block = _GROUPED_BYTES_PER_PENCIL * max(1, int(pencils))
+    if min(blocks, threads) * per_block > _GROUPED_SCRATCH_BYTES:
+        blocks = max(1, _GROUPED_SCRATCH_BYTES // per_block)
+    return int(blocks)
+
+
 def compress(elements, segments, config):
     """Stage A: rings of all elements -> (cell, pixel) pencils with moments."""
     from . import _prompt_numba as kernels
@@ -1228,33 +1253,62 @@ def compress(elements, segments, config):
     if float(np.prod(dims.astype(float))) * pixels >= 2.0 ** 62:
         raise ValueError("cell grid too large for 64-bit pencil keys; increase cell_m")
     origin = low
-    arrays = (start, np.ascontiguousarray(elements.direction, float),
-              np.asarray(elements.length_m, float),
+    directions = np.ascontiguousarray(elements.direction, float)
+    length = np.asarray(elements.length_m, float)
+    start_ns = np.asarray(elements.start_ns, float)
+    end_ns = np.asarray(elements.end_ns, float)
+    arrays = (start, directions, length,
               np.asarray(elements.coefficient0, float),
               np.asarray(elements.coefficient2, float),
-              np.asarray(segments.cone, float), np.asarray(elements.start_ns, float),
-              np.asarray(elements.end_ns, float))
-    count = len(start)
-    chunks = max(1, min(_thread_count() * 2, count // 2000 + 1))
-    bounds = np.linspace(0, count, chunks + 1).astype(int)
+              np.asarray(segments.cone, float), start_ns, end_ns)
+    cell_m, a_step = float(config.cell_m), 0.5 * float(config.cell_m)
+    ring_nodes = int(config.ring_nodes)
+    # Pencils never span two position cells. Sub-segments sorted by cell are
+    # cut into ranges of whole cells, so every range holds only its own
+    # pencils: memory stays near the final pencil table, and each pencil sums
+    # its ring nodes in element order whatever the ranges and thread count.
+    cells, element, sub = kernels.subsegment_cells(
+        start, directions, length, start_ns, end_ns, cell_m, a_step, origin, dims)
+    order = np.argsort(cells, kind="stable")
+    cells, element, sub = cells[order], element[order], sub[order]
+    del order
+    runs = np.flatnonzero(np.r_[True, cells[1:] != cells[:-1]])
+    per_range = max(1, _COMPRESS_RANGE_NODES // ring_nodes)
+    cuts = [0]
+    while cuts[-1] < len(cells):
+        target = cuts[-1] + per_range
+        if target >= len(cells):
+            cuts.append(len(cells))
+            break
+        cut = int(runs[np.searchsorted(runs, target, side="right") - 1])
+        if cut <= cuts[-1]:
+            # one cell holds more than a range: keep it whole
+            after = int(np.searchsorted(runs, cuts[-1], side="right"))
+            cut = int(runs[after]) if after < len(runs) else len(cells)
+        cuts.append(cut)
+    del cells, runs
 
     def run(index):
-        return kernels.compress_elements(
-            *arrays, float(config.cell_m), int(config.pixel_face),
-            int(config.ring_nodes), 0.5 * float(config.cell_m), origin, dims,
-            int(bounds[index]), int(bounds[index + 1]))
+        chosen = slice(cuts[index], cuts[index + 1])
+        nodes = (cuts[index + 1] - cuts[index]) * ring_nodes
+        keys, rows = kernels.compress_subsegments(
+            *arrays, cell_m, int(config.pixel_face), ring_nodes, a_step, origin, dims,
+            element[chosen], sub[chosen],
+            1 << int(min(16, max(10, np.ceil(np.log2(2 * nodes + 2))))))
+        return kernels.finish_pencils(keys, rows, np.argsort(keys))
 
-    if chunks == 1:
+    ranges = len(cuts) - 1
+    if ranges == 0:
+        parts = [kernels.finish_pencils(np.zeros(0, np.int64), np.zeros(
+            (0, kernels.N_PENCIL_MOMENTS)), np.zeros(0, np.int64))]
+    elif ranges == 1:
         parts = [run(0)]
     else:
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=_thread_count()) as pool:
-            parts = list(pool.map(run, range(chunks)))
-    keys = np.concatenate([part[0] for part in parts])
-    rows = np.concatenate([part[1] for part in parts])
-    order = np.argsort(keys, kind="stable")
+        with ThreadPoolExecutor(max_workers=min(_thread_count(), ranges)) as pool:
+            parts = list(pool.map(run, range(ranges)))
     (position, direction, w0, w2, time, major, var_major, var_minor,
-     pos_cov) = kernels.finish_pencils(keys, rows, order)
+     pos_cov) = (np.concatenate(column) for column in zip(*parts))
     n_a = np.maximum(1, np.ceil(np.asarray(elements.length_m) / (0.5 * config.cell_m)))
     return {"position": position, "direction": direction, "w0": w0, "w2": w2,
             "time": time, "major": major, "var_major": var_major,

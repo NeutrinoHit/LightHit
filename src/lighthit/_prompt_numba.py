@@ -1072,21 +1072,68 @@ def _grow(keys, values, used):
 N_PENCIL_MOMENTS = 23  # w0 w2 wx wy wz wt wsx wsy wsz wxx wtt sxx syy szz sxy sxz syz xx yy zz xy xz yz
 
 
-@njit(cache=True, nogil=True)
-def compress_elements(start, direction, length, c0, c2, cone_cos, start_ns,
-                      end_ns, cell_m, n_face, ring_nodes, a_step, origin_m, dims,
-                      first, stop):
-    """Deposit every element's Cherenkov ring into (cell, direction pixel) bins.
+@njit(cache=True, nogil=True, inline="always")
+def _subsegment_point(start, direction, length, start_ns, end_ns, i, ia, n_a):
+    """Centre and time of sub-segment ``ia`` of the ``n_a`` of element ``i``."""
+    frac = (ia + 0.5) / n_a
+    px = start[i, 0] + frac * length[i] * direction[i, 0]
+    py = start[i, 1] + frac * length[i] * direction[i, 1]
+    pz = start[i, 2] + frac * length[i] * direction[i, 2]
+    t = start_ns[i] + frac * (end_ns[i] - start_ns[i])
+    return px, py, pz, t
 
-    Each element is split into ``ceil(length / a_step)`` sub-segments; each
-    sub-segment's cone is sampled with ``ring_nodes`` azimuths (a per-element
-    golden-ratio phase offset avoids aliasing between elements).  Every node
-    carries ``c / (n_a ring_nodes)`` of both spectral fields and is added to
-    the bin of its position cell and direction pixel.  Returns the moment
-    table (``N_PENCIL_MOMENTS`` columns) of the occupied bins and their keys,
-    for the elements ``first <= i < stop`` (chunks are merged by the caller).
+
+@njit(cache=True, nogil=True, inline="always")
+def _cell_key(px, py, pz, cell_m, origin_m, dims):
+    cx = min(max(int(math.floor((px - origin_m[0]) / cell_m)), 0), dims[0] - 1)
+    cy = min(max(int(math.floor((py - origin_m[1]) / cell_m)), 0), dims[1] - 1)
+    cz = min(max(int(math.floor((pz - origin_m[2]) / cell_m)), 0), dims[2] - 1)
+    return (cx * dims[1] + cy) * dims[2] + cz
+
+
+@njit(cache=True, nogil=True)
+def subsegment_cells(start, direction, length, start_ns, end_ns, cell_m, a_step,
+                     origin_m, dims):
+    """Position cell, element and index of every sub-segment of every element.
+
+    Elements are split into ``ceil(length / a_step)`` sub-segments as in
+    :func:`compress_subsegments`; the rows are in (element, sub-segment) order.
     """
-    capacity = 1 << 16
+    count = 0
+    for i in range(length.shape[0]):
+        count += max(1, int(math.ceil(length[i] / a_step)))
+    cells = np.empty(count, dtype=np.int64)
+    element = np.empty(count, dtype=np.int64)
+    sub = np.empty(count, dtype=np.int64)
+    k = 0
+    for i in range(length.shape[0]):
+        n_a = max(1, int(math.ceil(length[i] / a_step)))
+        for ia in range(n_a):
+            px, py, pz, _ = _subsegment_point(start, direction, length, start_ns,
+                                              end_ns, i, ia, n_a)
+            cells[k] = _cell_key(px, py, pz, cell_m, origin_m, dims)
+            element[k] = i
+            sub[k] = ia
+            k += 1
+    return cells, element, sub
+
+
+@njit(cache=True, nogil=True)
+def compress_subsegments(start, direction, length, c0, c2, cone_cos, start_ns,
+                         end_ns, cell_m, n_face, ring_nodes, a_step, origin_m, dims,
+                         element, sub, capacity):
+    """Deposit the Cherenkov rings of the listed sub-segments into (cell, direction pixel) bins.
+
+    Element ``i`` is split into ``n_a = ceil(length / a_step)`` sub-segments;
+    sub-segment ``sub[k]`` of element ``element[k]`` has its cone sampled
+    with ``ring_nodes`` azimuths (a per-element golden-ratio phase offset
+    avoids aliasing between elements).  Every node carries
+    ``c / (n_a ring_nodes)`` of both spectral fields and is added to the bin
+    of its position cell and direction pixel.  Bins sum their nodes in the
+    order of the list.  Returns the moment table (``N_PENCIL_MOMENTS``
+    columns) of the occupied bins and their keys; ``capacity`` (a power of
+    two) is the initial size of the hash table.
+    """
     keys = np.full(capacity, -1, dtype=np.int64)
     values = np.zeros((capacity, N_PENCIL_MOMENTS))
     used = 0
@@ -1094,7 +1141,9 @@ def compress_elements(start, direction, length, c0, c2, cone_cos, start_ns,
     n_pix = 6 * n_face * n_face
     step_c = math.cos(TWO_PI / ring_nodes)
     step_s = math.sin(TWO_PI / ring_nodes)
-    for i in range(first, stop):
+    for k in range(element.shape[0]):
+        i = element[k]
+        ia = sub[k]
         ux = direction[i, 0]
         uy = direction[i, 1]
         uz = direction[i, 2]
@@ -1121,61 +1170,54 @@ def compress_elements(start, direction, length, c0, c2, cone_cos, start_ns,
         w0 = c0[i] * share
         w2 = c2[i] * share
         offset = ((i * golden) % 1.0) * TWO_PI / ring_nodes
-        for ia in range(n_a):
-            frac = (ia + 0.5) / n_a
-            px = start[i, 0] + frac * length[i] * ux
-            py = start[i, 1] + frac * length[i] * uy
-            pz = start[i, 2] + frac * length[i] * uz
-            t = start_ns[i] + frac * (end_ns[i] - start_ns[i])
-            cx = min(max(int(math.floor((px - origin_m[0]) / cell_m)), 0), dims[0] - 1)
-            cy = min(max(int(math.floor((py - origin_m[1]) / cell_m)), 0), dims[1] - 1)
-            cz = min(max(int(math.floor((pz - origin_m[2]) / cell_m)), 0), dims[2] - 1)
-            cell_key = (cx * dims[1] + cy) * dims[2] + cz
-            cp = math.cos(offset)
-            sp = math.sin(offset)
-            for q in range(ring_nodes):
-                if q > 0:
-                    cp, sp = cp * step_c - sp * step_s, sp * step_c + cp * step_s
-                sx = cc * ux + cs * (cp * e1x + sp * e2x)
-                sy = cc * uy + cs * (cp * e1y + sp * e2y)
-                sz = cc * uz + cs * (cp * e1z + sp * e2z)
-                key = cell_key * n_pix + _pixel(sx, sy, sz, n_face)
-                if 2 * (used + 1) > keys.shape[0]:
-                    keys, values = _grow(keys, values, used)
-                slot = _hash_slot(keys, key)
-                if keys[slot] == -1:
-                    keys[slot] = key
-                    used += 1
-                row = values[slot]
-                row[0] += w0
-                row[1] += w2
-                row[2] += w0 * px
-                row[3] += w0 * py
-                row[4] += w0 * pz
-                row[5] += w0 * t
-                row[6] += w0 * sx
-                row[7] += w0 * sy
-                row[8] += w0 * sz
-                row[9] += w0 * (px * px + py * py + pz * pz + sub2)
-                row[10] += w0 * t * t
-                # direction second moments, with the exact variance of the
-                # arc this node stands for along the ring tangent
-                tx = -sp * e1x + cp * e2x
-                ty = -sp * e1y + cp * e2y
-                tz = -sp * e1z + cp * e2z
-                row[11] += w0 * (sx * sx + arc2 * tx * tx)
-                row[12] += w0 * (sy * sy + arc2 * ty * ty)
-                row[13] += w0 * (sz * sz + arc2 * tz * tz)
-                row[14] += w0 * (sx * sy + arc2 * tx * ty)
-                row[15] += w0 * (sx * sz + arc2 * tx * tz)
-                row[16] += w0 * (sy * sz + arc2 * ty * tz)
-                # position second moments with the sub-segment's own spread
-                row[17] += w0 * (px * px + sub2 * ux * ux)
-                row[18] += w0 * (py * py + sub2 * uy * uy)
-                row[19] += w0 * (pz * pz + sub2 * uz * uz)
-                row[20] += w0 * (px * py + sub2 * ux * uy)
-                row[21] += w0 * (px * pz + sub2 * ux * uz)
-                row[22] += w0 * (py * pz + sub2 * uy * uz)
+        px, py, pz, t = _subsegment_point(start, direction, length, start_ns, end_ns,
+                                          i, ia, n_a)
+        cell_key = _cell_key(px, py, pz, cell_m, origin_m, dims)
+        cp = math.cos(offset)
+        sp = math.sin(offset)
+        for q in range(ring_nodes):
+            if q > 0:
+                cp, sp = cp * step_c - sp * step_s, sp * step_c + cp * step_s
+            sx = cc * ux + cs * (cp * e1x + sp * e2x)
+            sy = cc * uy + cs * (cp * e1y + sp * e2y)
+            sz = cc * uz + cs * (cp * e1z + sp * e2z)
+            key = cell_key * n_pix + _pixel(sx, sy, sz, n_face)
+            if 2 * (used + 1) > keys.shape[0]:
+                keys, values = _grow(keys, values, used)
+            slot = _hash_slot(keys, key)
+            if keys[slot] == -1:
+                keys[slot] = key
+                used += 1
+            row = values[slot]
+            row[0] += w0
+            row[1] += w2
+            row[2] += w0 * px
+            row[3] += w0 * py
+            row[4] += w0 * pz
+            row[5] += w0 * t
+            row[6] += w0 * sx
+            row[7] += w0 * sy
+            row[8] += w0 * sz
+            row[9] += w0 * (px * px + py * py + pz * pz + sub2)
+            row[10] += w0 * t * t
+            # direction second moments, with the exact variance of the
+            # arc this node stands for along the ring tangent
+            tx = -sp * e1x + cp * e2x
+            ty = -sp * e1y + cp * e2y
+            tz = -sp * e1z + cp * e2z
+            row[11] += w0 * (sx * sx + arc2 * tx * tx)
+            row[12] += w0 * (sy * sy + arc2 * ty * ty)
+            row[13] += w0 * (sz * sz + arc2 * tz * tz)
+            row[14] += w0 * (sx * sy + arc2 * tx * ty)
+            row[15] += w0 * (sx * sz + arc2 * tx * tz)
+            row[16] += w0 * (sy * sz + arc2 * ty * tz)
+            # position second moments with the sub-segment's own spread
+            row[17] += w0 * (px * px + sub2 * ux * ux)
+            row[18] += w0 * (py * py + sub2 * uy * uy)
+            row[19] += w0 * (pz * pz + sub2 * uz * uz)
+            row[20] += w0 * (px * py + sub2 * ux * uy)
+            row[21] += w0 * (px * pz + sub2 * ux * uz)
+            row[22] += w0 * (py * pz + sub2 * uy * uz)
     out = np.empty((used, N_PENCIL_MOMENTS))
     out_keys = np.empty(used, dtype=np.int64)
     k = 0
@@ -2201,7 +2243,7 @@ def min_distance_to_segments(receivers, start, direction, length):
     return out
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def finish_pencils(keys, rows, order):
     """Merge chunk tables (sorted by ``order``) and turn moments into pencils.
 

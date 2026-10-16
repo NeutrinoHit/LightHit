@@ -73,6 +73,10 @@ the repository. The prepared atlases are shipped in the data bundle
      * Order 1 (`muon/secondary_first.py`): the grouped physical-time solver
        with fused bands; packets are skipped while a certified upper bound
        (`muon/packet_skip.py`) stays below 1e-3 of the seed packets' charge.
+       Rings are compressed into pencils by ranges of whole position cells,
+       so a large shower packet needs about the memory of its final pencil
+       table; the per-OM evaluation runs fewer blocks at once when the
+       pencils are many (`prompt._grouped_blocks`, 1 GiB of scratch).
      * Order >=2: each packet becomes sparse joint source cells
        (`muon/joint_source.py`) applied to the pack with BLAS in float32
        batches (`muon/point_ge2_blas.py`); weak packet-OM pairs are predicted
