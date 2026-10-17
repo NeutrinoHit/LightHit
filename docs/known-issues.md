@@ -19,27 +19,11 @@ stated. Fixed items are removed from this list.
   directional tables from memory, so later events rebuild them.
 * `EventTransport` completion: with `max_rounds=4` at most three recomputing
   rounds succeed (a recomputation in the last round raises "did not converge").
-* Muon route, found by measurement (registry ideas `default-muon-route`,
-  `default-event-route`): `transport_universal_primary` raises "primary enters
-  unvalidated inner >=2 radius" when the *infinite line* of a primary polyline
-  piece passes within 3.01 m of an OM inside the order >=2 reach (`rho` is the
-  distance to the line, not to the piece). The tail of a stopping muon is cut
-  into pieces of a few centimetres with scattered directions, so ordinary
-  stopping muons trigger it: the regenerated 100 GeV muon, which stays at least
-  93 m from every OM, raises because the lines of three tail pieces of 0-6 cm
-  pass 0.96-1.44 m from OMs 146-341 m away. `MuonTransport` fails;
-  `EventTransport` computes the muon with the shower route instead.
-* `TransportKernel.transport` reads out on the table frequencies
-  (`readout_omega_per_ns` is used only by the hybrid and shower routes). With
-  the 65 route frequencies up to 1.2 rad/ns the waveform repeats every 335 ns,
-  so the 805 ns window of the route configuration holds three copies: the bin
-  sums are three times the charges, which are correct (registry idea
-  `kernel-transport-full`, 100 GeV electron). Nothing warns about a window
-  longer than `2 pi / d_omega`.
-* The muon->shower fallback cannot help a muon that really passes within 3 m of
-  an OM: the shower route then raises "source points closer than the validated
-  radial minimum 3 m" (regenerated 6 GeV muon passing an OM at 1.76 m), and the
-  event has no result.
+* Source points closer than 3 m to an OM (muon and shower routes): order >=2
+  of these points uses the near-field clamp (`transport-kernel.md`, Near
+  passes), checked against the photon Monte Carlo on one event only (6 GeV
+  muon at 1.76 m: 0.167 pe vs 0.145 +- 0.024 pe). `TransportKernel.transport`
+  and `transport_hybrid_basis` (default `near_points="raise"`) still refuse them.
 * Muon route: order >=2 charge and time profile of the same pair can come from
   different methods (atlas or batch charge, direct Filon profile), so a bin sum
   need not equal the charge column; near-field errors other than "unvalidated
