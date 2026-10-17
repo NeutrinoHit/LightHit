@@ -53,18 +53,16 @@ Many tests still import through these names.
 | `stationary_pencils` | all-time first-scattering charge of grouped pencils | unused | test_stationary_pencils |
 | `axial_blocked` | numpy reordered axial apply | unused, untested | none |
 
-## Candidates for deletion
+## Registry and measurements
 
-Unused or superseded and not needed by NTSim: `axial_blocked`,
-`ballistic_spectral`, `charge_preview` with `detector_tree`, `smart_muon`,
-`primary_prompt`, `joint_first`, `joint_first_atlas` (with the `atlas` option
-of `JointMuonConfig` and its parameters), `local_source_rank`,
-`stationary_pencils`, `signal_screen`,
-`spline_fast`; and the 20 `lighthit.muon` aliases once the tests import the new
-names. The Monte-Carlo and coordinate-space references (`crossing_mc`,
-`shell_mc`, `stationary_modes`, `segment_reference`, `directional_reference`,
-`prompt_backward`, `cone_segment`) are independent checks of the solvers and
-worth keeping. Nothing has been deleted yet.
+Each module above belongs to an idea of the registry `experiments/ideas/`
+(for example `smart-muon`, `charge-preview`, `joint-first-cdf`,
+`flash-references`, `spline-fast-multipoles`, `axial-source-route` for
+`axial_blocked`), which records its status (default, used by default, tool,
+superseded, rejected, open, not reproducible), how to run it and its measured
+result; `experiments/REPORT.md` is the table. Decisions about keeping or
+retiring a module start from that record. Which functions the default routes
+execute is measured in `usage-map.md`.
 
 Opt-in branches of library code that import modules not in the wheel:
 `lighthit.muon.adaptive_screen.transport_smart_muon` (needs `smart_muon`,

@@ -36,8 +36,8 @@ the manifest. `MuonData.load` checks that they exist.
 The atlases are built once per medium and OM response by build functions in
 `muon/track_first_primitive.py`, `muon/track_ge2_primitive.py`,
 `muon/first_charge_beta_atlas.py`, `muon/ge2_charge_beta_atlas.py` and
-`muon/positive_fluence.py`; the driver scripts that ran them are not part of
-the repository. The prepared atlases are shipped in the data bundle
+`muon/positive_fluence.py`; the driver scripts are in `tools/tables/` (build
+order, arguments and what each bundle file records: `tools/tables/README.md`). The prepared atlases are shipped in the data bundle
 (`sources-and-models.md`).
 
 ## One event (`muon/joint_muon.py: transport_joint_muon`)

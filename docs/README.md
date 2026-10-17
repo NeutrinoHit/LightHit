@@ -18,7 +18,14 @@ documentation is not part of the PyPI package.
 | `viewer.md` | the HTML event viewer and its payload |
 | `experimental.md` | every module of `lighthit.experimental` with its status |
 | `accuracy.md` | measured accuracy and speed, and what the tests check |
+| `usage-map.md` | measured: which functions each default route executes |
 | `known-issues.md` | defects and inconsistencies found in the code, to fix |
+
+Every idea tried in LightHit (routes, options, research modules and scripts),
+with its status, how to run it and its measured result, is registered in
+`experiments/ideas/` (one file per idea, format in `experiments/README.md`); the
+measured table is `experiments/REPORT.md`. The registry is the single place for
+tried ideas; these pages describe the code.
 
 ## Layers
 
