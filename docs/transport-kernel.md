@@ -29,7 +29,7 @@ sibling kernels from it (same medium and detector, their own frequency grids).
 | `cache_policy` | "build" | "build" builds missing tables during transport; "require" raises `FileNotFoundError` |
 | `spectral_folded_cache` | "auto" | use a folded cache found on disk; True requires one; False disables |
 | `allow_experimental` | False | needed for methods flagged experimental |
-| `readout_omega_per_ns` | None | denser readout grid (hybrid and shower routes); must end at the table cutoff |
+| `readout_omega_per_ns` | None | denser readout grid of every route (`transport`, hybrid, shower, muon); must end at the table cutoff |
 
 `kernel.acceptance()` measures the Legendre coefficients of the OM acceptance up
 to `max(2*scattering_degree, 64)`. It raises if the response is not band-limited
@@ -130,6 +130,46 @@ half-axis Fourier integral with trapezoid frequency weights and exact
 integration of `exp(-i omega t)` over each bin, optionally with a Gaussian
 factor. It never clips or renormalises, so finite-band ringing stays visible.
 
+A sum over frequencies spaced by `d_omega` repeats in time every
+`2 pi / d_omega`: 335 ns for the 65 route frequencies up to 1.2 rad/ns, shorter
+than the default 805 ns window. `readout.readout_bins`, used by
+`kernel.transport` for the Fourier-derived orders, therefore interpolates the
+demodulated spectrum onto `readout_omega_per_ns` (cubic spline of the real and
+imaginary parts, as the hybrid routes do for order >=2) and warns
+(`RuntimeWarning`) when the window is longer than the period of the grid it
+reads out on. The spline resolves waveforms much shorter than the table period
+(a 20 ns exponential keeps its charge to 0.5 %); a tail comparable to half the
+period is attenuated (an 80 ns exponential loses 10 %).
+
+## Near passes (`near_field.py`)
+
+The order >=2 tables start at `radial_range_m[0]` (3 m). The muon and shower
+routes leave source points closer than that out of their order >=2 sums and
+`near_field.add_near_field` adds them back with an explicit approximation, the
+near-field clamp: the order >=2 Green function of a point at distance
+`r < r_min` is taken at `r_min` along the same directions (source cone and OM
+orientation exact), with the flight phase of the actual distance. It rests on
+the bounded behaviour of multiply scattered light near its source: two
+scatterings within `r` are `O(r^2)` likely while the dilution is `r^-2`, so
+`G>=2` tends to a finite limit instead of the `r^-2` growth of direct light.
+The near portions are integrated on the original steps (Gauss, 5 cm panels).
+Every OM that uses it is listed in `metadata["near_field"]` (OMs, clamped
+charge) and named in a `RuntimeWarning`. Orders 0 and 1 do not use the radial
+tables and are unaffected.
+
+Measured on a 6 GeV muon passing an OM at 1.76 m (`muon-near-om` of the
+registry): the clamp gives 0.051 pe of the OM's 0.167 pe order >=2 (orders 0
+and 1: 63.6 and 3.6 pe). The NTSim photon Monte Carlo of the same event (31
+runs, hits split by their number of scatterings) gives 0.145 +- 0.024 pe for
+order >=2 at that OM; without the near part LightHit would give 0.116 pe. Moving
+the clamp radius from 3 m to 3.5 m or 4 m lowers the OM's order >=2 by 6 % or
+17 % of the near part, so `G>=2` still grows towards the source and the clamp
+at 3 m more likely underestimates the near part than overestimates it. The
+clamp is an approximation, not a validated near-field solution: its error is
+not bounded beyond these measurements. The boundary between the tables and the
+clamp follows the original steps exactly for the primary of the muon route and
+to within one basis cell (0.12-0.25 m) for shower basis points.
+
 ## Other modules of this layer
 
 | Module | Role | Status |
@@ -140,6 +180,7 @@ factor. It never clips or renormalises, so finite-band ringing stays visible.
 | `green.py` | `SolverSettings` (hashed into keys), `PointGreenSolver` single-band point Green spectra | settings core; solver optional |
 | `single.py`, `single_fast.py` | exact full-HG single scattering for point flashes | internal (flash path) |
 | `readout.py` | spectra to bins | core |
+| `near_field.py` | order >=2 of source points closer than the radial minimum (clamp) | core |
 | `medium.py`, `model.py` | `Medium`, `SpectralMedium`, `WavelengthQuadrature`, `DetectorArray` | core |
 | `geometry.py` | `describe_geometry`, `point_source_radial_range` | public; used by the laser kernel |
 | `api.py` | `lh.build(medium, detector, config, ...)`: kernel + `build()` | public |

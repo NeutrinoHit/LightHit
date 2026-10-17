@@ -37,9 +37,11 @@ the source must be `SpectralLightElements` with `cone_model="spectral"`.
    kind, charge, runs), `completion_rounds`, `inactive_charge_may_be_estimated`,
    `route_fallbacks`.
 
-**Fallback**: a muon whose route raises the "unvalidated inner" error (see
-`muon-route.md`) is transported by the shower route instead, also in later
-completion rounds, and listed in `route_fallbacks`.
+**Fallback**: a muon whose route raises the "unvalidated inner" error (a
+primary line through an OM centre, see `muon-route.md`) is transported by the
+shower route instead, also in later completion rounds, and listed in
+`route_fallbacks`. A muon or shower passing an OM closer than 3 m needs no
+fallback: both routes add the near-field clamp (`metadata["near_field"]`).
 
 ## Laser kernel
 

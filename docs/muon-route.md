@@ -87,12 +87,20 @@ The response has `metadata["route"] = "lighthit.muon"` and
 `method = "joint-muon"`. OMs that were not evaluated in detail keep the preview
 order 1 and >=2 charges and have no bins.
 
-## Unsupported muons
+## Near passes
 
-`transport_universal_primary` raises `ValueError("primary enters unvalidated
-inner >=2 radius ...")` when a primary piece passes through an OM or within
-3.01 m of it (typical for the end of a stopping muon). `MuonTransport` does not
-catch it; `EventTransport` does and re-runs that source with the shower route
+Only the part of a primary piece that comes closer to an OM than the 3 m radial
+minimum of the order >=2 tables leaves the tables' sums: the distance is taken
+to the piece itself, not to its line, so the scattered centimetre pieces at the
+end of a stopping muon are computed as usual (the direct fallback accepts an
+impact below 3 m as long as every point is outside). The near part of the
+primary, the near secondary points (skipped by the point kernels) and the near
+points of the beta < 1 tail (`transport_hybrid_basis(near_points="exclude")`)
+are then added by the near-field clamp of `near_field.py`
+(`transport-kernel.md`); the OMs are listed in `metadata["near_field"]` and a
+`RuntimeWarning` names them. A primary line through the very centre of an OM
+still raises `ValueError("primary enters unvalidated inner >=2 radius ...")`;
+`EventTransport` then re-runs that source with the shower route
 (`route_fallbacks`). Other near-field errors (`first_charge_only`,
 `muon_integral`) are not caught.
 

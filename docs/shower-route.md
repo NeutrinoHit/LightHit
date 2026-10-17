@@ -45,8 +45,11 @@ frozen, so use `replace(elements, cone_model="spectral")`. Steps with
    0.25 m on the principal axis, cubic axial weights, a five-point transverse
    stencil reproducing moments up to second order, emission phases on a
    0.02 ns lattice), scaled by the band's `w * eta`.
-3. **Radial window.** Basis points closer than the table's `r_min` raise; the
-   far tail beyond `r_max` is estimated and must stay below 1e-4 pe.
+3. **Radial window.** Basis points closer than the table's `r_min` are left
+   out of order >=2 and the near-field clamp adds the light of the steps closer
+   than `r_min` (`near_field.py`, `transport-kernel.md`; reported in
+   `metadata["near_field"]` and by a `RuntimeWarning`); the far tail beyond
+   `r_max` is estimated and must stay below 1e-4 pe.
 4. **Predictor.** Each band's points are collapsed into 2 m cells
    (`predictor_cell_m`) and the zero-frequency order >=2 charge is predicted for
    every reachable OM.
