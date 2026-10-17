@@ -22,6 +22,7 @@ baseline case's wall time on the same input and thread count (< 1 is faster).
 | [effective-segments](ideas/effective-segments.toml) | alternative-option | superseded-by:default-shower-route | 1 ok | On the 100 GeV electron the effective-segment representation has order-1 relative error 0.85-0.87 and order >=2 error 0.66-0.69 for 1 to 64 segments without converging, while apply time grows from 1.68 s to 102.5 s. |
 | [event-moments-route](ideas/event-moments-route.toml) | alternative-option | superseded-by:default-shower-route | 4 ok | Block moments reproduce the zero-frequency charge (median error 5.2e-5 with 4 blocks; apply 0.34 s vs 26.0 s direct for 65 receivers) but not the time structure: median error 1.0 at 0.6 rad/ns with 4 blocks, 3.7e-3 with 256 blocks, and 1.22 at 0.3 rad/ns with 1 block. |
 | [experimental-aliases](ideas/experimental-aliases.toml) | tool | tool | no case | Not measured: the idea has no case; it is an inventory of import aliases and records only code facts in its notes. |
+| [finite-receiver-order0](ideas/finite-receiver-order0.toml) | alternative-option | default | 5 ok | The point receiver samples the thin conical shells of short steps; on the OM sphere (within 20 m) order 0 of the muon passing OM 267 is 59.70 pe (57.92 with the chord yields of NTSim's generator) against MC 58.10 +- 0.49, OM 266 0.171 against 0.172 +- 0.017, OM 268 0.571 against 0.555 +- 0.038; beyond 20 m the point stays (order-0 error per OM 3-11% median, up to 98% on dim OMs), shower routes are bitwise unchanged and the default routes keep their time. |
 | [flash-references](ideas/flash-references.toml) | reference | tool | 1 ok | On the synthetic flash, stationary P_N modes agree with the TransportKernel flash path to 0 (order 0), 5.1e-13 (order 1) and 4.2e-7 (order >=2); the largest pull against crossing MC is 3.21. |
 | [method-survey](ideas/method-survey.toml) | probe | superseded-by:default-shower-route | 1 ok | On the 100 GeV electron (6 control OMs) the median errors (order 1 / >=2) are: moments 1.6e-3/1.7e-3 (apply 578.7 s), axial 3-D 7.2e-3/3.1e-3 (64.7 s), axial 1-D 4.4e-3/2.5e-3 (0.64 s), effective segments 1.37/0.91 (8.27 s). |
 | [om-acceptance-legendre](ideas/om-acceptance-legendre.toml) | validation | used-by-default | 1 ok | The OM acceptance is band-limited at Legendre degree 2: coefficients above degree 2 are at most 1.6e-13 and the reconstruction error is 6.7e-14, with all checks passing. |
@@ -166,6 +167,11 @@ baseline case's wall time on the same input and thread count (< 1 is faster).
 | event-moments-route/block-channels | 1 | 124.59 | 123.77 | 3018 |  | scan[0].relative_error (max) 0.01224; scan[0].median_relative_error 0.0001237; scan[0].seconds 0.162; scan[1].relative_error (max) 0.05231; scan[1].median_relative_error 6.968e-05; scan[1].seconds 0.5807; scan[2].relative_error (max) 0.0105; scan[2].median_relative_error 9.414e-05 |
 | event-moments-route/frequency | 1 | 151.53 | 148.94 | 973 |  | settings.max_distance 80; derived.k_max_per_m 8.166; cache.build_seconds 115.8; direct_reference.first.seconds 3.216; direct_reference.two_or_more.seconds 3.137; frequency_scan[0].compile_seconds 4.442; frequency_scan[0].orders.first.median_relative_error.0.0 0.004809; frequency_scan[0].orders.first.median_relative_error.0.1 0.1173 |
 | event-moments-route/moments | 1 | 2985.61 | 2972.84 | 2971 |  | source.read_seconds 0.1409; cache.build_seconds 9.652; angular_convergence.first.seconds.8 0.9333; angular_convergence.first.seconds.16 1.363; angular_convergence.first.seconds.32 3.949; angular_convergence.first.seconds.64 12.79; angular_convergence.first.seconds.128 48.19; angular_convergence.first.relative_to_reference.8 (max) 0.6797 |
+| finite-receiver-order0/far-electron-100GeV | 1 | 51.68 | 51.01 | 449 |  | point_pe 2.638; sphere_pe 2.636; default_equals_point True; nearest_om_m 23.43; sphere_over_point_seconds 10.02 |
+| finite-receiver-order0/far-muon-100GeV | 1 | 11.83 | 11.79 | 306 |  | point_pe 0.8608; sphere_pe 0.836; default_equals_point True; nearest_om_m 19.29; sphere_over_point_seconds 9.539 |
+| finite-receiver-order0/far-nue-cc | 1 | 9.80 | 8.53 | 245 |  | point_pe 2.277; sphere_pe 2.368; default_equals_point True; nearest_om_m 24.7; sphere_over_point_seconds 13.58 |
+| finite-receiver-order0/far-pion-100GeV | 1 | 6.05 | 6.03 | 220 |  | point_pe 1.869; sphere_pe 1.898; default_equals_point True; nearest_om_m 22.44; sphere_over_point_seconds 11.16 |
+| finite-receiver-order0/muon-near-om-mc | 1 | 0.55 | 0.54 | 171 |  | om267_point_pe 63.6; om267_default_pe 59.7; om267_chord_pe 57.92; om267_mc_pe 58.1; om267_mc_sigma_pe 0.4917; runs 31 |
 | first-beta-atlas/response-rho30 | 1 | 29.41 | 29.43 | 266 |  | max_q 73.68; max_bins 192.8 |
 | first-control-variate/300GeV | 1 | 13.12 | 13.11 | 481 |  | output_tail PAIRED {"seed": 42, "samples_per_wavelength_per_om": 16384, "cpu_s": 1.7834559999999993, "wall_s": 1.7822432500543073, "hybrid_charge": [0.061574673792755816, 0.0033447633895887273, 0.004338579197661586], "plain_charge": [0.06189970596596283, 0.0034947750458366317, 0.004527840863599614], "hybrid_relative_charge_error": [1.9848764589332335e-05, 2.0311093610361696e-05, 8.750519865625113e-09], "plain |
 | first-control-variate/cached-residual-300GeV | 1 | 3.84 | 3.85 | 355 |  | error_relative 0.0005631; residual_only_error_relative 5.217e-05; estimated_se_relative 9.704e-08 |
@@ -381,7 +387,7 @@ baseline case's wall time on the same input and thread count (< 1 is faster).
 
 ## Provenance
 
-Commits of the measured source: 97372c7f529b.
+Commits of the measured source: 4eccd0f7e872, 97372c7f529b.
 Machines:
 
 * Apple M4 Pro (14 cores), Python 3.12.3, numpy 2.5.3, numba 0.67.0
