@@ -37,6 +37,7 @@ notebooks/lighthit-demo-output/
 # Local working files
 /.work/
 /data/
+/.cache/
 
 # Experiment inputs and raw results (regenerate, do not commit)
 /experiments/inputs/

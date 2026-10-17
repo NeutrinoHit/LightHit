@@ -2,14 +2,16 @@
 from dataclasses import replace
 from pathlib import Path
 import json
+import os
 
 import numpy as np
 import pytest
 
 import lighthit as lh
 
-BUNDLE_MODEL = (Path(__file__).resolve().parents[1]
-                / ".build" / "lighthit-bgvd-data" / "model" / "bgvd-model.npz")
+BUNDLE_MODEL = (Path(os.environ.get("LIGHTHIT_DATA", "")
+                     or Path(__file__).resolve().parents[1] / "data" / "lighthit-bgvd-data")
+                / "model" / "bgvd-model.npz")
 
 
 def medium(provenance="first label"):

@@ -150,7 +150,7 @@ def text_headline(stdout, limit=12):
     found = {}
     for line in stdout.splitlines():
         if line.startswith("written: ") and line.strip().endswith(".json"):
-            path = Path(line[len("written: "):].strip())
+            path = _relocated(Path(line[len("written: "):].strip()))
             if path.is_file():
                 try:
                     found.update(auto_headline(json.loads(path.read_text())))
@@ -181,6 +181,9 @@ def _portable(text):
     """Text without this machine's absolute paths."""
     import os
     from harness.record import ROOT
+    # results measured in another checkout keep its absolute prefix
+    text = re.sub(r"[^\s'\"]*/experiments/results/", "experiments/results/", text)
+    text = re.sub(r"[^\s'\"]*/lighthit-bgvd-data(?=/)", "$LIGHTHIT_DATA", text)
     text = text.replace(str(ROOT) + "/", "")
     data = os.environ.get("LIGHTHIT_DATA")
     if data:
@@ -280,6 +283,19 @@ def _error_text(error):
     else:
         text = str(error).strip().splitlines()[-1]
     return _portable(text)
+
+
+def _relocated(path):
+    """``path`` itself, or the same file below this checkout's results directory
+    when the results were measured in another checkout and moved here."""
+    if path.is_file():
+        return path
+    from harness.record import RESULTS
+    parts = path.parts
+    for i in range(len(parts) - 1, 0, -1):
+        if parts[i] == "results" and parts[i - 1] == "experiments":
+            return RESULTS.joinpath(*parts[i + 1:])
+    return path
 
 
 def _full_stdout(record):
