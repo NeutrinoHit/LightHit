@@ -24,7 +24,7 @@ def calculate(*, phase=(1.34, 1.4), group=(1.37, 1.44), wavelengths=(350., 610.)
         np.ones(len(receivers)), start, direction, lengths, coeff, -coeff/beta**2,
         np.full(n,beta), t0, t1, np.asarray(wavelengths), np.asarray(phase), np.asarray(group),
         np.full(len(phase), .02), efficiency, np.array([4*np.pi]), *leggauss(order),
-        np.zeros(len(receivers)), np.asarray(edges), True)
+        np.zeros(len(receivers)), np.asarray(edges), True, np.zeros(len(receivers)), 0.)
 
 
 def reference(phase, group, wavelengths, edges, z=15., rho=3., length=20.):
@@ -123,7 +123,7 @@ def test_rotated_short_track_directional_acceptance():
           np.array([length]),np.array([length*1e8]),np.array([-length*1e8]),np.ones(1),
           np.zeros(1),np.array([length/.299792458]),waves,phase,np.array([1.4,1.5]),
           np.array([.02,.02]),np.array([[1.,0.,0.,0.]]),alpha,*leggauss(32),
-          np.zeros(1),np.array([-100.,1000.]),True)
+          np.zeros(1),np.array([-100.,1000.]),True,np.zeros(1),0.)
     q,b,_=interval_kernel(*args)
     def integrand(lam):
         n=np.interp(lam,waves,phase); sine=np.sqrt(1-1/n**2)
@@ -134,7 +134,7 @@ def test_rotated_short_track_directional_acceptance():
     expected=quad(integrand,max(waves[0],cutoff),waves[1],epsabs=1e-11,epsrel=1e-12)[0]
     np.testing.assert_allclose(q[0],expected,rtol=1e-11)
     np.testing.assert_allclose(b.sum(),expected,rtol=1e-11)
-    args=list(args); args[-1]=False
+    args=list(args); args[-3]=False
     qc,bc,_=interval_kernel(*args)
     np.testing.assert_allclose(qc,q,rtol=1e-12)
     assert bc.shape==(1,0)

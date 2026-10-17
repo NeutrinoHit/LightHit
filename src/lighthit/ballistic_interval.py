@@ -18,6 +18,10 @@ class BallisticIntervalConfig:
 
     ``pair_list`` evaluates every convergence pass only on the element-OM
     pairs passing the geometry test (bitwise equal to the full loop).
+    ``finite_receiver_m``: elements closer than this to an OM centre light
+    the OM sphere whose cross-section is its ``effective_area_m2`` (the OM of
+    the photon Monte Carlo), farther ones its centre. ``0`` is the point
+    receiver everywhere, ``inf`` the sphere everywhere.
     """
     order: int = 8
     max_order: int = 64
@@ -27,6 +31,7 @@ class BallisticIntervalConfig:
     efficiency_absolute_tolerance: float = 1e-12
     efficiency_max_depth: int = 16
     pair_list: bool = True
+    finite_receiver_m: float = 20.
 
     def __post_init__(self):
         """Integer orders and positive tolerances."""
@@ -40,6 +45,8 @@ class BallisticIntervalConfig:
             value = getattr(self, name)
             if not np.isfinite(value) or value <= 0:
                 raise ValueError(f'{name} must be finite and positive')
+        if not self.finite_receiver_m >= 0:
+            raise ValueError('finite_receiver_m must be nonnegative')
 
 
 @dataclass
@@ -138,6 +145,8 @@ def ballistic_interval(kernel, source, *, config=None, time_origin_ns=None,
     positions = np.ascontiguousarray(detector.positions_m, float)
     looks = np.ascontiguousarray(-detector.orientations, float)
     area = np.ascontiguousarray(detector.effective_area_m2, float)
+    radii = np.sqrt(area / np.pi)
+    reach = float(config.finite_receiver_m)
     alpha = np.ascontiguousarray(kernel.acceptance()['alpha'], float)
     want_bins = time_origin_ns is not None or relative_edges_ns is not None
     if want_bins:
@@ -159,20 +168,20 @@ def ballistic_interval(kernel, source, *, config=None, time_origin_ns=None,
         # The geometry precheck does not depend on the quadrature order: find
         # its pairs once, then every convergence pass visits only those pairs,
         # receiver-major in element order as in interval_kernel.
-        pair_om, pair_element = interval_candidates(positions, arrays[0], arrays[1], arrays[2],
+        pair_om, pair_element = interval_candidates(positions, radii, reach, arrays[0], arrays[1], arrays[2],
                                                     arrays[3], arrays[5], tables['phase_nodes'])
     def evaluate(ids, order):
         """Charge and bins of the OMs ``ids`` at Gauss order ``order``."""
         gx, gw = np.polynomial.legendre.leggauss(order)
         if not config.pair_list:
             return interval_kernel(positions[ids], looks[ids], area[ids], *arrays, *optics,
-                alpha, gx, gw, origins[ids], edges, want_bins)
+                alpha, gx, gw, origins[ids], edges, want_bins, radii[ids], reach)
         row_of = np.full(len(positions), -1, np.int64)
         row_of[ids] = np.arange(len(ids))
         keep = row_of[pair_om] >= 0
         return interval_kernel_pairs(pair_om[keep], pair_element[keep], row_of[pair_om[keep]],
             len(ids), positions, looks, area, *arrays, *optics, alpha, gx, gw,
-            origins[ids], edges, want_bins)
+            origins[ids], edges, want_bins, radii, reach)
     ids = np.arange(len(positions))
     order = config.order
     charge, bins, counts = evaluate(ids, order)
@@ -197,4 +206,5 @@ def ballistic_interval(kernel, source, *, config=None, time_origin_ns=None,
              prepare_seconds=prepare_seconds, elapsed_seconds=perf_counter()-began,
              cpu_seconds=process_time()-cpu, source_compressed=False,
              time_bins_split_at_arrival_roots=want_bins, pair_list=config.pair_list,
+             finite_receiver_m=reach,
              relative_tolerance=config.relative_tolerance, absolute_tolerance_pe=config.absolute_tolerance_pe))
