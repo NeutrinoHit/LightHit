@@ -11,7 +11,7 @@ from time import perf_counter
 
 import numpy as np
 
-from .readout import inverse_bins
+from .readout import inverse_bins, readout_bins
 
 
 def _radial_windows(source, compiled, positions, low, high):
@@ -338,8 +338,9 @@ def transport_track_directional(kernel, source, *, method):
         * np.exp(-1j * omega[:, None] * origins[None, active_index])[:, :, None])
     if len(omega) > 1 and len(active_index):
         for order in range(2):
-            components[active_index, :, order + 1] = inverse_bins(
-                omega, relative[:, :, order], kernel.config.relative_time_edges_ns)
+            components[active_index, :, order + 1] = readout_bins(
+                omega, relative[:, :, order], kernel.config.relative_time_edges_ns,
+                kernel.config.readout_omega_per_ns)
     apply_seconds = perf_counter() - apply_start
     readout_seconds = perf_counter() - readout_start
 

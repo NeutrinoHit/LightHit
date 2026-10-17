@@ -40,6 +40,38 @@ def inverse_bins(omega, spectrum, edges_ns, sigma_ns=0.0):
     return (kernel @ spectrum).real.T
 
 
+def readout_bins(omega, spectrum, edges_ns, readout_omega=None):
+    """``inverse_bins`` of a relative spectrum sampled on ``omega``.
+
+    A sum over frequencies spaced by ``d_omega`` repeats in time every
+    ``2 pi / d_omega``. When ``readout_omega`` is given (a finer grid with the
+    same cutoff), the spectrum is first interpolated onto it by a cubic spline
+    of its real and imaginary parts, as the hybrid routes do for order >=2.
+    A time window longer than the period of the grid actually used would hold
+    several copies of the waveform; a ``RuntimeWarning`` reports it.
+    """
+    omega = np.asarray(omega, float)
+    spectrum = np.asarray(spectrum, complex)
+    grid = omega
+    if readout_omega is not None and len(omega) > 1:
+        readout = np.asarray(readout_omega, float)
+        same = len(readout) == len(omega) and np.allclose(readout, omega)
+        if not same and np.isclose(readout[-1], omega[-1], rtol=0, atol=1e-12):
+            from scipy.interpolate import CubicSpline
+            spectrum = (CubicSpline(omega, spectrum.real, axis=0)(readout)
+                        + 1j * CubicSpline(omega, spectrum.imag, axis=0)(readout))
+            grid = readout
+    edges = np.asarray(edges_ns, float)
+    period = 2 * np.pi / float(np.max(np.diff(grid))) if len(grid) > 1 else np.inf
+    if edges[-1] - edges[0] > period * (1 + 1e-9):
+        import warnings
+        warnings.warn(f"time window of {edges[-1] - edges[0]:g} ns is longer than the "
+                      f"{period:g} ns period of the frequency grid; the bins hold repeated "
+                      "copies of the waveform (set KernelConfig.readout_omega_per_ns)",
+                      RuntimeWarning, stacklevel=2)
+    return inverse_bins(grid, spectrum, edges)
+
+
 @dataclass
 class TimeProfile:
     edges_ns: np.ndarray

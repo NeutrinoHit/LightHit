@@ -16,7 +16,7 @@ from .cache import CacheGrid, ResponseCache, acceptance_coefficients
 from .directional import DirectionalCache, acceptance_bandwidth, directional_response
 from .green import SolverSettings
 from .model import DetectorArray, SpectralMedium, WavelengthQuadrature
-from .readout import inverse_bins
+from .readout import inverse_bins, readout_bins
 from .single import single_bins
 from .sources import (CherenkovTrack, G4Shower, IsotropicFlash,
                       SpectralLightElements, SyntheticShower)
@@ -1006,8 +1006,9 @@ class TransportKernel:
         if len(omega) > 1:
             fourier_orders = (2,) if constant_acceptance is not None else (1, 2)
             for order in fourier_orders:
-                components[:, :, order] = inverse_bins(
-                    omega, relative[:, :, order], edges)
+                components[:, :, order] = readout_bins(
+                    omega, relative[:, :, order], edges,
+                    self.config.readout_omega_per_ns)
         else:
             fourier_orders = ()
         if constant_acceptance is not None:
@@ -1200,8 +1201,9 @@ class TransportKernel:
                     * np.exp(-1j * omega[:, None] * origins[None, active])[:, :, None])
         if len(omega) > 1:
             for order in range(2):
-                components[active, :, order + 1] = inverse_bins(
-                    omega, relative[:, :, order], self.config.relative_time_edges_ns)
+                components[active, :, order + 1] = readout_bins(
+                    omega, relative[:, :, order], self.config.relative_time_edges_ns,
+                    self.config.readout_omega_per_ns)
         apply_seconds = perf_counter() - apply_start
         return self._response(
             spectrum, components, charge, origins, active, method,
@@ -1648,8 +1650,9 @@ class TransportKernel:
                         * np.exp(-1j * omega[:, None] * origins[None, active])[:, :, None])
             if len(omega) > 1 and np.any(active):
                 for order in range(2):
-                    components[active, :, order + 1] = inverse_bins(
-                        omega, relative[:, :, order], self.config.relative_time_edges_ns)
+                    components[active, :, order + 1] = readout_bins(
+                        omega, relative[:, :, order], self.config.relative_time_edges_ns,
+                        self.config.readout_omega_per_ns)
         apply_seconds = perf_counter() - apply_start
         readout_seconds = perf_counter() - readout_start
         metadata = {"elapsed_seconds": perf_counter() - began,
