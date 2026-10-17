@@ -1,0 +1,9718 @@
+{
+ "scenarios": {
+  "shower": {
+   "description": "ShowerTransport, bundle Geant4 100 GeV electron (event 5)",
+   "wall_seconds": 267.6574463750003,
+   "cpu_seconds": 289.27383399999997,
+   "peak_rss_mib": 5362.515625,
+   "scenario_seconds": 267.64899962500203,
+   "numba_threads": 14,
+   "result": {
+    "route": "lighthit.shower",
+    "method": null,
+    "active": 28,
+    "charge_pe_by_order": [
+     2.6375668983604483,
+     1.895789335855613,
+     1.0528087491103089
+    ],
+    "route_fallbacks": null
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "muon": {
+   "description": "MuonTransport, bundle 1 TeV muon with its secondaries",
+   "wall_seconds": 138.35957241698634,
+   "cpu_seconds": 181.895147,
+   "peak_rss_mib": 2432.53125,
+   "scenario_seconds": 138.3536754589877,
+   "numba_threads": 14,
+   "result": {
+    "route": "lighthit.muon",
+    "method": null,
+    "active": 31,
+    "charge_pe_by_order": [
+     2.18562027549521,
+     1.4948373663307315,
+     0.7737909807894469
+    ],
+    "route_fallbacks": null
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "event": {
+   "description": "EventTransport, 1 TeV muon + 100 GeV electron shower",
+   "wall_seconds": 88.13951675000135,
+   "cpu_seconds": 203.931988,
+   "peak_rss_mib": 7713.28125,
+   "scenario_seconds": 88.13035087502794,
+   "numba_threads": 14,
+   "result": {
+    "route": "lighthit.event",
+    "method": null,
+    "active": 61,
+    "charge_pe_by_order": [
+     4.823187173855657,
+     3.372765907078421,
+     1.7978135309278571
+    ],
+    "route_fallbacks": []
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "event-stopping-muon": {
+   "description": "EventTransport, regenerated 6 GeV muon aimed 1.5 m past an OM, stopping 15 m before it (route fallback to the shower route)",
+   "wall_seconds": 5.677618917019572,
+   "cpu_seconds": 8.668537,
+   "peak_rss_mib": 3034.625,
+   "scenario_seconds": 5.673281292023603,
+   "numba_threads": 14,
+   "result": {
+    "route": "lighthit.shower",
+    "method": null,
+    "active": 5,
+    "charge_pe_by_order": [
+     1.7335131163585802,
+     0.8135925822750792,
+     0.1692684571814134
+    ],
+    "route_fallbacks": [
+     {
+      "label": "muon 0",
+      "reason": "primary enters unvalidated inner >=2 radius; separate near-field solver required",
+      "route": "lighthit.shower"
+     }
+    ]
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "event-muon-near-om": {
+   "description": "EventTransport, regenerated 6 GeV muon passing 1.76 m from an OM (fallback entered, then the shower route raises)",
+   "wall_seconds": 5.0589795840205625,
+   "cpu_seconds": 5.785341,
+   "peak_rss_mib": 2780.296875,
+   "scenario_seconds": 5.056102208967786,
+   "numba_threads": 14,
+   "result": {
+    "error": "ValueError: 1 OMs have source points closer than the validated radial minimum 3 m"
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "laser": {
+   "description": "EventTransport with laser_kernel, 532 nm flash (bundle laser table)",
+   "wall_seconds": 0.8403086250182241,
+   "cpu_seconds": 0.7379819999999999,
+   "peak_rss_mib": 571.046875,
+   "scenario_seconds": 0.6962140830000862,
+   "numba_threads": 14,
+   "result": {
+    "route": "lighthit.transport (isotropic flash)",
+    "method": null,
+    "active": 1002,
+    "charge_pe_by_order": [
+     6367120.323689467,
+     7008041.576414629,
+     6557284.328949163
+    ],
+    "route_fallbacks": null
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "prompt": {
+   "description": "TransportKernel.transport_prompt, 100 GeV electron (orders 0 and 1)",
+   "wall_seconds": 21.413437083014287,
+   "cpu_seconds": 163.236144,
+   "peak_rss_mib": 2872.6875,
+   "scenario_seconds": 21.407991208019666,
+   "numba_threads": 14,
+   "result": {
+    "route": null,
+    "method": null,
+    "active": 24,
+    "charge_pe_by_order": [
+     2.4114526327755157,
+     1.8766848068446602,
+     0.0
+    ],
+    "route_fallbacks": null
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "hybrid": {
+   "description": "TransportKernel.transport_hybrid, 100 GeV electron (per-band order >=2)",
+   "wall_seconds": 174.67000129201915,
+   "cpu_seconds": 711.287053,
+   "peak_rss_mib": 5591.921875,
+   "scenario_seconds": 174.66499087499687,
+   "numba_threads": 14,
+   "result": {
+    "route": null,
+    "method": null,
+    "active": 28,
+    "charge_pe_by_order": [
+     2.4114526327755157,
+     1.871671208369727,
+     1.0528694302941974
+    ],
+    "route_fallbacks": null
+   },
+   "command": null,
+   "exit_status": null
+  },
+  "ntsim-electron": {
+   "description": "NTSim run_lighthit.py, e- 100 GeV",
+   "wall_seconds": 11.03735424997285,
+   "cpu_seconds": 19.930711,
+   "peak_rss_mib": 5722.234375,
+   "scenario_seconds": null,
+   "numba_threads": null,
+   "result": null,
+   "command": [
+    "$NTSIM/run/run_lighthit.py",
+    "1",
+    "--cache",
+    "$LIGHTHIT_DATA/tables/rte-cache",
+    "--clusters",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "--pdg",
+    "11",
+    "--energy",
+    "100",
+    "--position",
+    "5",
+    "-269.5",
+    "330",
+    "--direction",
+    "0.35",
+    "-0.20",
+    "0.915",
+    "--output",
+    "experiments/results/ntsim/electron"
+   ],
+   "exit_status": 0
+  },
+  "ntsim-muon": {
+   "description": "NTSim run_lighthit.py, mu- 1 TeV",
+   "wall_seconds": 48.254589208983816,
+   "cpu_seconds": 94.183232,
+   "peak_rss_mib": 2710.78125,
+   "scenario_seconds": null,
+   "numba_threads": null,
+   "result": null,
+   "command": [
+    "$NTSIM/run/run_lighthit.py",
+    "1",
+    "--cache",
+    "$LIGHTHIT_DATA/tables/rte-cache",
+    "--clusters",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "--pdg",
+    "13",
+    "--energy",
+    "1000",
+    "--position",
+    "-100",
+    "-950",
+    "350",
+    "--direction",
+    "0",
+    "1",
+    "0",
+    "--output",
+    "experiments/results/ntsim/muon"
+   ],
+   "exit_status": 0
+  },
+  "ntsim-nue-cc": {
+   "description": "NTSim run_lighthit.py, e- 70 + pi+ 25 + p 5 GeV",
+   "wall_seconds": 11.467249375011306,
+   "cpu_seconds": 28.848392,
+   "peak_rss_mib": 5603.828125,
+   "scenario_seconds": null,
+   "numba_threads": null,
+   "result": null,
+   "command": [
+    "$NTSIM/run/run_lighthit.py",
+    "1",
+    "--cache",
+    "$LIGHTHIT_DATA/tables/rte-cache",
+    "--clusters",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "--position",
+    "5",
+    "-269.5",
+    "330",
+    "--particle",
+    "11",
+    "70",
+    "0.35",
+    "-0.20",
+    "0.915",
+    "--particle",
+    "211",
+    "25",
+    "0.55",
+    "-0.10",
+    "0.83",
+    "--particle",
+    "2212",
+    "5",
+    "0.20",
+    "-0.40",
+    "0.89",
+    "--output",
+    "experiments/results/ntsim/nue-cc"
+   ],
+   "exit_status": 0
+  },
+  "ntsim-numu-cc": {
+   "description": "NTSim run_lighthit.py, mu- 800 + pi+ 150 + p 50 GeV",
+   "wall_seconds": 74.17701170797227,
+   "cpu_seconds": 203.84329100000002,
+   "peak_rss_mib": 9973.75,
+   "scenario_seconds": null,
+   "numba_threads": null,
+   "result": null,
+   "command": [
+    "$NTSIM/run/run_lighthit.py",
+    "1",
+    "--cache",
+    "$LIGHTHIT_DATA/tables/rte-cache",
+    "--clusters",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "--position",
+    "5",
+    "-269.5",
+    "200",
+    "--particle",
+    "13",
+    "800",
+    "0.30",
+    "-0.15",
+    "0.94",
+    "--particle",
+    "211",
+    "150",
+    "0.50",
+    "-0.30",
+    "0.81",
+    "--particle",
+    "2212",
+    "50",
+    "0.10",
+    "0.20",
+    "0.97",
+    "--output",
+    "experiments/results/ntsim/numu-cc"
+   ],
+   "exit_status": 0
+  },
+  "ntsim-laser": {
+   "description": "NTSim run_lighthit.py --laser, 532 nm flash",
+   "wall_seconds": 4.407289833994582,
+   "cpu_seconds": 4.123603999999999,
+   "peak_rss_mib": 943.28125,
+   "scenario_seconds": null,
+   "numba_threads": null,
+   "result": null,
+   "command": [
+    "$NTSIM/run/run_lighthit.py",
+    "1",
+    "--cache",
+    "$LIGHTHIT_DATA/tables/rte-cache",
+    "--clusters",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "--laser",
+    "1e15",
+    "532",
+    "--laser-cache",
+    "$LIGHTHIT_DATA/tables/laser-cache",
+    "--position",
+    "-62",
+    "-385",
+    "361",
+    "--output",
+    "experiments/results/ntsim/laser"
+   ],
+   "exit_status": 0
+  }
+ },
+ "modules": {
+  "lighthit": {
+   "file": "lighthit/__init__.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "__getattr__",
+     "line": 37,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.__main__": {
+   "file": "lighthit/__main__.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit._angular_numba": {
+   "file": "lighthit/_angular_numba.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_nodewise",
+     "line": 14,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "free_moments_and_ratios",
+     "line": 47,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit._ballistic_interval_numba": {
+   "file": "lighthit/_ballistic_interval_numba.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_acceptance",
+     "line": 14,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_arrival",
+     "line": 30,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_stationary_cuts",
+     "line": 40,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_time_root",
+     "line": 95,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_integral",
+     "line": 113,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_precheck",
+     "line": 139,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_pair_contribution",
+     "line": 168,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "interval_kernel",
+     "line": 244,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "interval_candidates",
+     "line": 300,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "interval_kernel_pairs",
+     "line": 346,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit._directional_numba": {
+   "file": "lighthit/_directional_numba.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_parity",
+     "line": 32,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower",
+      "muon",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_start_value",
+     "line": 37,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_wigner_into",
+     "line": 52,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_harmonics_into",
+     "line": 91,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_apply_m0",
+     "line": 132,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_apply",
+     "line": 236,
+     "kind": "numba",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_start_norm_table",
+     "line": 389,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "PreparedDirectionalKernel.from_cache",
+     "line": 419,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "PreparedDirectionalKernel.apply",
+     "line": 456,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    }
+   ]
+  },
+  "lighthit._prompt_numba": {
+   "file": "lighthit/_prompt_numba.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_hg",
+     "line": 63,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "gauss_inverse_mean",
+     "line": 74,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_prepare_gauss_inverse",
+     "line": 104,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "gauss_inverse_mean_prepared",
+     "line": 116,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ifuncs",
+     "line": 139,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_quad_integral",
+     "line": 158,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower",
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_find_bin",
+     "line": 167,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_deposit_panel",
+     "line": 186,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_batch_grid",
+     "line": 258,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_batch_sigma",
+     "line": 290,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower",
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_stationary_path_gauss",
+     "line": 296,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_batch_add_pencil",
+     "line": 323,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_cubic_moment_coefficients",
+     "line": 352,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_batch_add_moments",
+     "line": 394,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_batch_deposit",
+     "line": 451,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_pencil_frame",
+     "line": 555,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_pencil_frame_from_ray",
+     "line": 565,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "_prepare_pencil_look_powers",
+     "line": 582,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_pencil_frame_from_ray_cached_look",
+     "line": 594,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_finalize",
+     "line": 610,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon"
+     ]
+    },
+    {
+     "qualname": "interval_table",
+     "line": 635,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_gauss_legendre",
+     "line": 648,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_phi_rule",
+     "line": 672,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_segment_a_breaks",
+     "line": 704,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_scratch_note",
+     "line": 778,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_segment_order1_block",
+     "line": 784,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "segment_order1",
+     "line": 917,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "pencils_order1",
+     "line": 965,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_pixel",
+     "line": 1015,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_hash_slot",
+     "line": 1047,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_grow",
+     "line": 1060,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "compress_elements",
+     "line": 1076,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_fill_moments_averaged",
+     "line": 1194,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "_fill_moments_averaged_pair",
+     "line": 1218,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_is_cubic_moment_layout",
+     "line": 1239,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_accumulate_cubic_moments_pair",
+     "line": 1253,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "_accumulate_cubic_moments_pair_prepared",
+     "line": 1263,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_prepare_pencil_shape",
+     "line": 1305,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_pencil_shape_factor_prepared",
+     "line": 1332,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_pencil_shape_factor_from_ray",
+     "line": 1347,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_pencil_shape_factor",
+     "line": 1398,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_grouped_batch_charge_estimate",
+     "line": 1465,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_geometry_bit_hash",
+     "line": 1499,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_exact_pencil_geometry_ids",
+     "line": 1506,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_prepare_receiver_geometry",
+     "line": 1548,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_float64_bits",
+     "line": 1574,
+     "kind": "python",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_float64_bits.<locals>.codegen",
+     "line": 1580,
+     "kind": "python",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "scalar_theta_index",
+     "line": 1586,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "build_theta_thresholds",
+     "line": 1592,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "threshold_theta_index",
+     "line": 1634,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "build_theta_bit_lut",
+     "line": 1650,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "bit_lut_theta_index",
+     "line": 1672,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "_prepare_common_pencil_look",
+     "line": 1689,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_grouped_pencils_order1_block",
+     "line": 1709,
+     "kind": "numba",
+     "executed_by": [
+      "shower"
+     ]
+    },
+    {
+     "qualname": "_grouped_pencils_order1_impl",
+     "line": 1959,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "grouped_pencils_order1",
+     "line": 2025,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_rings_order1_block",
+     "line": 2048,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "rings_order1",
+     "line": 2147,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "min_distance_to_segments",
+     "line": 2179,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "finish_pencils",
+     "line": 2205,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit._shower_basis": {
+   "file": "lighthit/_shower_basis.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "earliest_element_arrival",
+     "line": 51,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_cone_harmonics",
+     "line": 82,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_deposit_elements",
+     "line": 104,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_axial_weights",
+     "line": 129,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_align_geometry_reference",
+     "line": 138,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "compile_axial_slices",
+     "line": 188,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_source_norm_bound",
+     "line": 664,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_radial_norm_bound",
+     "line": 673,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_active_pair_bands",
+     "line": 711,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_apply_multi",
+     "line": 728,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_apply_multi_spectral",
+     "line": 895,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "apply_multi",
+     "line": 1052,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "apply_multi_spectral",
+     "line": 1126,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit._spectral_fold": {
+   "file": "lighthit/_spectral_fold.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_profile",
+     "line": 27,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_stored_profile",
+     "line": 56,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "folded_cache_path",
+     "line": 78,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_original_files",
+     "line": 83,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_same_grid",
+     "line": 95,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_prepared_shape",
+     "line": 119,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "build_folded_cache",
+     "line": 123,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "FoldedKernels.zero_frequency",
+     "line": 252,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "load_folded_cache",
+     "line": 259,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "optional_folded_cache",
+     "line": 292,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit._track_transport": {
+   "file": "lighthit/_track_transport.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_radial_windows",
+     "line": 17,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_track_frame",
+     "line": 81,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_track_directional",
+     "line": 94,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_track_directional.<locals>.apply_zero",
+     "line": 218,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_track_directional.<locals>.prepare_full",
+     "line": 253,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_track_directional.<locals>.apply_full",
+     "line": 304,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit._version": {
+   "file": "lighthit/_version.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": []
+  },
+  "lighthit.angular": {
+   "file": "lighthit/angular.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_degree",
+     "line": 11,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "_free_moments_and_ratios_numpy",
+     "line": 17,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_check_backend",
+     "line": 95,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_free_moments_and_ratios",
+     "line": 101,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "free_moments_and_tail",
+     "line": 129,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "solve_tail_system",
+     "line": 135,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "angular_components",
+     "line": 172,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "dense_finite_rank_reference",
+     "line": 204,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "coupling_coefficients",
+     "line": 244,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_decay_rate",
+     "line": 256,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "tail_ratios_continued_fraction",
+     "line": 264,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "free_tail_ratios_m",
+     "line": 313,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "solve_tail_system_m",
+     "line": 390,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "resolvent_rows",
+     "line": 427,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "dense_block_reference",
+     "line": 478,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.api": {
+   "file": "lighthit/api.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "build",
+     "line": 6,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.axial_fast": {
+   "file": "lighthit/axial_fast.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_harmonics_into",
+     "line": 21,
+     "kind": "numba",
+     "executed_by": [
+      "shower",
+      "muon",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_apply",
+     "line": 56,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_layout",
+     "line": 111,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "PreparedAxialKernel.from_cache",
+     "line": 143,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedAxialKernel.apply",
+     "line": 174,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_element_angular",
+     "line": 220,
+     "kind": "numba",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "accumulate_cell_gemm",
+     "line": 239,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "compile_axial_source_fast",
+     "line": 262,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "rigidly_moved_source",
+     "line": 369,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.axial_source": {
+   "file": "lighthit/axial_source.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "channel_index",
+     "line": 63,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "AxisFrame.of",
+     "line": 88,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "AxisFrame.rotate",
+     "line": 120,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "AxisFrame.coordinates",
+     "line": 126,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "AxialSource.points_m",
+     "line": 158,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "AxialSource.of",
+     "line": 166,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "AxialSource.truncated",
+     "line": 354,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_weighted_quantile",
+     "line": 369,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "axial_response",
+     "line": 375,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.ballistic": {
+   "file": "lighthit/ballistic.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "acceptance_from_coefficients",
+     "line": 30,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ballistic_directional",
+     "line": 38,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.ballistic_fast": {
+   "file": "lighthit/ballistic_fast.py",
+   "imported_by": [
+    "shower",
+    "event",
+    "event-stopping-muon",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_ballistic_kernel",
+     "line": 38,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ballistic_bins_kernel",
+     "line": 79,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "vectorised_ballistic_fast",
+     "line": 139,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "vectorised_ballistic_bins_fast",
+     "line": 163,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_acceptance",
+     "line": 199,
+     "kind": "numba-inlined",
+     "executed_by": [
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_ballistic_directional_kernel",
+     "line": 216,
+     "kind": "numba",
+     "executed_by": [
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "ballistic_directional_fast",
+     "line": 290,
+     "kind": "python",
+     "executed_by": [
+      "prompt",
+      "hybrid"
+     ]
+    }
+   ]
+  },
+  "lighthit.ballistic_interval": {
+   "file": "lighthit/ballistic_interval.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "BallisticIntervalConfig.__post_init__",
+     "line": 31,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "prepare_optics",
+     "line": 53,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ballistic_interval",
+     "line": 116,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ballistic_interval.<locals>.evaluate",
+     "line": 164,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.band_fold": {
+   "file": "lighthit/band_fold.py",
+   "imported_by": [
+    "shower",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_legendre_table",
+     "line": 49,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "BandFold.of",
+     "line": 79,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "BandFold.of.<locals>.residuals",
+     "line": 105,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "BandFold.source_residual",
+     "line": 123,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "BandFold.metadata",
+     "line": 137,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "fold_bundle",
+     "line": 146,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "zero_frequency",
+     "line": 200,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "save_folded",
+     "line": 208,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "load_folded",
+     "line": 218,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.bgvd": {
+   "file": "lighthit/bgvd.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_package_directory",
+     "line": 22,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_load_file",
+     "line": 36,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_hash",
+     "line": 45,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_angular_acceptance",
+     "line": 52,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_angular_acceptance.<locals>.angular_acceptance",
+     "line": 55,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_vector",
+     "line": 61,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "OMResponse.__post_init__",
+     "line": 94,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "OMResponse.from_module",
+     "line": 120,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "OMResponse.functions",
+     "line": 125,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "OMResponse.functions.<locals>.spectral_efficiency",
+     "line": 131,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "OMResponse.check",
+     "line": 138,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BGVDModel.kernel",
+     "line": 164,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "BGVDModel.save",
+     "line": 169,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "load_model",
+     "line": 228,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "load_bgvd_model",
+     "line": 263,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "load_bgvd_model.<locals>.spectral_efficiency",
+     "line": 307,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.cache": {
+   "file": "lighthit/cache.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_validate_photons",
+     "line": 59,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_validate_axis",
+     "line": 68,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "hybrid",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "acceptance_coefficients",
+     "line": 81,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "isotropic_acceptance",
+     "line": 102,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "cosine_acceptance",
+     "line": 107,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "hemispherical_acceptance",
+     "line": 112,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CacheGrid.__post_init__",
+     "line": 133,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "hybrid",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "CacheGrid.geometric",
+     "line": 141,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache.__post_init__",
+     "line": 170,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache.clear_interpolation_cache",
+     "line": 185,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache.radius_range_m",
+     "line": 190,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache.degree",
+     "line": 194,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache.build",
+     "line": 200,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache._scale",
+     "line": 289,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache.moments_at",
+     "line": 294,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache._contract",
+     "line": 341,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache.directed_spectrum",
+     "line": 346,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache.acceptance_spectrum",
+     "line": 372,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache._zero_view",
+     "line": 438,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache.directed_charge",
+     "line": 453,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache.acceptance_charge",
+     "line": 458,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache._charge",
+     "line": 466,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache._arrays",
+     "line": 474,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache._metadata",
+     "line": 479,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache.save",
+     "line": 485,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCache._from_parts",
+     "line": 493,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "ResponseCache.load",
+     "line": 504,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "_acceptance_from_coefficients",
+     "line": 509,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.__post_init__",
+     "line": 535,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.medium",
+     "line": 550,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.radius_range_m",
+     "line": 554,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.build_time_s",
+     "line": 558,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache._dispatch",
+     "line": 561,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.directed_spectrum",
+     "line": 577,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.acceptance_spectrum",
+     "line": 583,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache._charge",
+     "line": 594,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache._zero_view",
+     "line": 601,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.directed_charge",
+     "line": 604,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.acceptance_charge",
+     "line": 608,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.charge_for_modules",
+     "line": 615,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.save",
+     "line": 641,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BandedResponseCache.load",
+     "line": 653,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "validation_report",
+     "line": 660,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "first_order_consistency",
+     "line": 706,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.cli": {
+   "file": "lighthit/cli.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "peak_rss_mib",
+     "line": 18,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "configure",
+     "line": 27,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "save_figures",
+     "line": 48,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "main",
+     "line": 73,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.directional": {
+   "file": "lighthit/directional.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "clebsch_gordan",
+     "line": 64,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "acceptance_bandwidth",
+     "line": 107,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "CouplingTable.pairs",
+     "line": 153,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "CouplingTable.triples",
+     "line": 157,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CouplingTable.build",
+     "line": 161,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_start_value",
+     "line": 198,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "wigner_small_d",
+     "line": 217,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_real_basis_matrix",
+     "line": 259,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "real_rotation_rows",
+     "line": 273,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache.__post_init__",
+     "line": 320,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "DirectionalCache.radius_range_m",
+     "line": 335,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache.degree",
+     "line": 339,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "DirectionalCache.acceptance_degree",
+     "line": 343,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache.clear_interpolation_cache",
+     "line": 346,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache.build",
+     "line": 352,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache._scale",
+     "line": 468,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache.coefficients_at",
+     "line": 472,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache._metadata",
+     "line": 504,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache.save",
+     "line": 513,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DirectionalCache.load",
+     "line": 523,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_frame_angles",
+     "line": 540,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "directional_response",
+     "line": 548,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "dense_source_channels",
+     "line": 630,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_rotate_into_frame",
+     "line": 647,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_real_harmonics",
+     "line": 658,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "rotation_rows_explicit",
+     "line": 663,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "rotation_rows_explicit.<locals>.dval",
+     "line": 695,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.event": {
+   "file": "lighthit/event.py",
+   "imported_by": [
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "SourceComponent.__post_init__",
+     "line": 54,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "common_time_origins",
+     "line": 64,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "EventTransport.__init__",
+     "line": 104,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "EventTransport.muon_route",
+     "line": 116,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "EventTransport.shower_route",
+     "line": 123,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "EventTransport._run",
+     "line": 130,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "EventTransport.__call__",
+     "line": 151,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "EventTransport.flash",
+     "line": 173,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "EventTransport._describe",
+     "line": 182,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "EventTransport._compose",
+     "line": 187,
+     "kind": "python",
+     "executed_by": [
+      "event",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "laser_config",
+     "line": 286,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "laser_kernel",
+     "line": 309,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    }
+   ]
+  },
+  "lighthit.event_moments": {
+   "file": "lighthit/event_moments.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "real_spherical_harmonics",
+     "line": 55,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "monomial_powers",
+     "line": 89,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_monomials",
+     "line": 96,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BlockPartition.count",
+     "line": 110,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BlockPartition._reach",
+     "line": 115,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BlockPartition.single",
+     "line": 130,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BlockPartition.split",
+     "line": 137,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BlockPartition.split.<locals>.half_diagonal",
+     "line": 168,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BlockPartition.summary",
+     "line": 208,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "KernelChannels.of",
+     "line": 225,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "KernelChannels.omega_per_ns",
+     "line": 245,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "KernelChannels.multipoles",
+     "line": 250,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "KernelChannels.channels",
+     "line": 276,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "compile_joint_moments",
+     "line": 290,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "evaluate_moments",
+     "line": 341,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "direct_response",
+     "line": 410,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.examples": {
+   "file": "lighthit/examples/__init__.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.examples.synthetic": {
+   "file": "lighthit/examples/synthetic.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "synthetic_medium_model",
+     "line": 12,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "baikal_like_detector",
+     "line": 19,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "baikal_like_detector.<locals>.angular_acceptance",
+     "line": 37,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "baikal_like_detector.<locals>.spectral_efficiency",
+     "line": 41,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "quick_config",
+     "line": 56,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "standard_config",
+     "line": 68,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "example_sources",
+     "line": 75,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_config",
+     "line": 89,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_json_default",
+     "line": 94,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "geometry_command",
+     "line": 102,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "cache_command",
+     "line": 107,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "run_command",
+     "line": 120,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "parser",
+     "line": 160,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "main",
+     "line": 186,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental": {
+   "file": "lighthit/experimental/__init__.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.adaptive_screen": {
+   "file": "lighthit/experimental/adaptive_screen.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.axial_blocked": {
+   "file": "lighthit/experimental/axial_blocked.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "BlockedAxialKernel.of",
+     "line": 62,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "BlockedAxialKernel.apply",
+     "line": 90,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.axial_fast": {
+   "file": "lighthit/experimental/axial_fast.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.axial_source": {
+   "file": "lighthit/experimental/axial_source.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.ballistic_fast": {
+   "file": "lighthit/experimental/ballistic_fast.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.ballistic_spectral": {
+   "file": "lighthit/experimental/ballistic_spectral.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_cone_bounds",
+     "line": 14,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_spectral_kernel",
+     "line": 29,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "spectral_ballistic_charge",
+     "line": 84,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.charge_preview": {
+   "file": "lighthit/experimental/charge_preview.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "ChargePreviewConfig.__post_init__",
+     "line": 29,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ChargePreview.charge_components_pe",
+     "line": 50,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ChargePreview.charge_pe",
+     "line": 55,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ChargePreview.unsafe",
+     "line": 59,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ChargePreview.unsafe_mask",
+     "line": 67,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_operator_lanes",
+     "line": 71,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "load_charge_operators",
+     "line": 88,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_radial_diagnostics",
+     "line": 116,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "charge_preview",
+     "line": 136,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.cone_segment": {
+   "file": "lighthit/experimental/cone_segment.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "ConeSegment.__post_init__",
+     "line": 26,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ConeSegment.speed_m_per_ns",
+     "line": 39,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ConeSegment.cone_cosine",
+     "line": 43,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ballistic_spectrum",
+     "line": 47,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_scatter",
+     "line": 70,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "segment_spectrum",
+     "line": 92,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.crossing_mc": {
+   "file": "lighthit/experimental/crossing_mc.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_henyey_greenstein_cosines",
+     "line": 37,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_turn",
+     "line": 46,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "crossing_estimate",
+     "line": 63,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "mean_cosine",
+     "line": 147,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.detector_tree": {
+   "file": "lighthit/experimental/detector_tree.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_points",
+     "line": 22,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_indices",
+     "line": 29,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "AABB.__post_init__",
+     "line": 44,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "AABB.from_points",
+     "line": 55,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "aabb_distances",
+     "line": 60,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SourceBlock.__post_init__",
+     "line": 85,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "make_source_blocks",
+     "line": 91,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "AbsoluteChargeBound.__post_init__",
+     "line": 139,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.__init__",
+     "line": 185,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.__init__.<locals>.labels",
+     "line": 191,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.__init__.<locals>.groups",
+     "line": 203,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.__init__.<locals>.node",
+     "line": 219,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.__init__.<locals>.string_nodes",
+     "line": 228,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.from_detector",
+     "line": 239,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.range_candidates",
+     "line": 242,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorTree.range_candidates.<locals>.priority",
+     "line": 306,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.directional_reference": {
+   "file": "lighthit/experimental/directional_reference.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "spherical_quadrature",
+     "line": 36,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_frame_from_axis",
+     "line": 62,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "khat_quadrature_response",
+     "line": 73,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_node_angles",
+     "line": 132,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_batched_solve",
+     "line": 138,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_direction_operator",
+     "line": 144,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "dense_angular_reference",
+     "line": 156,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "axisymmetric_reference",
+     "line": 210,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.effective_segments": {
+   "file": "lighthit/experimental/effective_segments.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "EffectiveSegments.__len__",
+     "line": 64,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "EffectiveSegments.summary",
+     "line": 67,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "fit_effective_segments",
+     "line": 78,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "effective_segment_response",
+     "line": 179,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "full_response",
+     "line": 199,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "vectorised_ballistic",
+     "line": 235,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.event_moments": {
+   "file": "lighthit/experimental/event_moments.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.filon_ge2": {
+   "file": "lighthit/experimental/filon_ge2.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.first_charge_beta_atlas": {
+   "file": "lighthit/experimental/first_charge_beta_atlas.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.first_charge_only": {
+   "file": "lighthit/experimental/first_charge_only.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.g4_source": {
+   "file": "lighthit/experimental/g4_source.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.ge2_beta_response": {
+   "file": "lighthit/experimental/ge2_beta_response.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.ge2_charge_beta_atlas": {
+   "file": "lighthit/experimental/ge2_charge_beta_atlas.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.hdf5_minimal": {
+   "file": "lighthit/experimental/hdf5_minimal.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.joint_first": {
+   "file": "lighthit/experimental/joint_first.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_evaluate_path",
+     "line": 17,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_temporal_contract",
+     "line": 43,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "PencilFirstCDF.build",
+     "line": 78,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PencilFirstCDF.cdf_path",
+     "line": 136,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PencilFirstCDF.contract",
+     "line": 143,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "contract_joint_pencils",
+     "line": 164,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "direct_photon_histogram",
+     "line": 198,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.joint_first_atlas": {
+   "file": "lighthit/experimental/joint_first_atlas.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_coordinate",
+     "line": 15,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_lagrange4",
+     "line": 25,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_prepare",
+     "line": 36,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_pchip_slopes",
+     "line": 114,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_sample_curve",
+     "line": 140,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_contract",
+     "line": 154,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_stationary_direct",
+     "line": 171,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_acceptance_extrema",
+     "line": 202,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_positive_charge_bound",
+     "line": 212,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedFirstCDF.contract",
+     "line": 253,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "UniversalFirstCDFAtlas.build",
+     "line": 283,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "UniversalFirstCDFAtlas.save",
+     "line": 317,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "UniversalFirstCDFAtlas.load",
+     "line": 328,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "UniversalFirstCDFAtlas.prepare",
+     "line": 334,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "UniversalFirstCDFAtlas.charge_coefficients",
+     "line": 363,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "photon_source_guard",
+     "line": 394,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "evaluate_photon_histogram_atlas",
+     "line": 425,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.joint_muon": {
+   "file": "lighthit/experimental/joint_muon.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.joint_source": {
+   "file": "lighthit/experimental/joint_source.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.local_source_rank": {
+   "file": "lighthit/experimental/local_source_rank.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "charge_preserving_ranks",
+     "line": 11,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.muon_components": {
+   "file": "lighthit/experimental/muon_components.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "MuonFineStrategy.__init__",
+     "line": 22,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "MuonFineStrategy._labels",
+     "line": 59,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "MuonFineStrategy.__call__",
+     "line": 65,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "MuonFineStrategy.ge2_partition",
+     "line": 131,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_muon_components",
+     "line": 147,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_muon_components.<locals>.evaluate_prompt",
+     "line": 171,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.muon_integral": {
+   "file": "lighthit/experimental/muon_integral.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.muon_packets": {
+   "file": "lighthit/experimental/muon_packets.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.packet_skip": {
+   "file": "lighthit/experimental/packet_skip.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.point_ge2": {
+   "file": "lighthit/experimental/point_ge2.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.point_ge2_blas": {
+   "file": "lighthit/experimental/point_ge2_blas.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.positive_fluence": {
+   "file": "lighthit/experimental/positive_fluence.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.primary_polyline": {
+   "file": "lighthit/experimental/primary_polyline.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.primary_prompt": {
+   "file": "lighthit/experimental/primary_prompt.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "transport_primary_prompt",
+     "line": 27,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.prompt_backward": {
+   "file": "lighthit/experimental/prompt_backward.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_bounds",
+     "line": 79,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "build_tree",
+     "line": 92,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_next",
+     "line": 148,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_sample_cosine",
+     "line": 159,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_passes",
+     "line": 191,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_task",
+     "line": 207,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_run",
+     "line": 363,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "_frame",
+     "line": 386,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "direct_lobes",
+     "line": 393,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "backward_order1",
+     "line": 442,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.secondary_first": {
+   "file": "lighthit/experimental/secondary_first.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.segment_reference": {
+   "file": "lighthit/experimental/segment_reference.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "phase_function",
+     "line": 43,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "directed_first_order",
+     "line": 61,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "directed_first_order.<locals>.integrand",
+     "line": 101,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SegmentGeometry.of",
+     "line": 148,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SegmentGeometry.cone_cosine",
+     "line": 158,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SegmentGeometry.speed_m_per_ns",
+     "line": 162,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SegmentGeometry.frame",
+     "line": 165,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SegmentGeometry.cone_directions",
+     "line": 173,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SegmentGeometry.ballistic_root",
+     "line": 183,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "segment_ballistic_field",
+     "line": 201,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_polar_sectors",
+     "line": 233,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_polar_extent",
+     "line": 261,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "segment_first_order",
+     "line": 285,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "segment_first_order.<locals>.contribution",
+     "line": 322,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "segment_first_order_mc",
+     "line": 369,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ballistic_by_ray_counting",
+     "line": 414,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.shell_mc": {
+   "file": "lighthit/experimental/shell_mc.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_walk",
+     "line": 18,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "shell_estimate",
+     "line": 95,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ratio_with_standard_error",
+     "line": 120,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.signal_screen": {
+   "file": "lighthit/experimental/signal_screen.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "isotropic_axial_proxy",
+     "line": 16,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "screening_candidates",
+     "line": 58,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.smart_muon": {
+   "file": "lighthit/experimental/smart_muon.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "transport_smart_muon",
+     "line": 16,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_smart_muon.<locals>.fine",
+     "line": 37,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.spectral_response_basis": {
+   "file": "lighthit/experimental/spectral_response_basis.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "ResponseCubature.load",
+     "line": 24,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ResponseCubature.validate_optics",
+     "line": 36,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "fit_response_cubature",
+     "line": 43,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "evaluate_cubature",
+     "line": 75,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.spline_fast": {
+   "file": "lighthit/experimental/spline_fast.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_horner_eval",
+     "line": 53,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedMultipoles.__init__",
+     "line": 90,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedMultipoles.of",
+     "line": 102,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedMultipoles.grid",
+     "line": 134,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedMultipoles.medium",
+     "line": 138,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedMultipoles.radius_range_m",
+     "line": 142,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedMultipoles.moments",
+     "line": 146,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PreparedMultipoles.moments_at",
+     "line": 151,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.stationary_modes": {
+   "file": "lighthit/experimental/stationary_modes.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "StationaryModes.build",
+     "line": 29,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "StationaryModes.scalar_current",
+     "line": 47,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "StationaryModes.leading_attenuation_per_m",
+     "line": 67,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "StationaryModes.leading_mean_cosine",
+     "line": 71,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "StationaryModes.isolated_leading_mode",
+     "line": 75,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_scalar_current",
+     "line": 80,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_scalar_current.<locals>.integrand",
+     "line": 100,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "collision_components",
+     "line": 115,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.stationary_pencils": {
+   "file": "lighthit/experimental/stationary_pencils.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "stationary_pencils_charge",
+     "line": 12,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.experimental.track_first_bounds": {
+   "file": "lighthit/experimental/track_first_bounds.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.track_first_primitive": {
+   "file": "lighthit/experimental/track_first_primitive.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.track_ge2_primitive": {
+   "file": "lighthit/experimental/track_ge2_primitive.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.experimental.universal_primary": {
+   "file": "lighthit/experimental/universal_primary.py",
+   "imported_by": [],
+   "functions": []
+  },
+  "lighthit.g4_source": {
+   "file": "lighthit/g4_source.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "cherenkov_yield_per_m",
+     "line": 40,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SourceContract.as_dict",
+     "line": 61,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "LightElements.__len__",
+     "line": 93,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "LightElements.midpoints_m",
+     "line": 98,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "LightElements.midpoint_time_ns",
+     "line": 102,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "LightElements.centroid_m",
+     "line": 108,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "LightElements.extent_m",
+     "line": 114,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "LightElements.summary",
+     "line": 120,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "LightElements.moved",
+     "line": 133,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "load_event",
+     "line": 146,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.geometry": {
+   "file": "lighthit/geometry.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_readonly_vector",
+     "line": 9,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "GeometryRegion.from_positions",
+     "line": 26,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "GeometryRegion.as_dict",
+     "line": 39,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorGeometrySummary.centroid_m",
+     "line": 57,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "DetectorGeometrySummary.bounds_min_m",
+     "line": 61,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorGeometrySummary.bounds_max_m",
+     "line": 65,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorGeometrySummary.size_m",
+     "line": 69,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorGeometrySummary.bounding_radius_m",
+     "line": 73,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorGeometrySummary.as_dict",
+     "line": 76,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "describe_geometry",
+     "line": 84,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "point_source_radial_range",
+     "line": 104,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    }
+   ]
+  },
+  "lighthit.green": {
+   "file": "lighthit/green.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "SolverSettings.__post_init__",
+     "line": 24,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "SolverSettings.quick",
+     "line": 37,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SolverSettings.refined",
+     "line": 41,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SolverSettings.quadrature",
+     "line": 44,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "GreenResult.spectrum",
+     "line": 73,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "GreenResult.radii_m",
+     "line": 77,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "GreenResult.cosines",
+     "line": 81,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "GreenResult.front_time_ns",
+     "line": 87,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "GreenResult.charge_per_m2",
+     "line": 91,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "GreenResult.readout",
+     "line": 97,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "GreenResult.save",
+     "line": 101,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PointGreenSolver.__init__",
+     "line": 129,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PointGreenSolver.solve",
+     "line": 136,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.hdf5_minimal": {
+   "file": "lighthit/hdf5_minimal.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_unpack",
+     "line": 30,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_Header.one",
+     "line": 40,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File.__init__",
+     "line": 51,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._offset",
+     "line": 67,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._length",
+     "line": 73,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._symbol_entry",
+     "line": 77,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._heap_name",
+     "line": 89,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._symbol_nodes",
+     "line": 102,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._group_links",
+     "line": 124,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._object_header",
+     "line": 138,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._header_span",
+     "line": 164,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._datatype",
+     "line": 170,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._datatype_span",
+     "line": 219,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._filters",
+     "line": 246,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._undo_filters",
+     "line": 279,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._dataspace",
+     "line": 298,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._layout",
+     "line": 308,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File._chunk_addresses",
+     "line": 330,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File.dataset",
+     "line": 357,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "File.groups",
+     "line": 396,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "read_dataset",
+     "line": 404,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "list_datasets",
+     "line": 414,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.medium": {
+   "file": "lighthit/medium.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "Medium.__post_init__",
+     "line": 22,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "Medium.extinction_per_m",
+     "line": 36,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "Medium.speed_m_per_ns",
+     "line": 40,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "synthetic_medium",
+     "line": 44,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.model": {
+   "file": "lighthit/model.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_axis",
+     "line": 11,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "WavelengthQuadrature.__post_init__",
+     "line": 26,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "WavelengthQuadrature.gauss_legendre",
+     "line": 35,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "SpectralMedium.__post_init__",
+     "line": 56,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "SpectralMedium.wavelength_range_nm",
+     "line": 70,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "SpectralMedium.sample",
+     "line": 73,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "SpectralMedium.sample.<locals>.interp",
+     "line": 78,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "SpectralMedium.band",
+     "line": 85,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "DetectorArray.__post_init__",
+     "line": 110,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "DetectorArray.__len__",
+     "line": 138,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DetectorArray.head_on_cosine",
+     "line": 141,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "DetectorArray.angular_weight",
+     "line": 147,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "DetectorArray.spectral_weight",
+     "line": 150,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon": {
+   "file": "lighthit/muon/__init__.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": []
+  },
+  "lighthit.muon.adaptive_screen": {
+   "file": "lighthit/muon/adaptive_screen.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "AdaptiveScreenConfig.__post_init__",
+     "line": 25,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "detector_groups",
+     "line": 36,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "detector_groups.<locals>.labels",
+     "line": 40,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "adaptive_candidates",
+     "line": 48,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "__getattr__",
+     "line": 155,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.api": {
+   "file": "lighthit/muon/api.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "muon_kernel",
+     "line": 23,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "MuonTransport.__init__",
+     "line": 60,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "MuonTransport.tables",
+     "line": 73,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "MuonTransport.__call__",
+     "line": 93,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "MuonTransport._event",
+     "line": 122,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_muon",
+     "line": 148,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.muon.data": {
+   "file": "lighthit/muon/data.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "MuonData.load",
+     "line": 39,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "MuonData.find",
+     "line": 56,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "MuonData.check",
+     "line": 76,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "MuonData.paths",
+     "line": 83,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "write_manifest",
+     "line": 93,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.muon.filon_ge2": {
+   "file": "lighthit/muon/filon_ge2.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_projection",
+     "line": 14,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "backward_panels",
+     "line": 21,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "retarded_inverse",
+     "line": 38,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "warm_direct_rte",
+     "line": 45,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "wavelength_plane",
+     "line": 61,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "backward_ge2_filon_many",
+     "line": 79,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.first_charge_beta_atlas": {
+   "file": "lighthit/muon/first_charge_beta_atlas.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "FirstChargeBetaAtlas.__init__",
+     "line": 15,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "FirstChargeBetaAtlas.resident_bytes",
+     "line": 34,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "FirstChargeBetaAtlas.validate_kernel",
+     "line": 38,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "FirstChargeBetaAtlas.supports",
+     "line": 42,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "FirstChargeBetaAtlas.query_charge_many",
+     "line": 48,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "FirstChargeBetaAtlas.query_charge_many.<locals>.values",
+     "line": 66,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "FirstChargeBetaAtlas.query_charge_many.<locals>.values.<locals>.at",
+     "line": 68,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.muon.first_charge_only": {
+   "file": "lighthit/muon/first_charge_only.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "first_scattering_charge_only",
+     "line": 13,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.ge2_beta_response": {
+   "file": "lighthit/muon/ge2_beta_response.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "cone_beta_taylor",
+     "line": 26,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "primary_tail_mask",
+     "line": 47,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "subdivide_tail_elements",
+     "line": 54,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_ge2_tail_batch",
+     "line": 70,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_ge2_tail_batch.<locals>.no_prompt",
+     "line": 94,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.muon.ge2_charge_beta_atlas": {
+   "file": "lighthit/muon/ge2_charge_beta_atlas.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "Ge2ChargeBetaAtlas.__init__",
+     "line": 15,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2ChargeBetaAtlas.resident_bytes",
+     "line": 43,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2ChargeBetaAtlas.validate_kernel",
+     "line": 48,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2ChargeBetaAtlas.supports",
+     "line": 54,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "Ge2ChargeBetaAtlas.segment_charge_many",
+     "line": 60,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.muon.joint_muon": {
+   "file": "lighthit/muon/joint_muon.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "JointMuonConfig.__post_init__",
+     "line": 50,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "secondary_joint_transport",
+     "line": 95,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "secondary_joint_transport.<locals>.flush_ge2",
+     "line": 147,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_ge2_skip_plan",
+     "line": 263,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_joint_muon",
+     "line": 341,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_joint_muon.<locals>.fine",
+     "line": 399,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.joint_source": {
+   "file": "lighthit/muon/joint_source.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_charged_harmonics",
+     "line": 22,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_accumulate_spectral_cones",
+     "line": 32,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "JointSource.spectrum",
+     "line": 75,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_compile_photon_histogram_streaming",
+     "line": 118,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_compile_photon_histogram_streaming.<locals>.position_anchor",
+     "line": 159,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_compile_photon_histogram_streaming.<locals>.clock_anchor",
+     "line": 165,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "compile_photon_histogram",
+     "line": 249,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_unique_integer_rows",
+     "line": 381,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_positive",
+     "line": 402,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "compile_joint_source",
+     "line": 410,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.muon_integral": {
+   "file": "lighthit/muon/muon_integral.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "fit_track_integrals",
+     "line": 26,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "fit_track_integrals.<locals>.fit",
+     "line": 66,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "order1_integrals",
+     "line": 145,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.muon_packets": {
+   "file": "lighthit/muon/muon_packets.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "SourcePacket.source",
+     "line": 27,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "partition_muon",
+     "line": 35,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "order1_packets",
+     "line": 115,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.muon.packet_skip": {
+   "file": "lighthit/muon/packet_skip.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_hg_angle_upper",
+     "line": 24,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_yukawa_upper",
+     "line": 42,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_ray_bound",
+     "line": 54,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_azimuth_ray_bound",
+     "line": 72,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_packet_bounds",
+     "line": 103,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "bound_constants",
+     "line": 157,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "azimuth_partition",
+     "line": 168,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "packet_first_bounds",
+     "line": 180,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "seed_packets",
+     "line": 211,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "select_skips",
+     "line": 233,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.point_ge2": {
+   "file": "lighthit/muon/point_ge2.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_apply_points",
+     "line": 13,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "apply_point_spectral",
+     "line": 162,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.point_ge2_blas": {
+   "file": "lighthit/muon/point_ge2_blas.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "clear_matrix_cache",
+     "line": 18,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "matrix_cache_info",
+     "line": 25,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_immutable",
+     "line": 31,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_coefficient_matrix",
+     "line": 42,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_supported_pairs",
+     "line": 74,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_angular_weights",
+     "line": 112,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_accumulate",
+     "line": 222,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "apply_point_spectral_blas",
+     "line": 236,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "apply_point_spectral_blas_multi",
+     "line": 354,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.positive_fluence": {
+   "file": "lighthit/muon/positive_fluence.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "universal_endpoints",
+     "line": 16,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "endpoint_histogram",
+     "line": 50,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "prefixes",
+     "line": 69,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_bracket",
+     "line": 79,
+     "kind": "numba",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_prefix",
+     "line": 90,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "segment_queries",
+     "line": 102,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "point_queries",
+     "line": 135,
+     "kind": "numba",
+     "executed_by": []
+    },
+    {
+     "qualname": "PositiveFluenceAtlas.__post_init__",
+     "line": 166,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "PositiveFluenceAtlas.load",
+     "line": 183,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "PositiveFluenceAtlas.save",
+     "line": 189,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PositiveFluenceAtlas.segments",
+     "line": 199,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PositiveFluenceAtlas.points",
+     "line": 207,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.muon.preview": {
+   "file": "lighthit/muon/preview.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "group_elements",
+     "line": 38,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "group_elements.<locals>.reduce",
+     "line": 60,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_screen_points",
+     "line": 79,
+     "kind": "numba",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "query_groups",
+     "line": 120,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "acceptance_maximum",
+     "line": 131,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "check_atlas_optics",
+     "line": 141,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "independent_preview",
+     "line": 153,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.primary_polyline": {
+   "file": "lighthit/muon/primary_polyline.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "PrimaryPolylineConfig.__post_init__",
+     "line": 22,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "fit_primary_polyline",
+     "line": 37,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "fit_primary_polyline.<locals>.recurse",
+     "line": 67,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "order1_primary_polyline",
+     "line": 135,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "primary_spectral_quadrature",
+     "line": 147,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.secondary_first": {
+   "file": "lighthit/muon/secondary_first.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "evaluate_secondary_first",
+     "line": 14,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "evaluate_secondary_first.<locals>.prepare",
+     "line": 87,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "evaluate_secondary_first.<locals>.account",
+     "line": 105,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "evaluate_secondary_first.<locals>.apply",
+     "line": 110,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_evaluation_units",
+     "line": 177,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_skipping_units",
+     "line": 200,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_skipping_units.<locals>.run",
+     "line": 251,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.track_first_bounds": {
+   "file": "lighthit/muon/track_first_bounds.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "hg_angle_integral_over_sine_upper",
+     "line": 11,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "yukawa_convolution_upper",
+     "line": 35,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "yukawa_convolution_elementary_upper",
+     "line": 68,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "infinite_track_first_scattering_bounds",
+     "line": 93,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "combined_first_scattering_segment_bounds",
+     "line": 160,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.track_first_primitive": {
+   "file": "lighthit/muon/track_first_primitive.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_checked_source_bounds",
+     "line": 18,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstPrimitive.__post_init__",
+     "line": 39,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstPrimitive._spatial_interval",
+     "line": 70,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstPrimitive._spatial_interval.<locals>.at",
+     "line": 72,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstPrimitive.query",
+     "line": 84,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstPrimitive.segment",
+     "line": 107,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "build_track_first_primitive",
+     "line": 117,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "build_track_first_rows",
+     "line": 126,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "orientation_nodes",
+     "line": 201,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.__post_init__",
+     "line": 239,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.query",
+     "line": 254,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlas.query.<locals>.evaluate",
+     "line": 273,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlas.query.<locals>.evaluate.<locals>.interval",
+     "line": 275,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlas.query.<locals>.evaluate.<locals>.interval.<locals>.endpoint",
+     "line": 277,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlas.query_charge",
+     "line": 299,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.query_charge.<locals>.evaluate",
+     "line": 312,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.query_charge.<locals>.evaluate.<locals>.endpoint",
+     "line": 314,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.query_charge_many",
+     "line": 329,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlas.query_charge_many.<locals>.evaluate",
+     "line": 347,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlas.query_charge_many.<locals>.evaluate.<locals>.endpoint",
+     "line": 349,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlas.segment_charge",
+     "line": 365,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.segment",
+     "line": 371,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.save",
+     "line": 381,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackFirstAtlas.load",
+     "line": 387,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "build_track_first_atlas",
+     "line": 395,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "first_scattering_segment_bounds",
+     "line": 439,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlasStore.__init__",
+     "line": 526,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlasStore.__init__.<locals>.Access.__init__",
+     "line": 553,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlasStore.__init__.<locals>.Access.__getitem__",
+     "line": 556,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlasStore._load_row",
+     "line": 561,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlasStore.validate_kernel",
+     "line": 579,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TrackFirstAtlasStore.resident_bytes",
+     "line": 589,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "track_first_optical_contract",
+     "line": 600,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.track_ge2_primitive": {
+   "file": "lighthit/muon/track_ge2_primitive.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "SegmentPrimitive.build",
+     "line": 26,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SegmentPrimitive.primitive",
+     "line": 59,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "SegmentPrimitive.segment",
+     "line": 71,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "cone_point_evaluator",
+     "line": 84,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "cone_point_evaluator.<locals>.evaluate",
+     "line": 139,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "look_polynomials",
+     "line": 156,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "orientation_basis_looks",
+     "line": 168,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackGe2MiniAtlas.save",
+     "line": 194,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackGe2MiniAtlas.load",
+     "line": 203,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackGe2MiniAtlas.build",
+     "line": 216,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TrackGe2MiniAtlas.segment",
+     "line": 242,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "track_ge2_optics_metadata",
+     "line": 279,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "track_ge2_axial_edges",
+     "line": 295,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "build_track_ge2_orientation_row",
+     "line": 308,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ReadMeter.__init__",
+     "line": 334,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_ReadMeter.read",
+     "line": 337,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_ReadMeter.__getattr__",
+     "line": 342,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.__init__",
+     "line": 354,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas._verify_file",
+     "line": 384,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.validate_kernel",
+     "line": 404,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.is_validated",
+     "line": 410,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.query_supported",
+     "line": 419,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas._row",
+     "line": 426,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.resident_bytes",
+     "line": 453,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas._segment",
+     "line": 459,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas._segment.<locals>.front_at",
+     "line": 487,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.segment",
+     "line": 500,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.segment_charge_many",
+     "line": 505,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DiskTrackGe2Atlas.segment_charge",
+     "line": 509,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_disk_charge_many",
+     "line": 515,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_charge_endpoint",
+     "line": 544,
+     "kind": "python",
+     "executed_by": [
+      "muon"
+     ]
+    },
+    {
+     "qualname": "_charge_pairs",
+     "line": 565,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_cone_many_looks",
+     "line": 590,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.muon.universal_primary": {
+   "file": "lighthit/muon/universal_primary.py",
+   "imported_by": [
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-muon",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "subset_kernel",
+     "line": 21,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "split_source",
+     "line": 31,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_legendre_rule",
+     "line": 45,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_direct_ge2_order",
+     "line": 50,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DirectGe2.__init__",
+     "line": 59,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DirectGe2._load_bundle",
+     "line": 71,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DirectGe2.many",
+     "line": 85,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "DirectGe2.__call__",
+     "line": 95,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "transport_universal_primary",
+     "line": 142,
+     "kind": "python",
+     "executed_by": [
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.prompt": {
+   "file": "lighthit/prompt.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "PromptConfig.__post_init__",
+     "line": 185,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "PromptComponent.rate_pe_per_ns",
+     "line": 237,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PromptTransportResponse.charge_pe",
+     "line": 266,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "PromptTransportResponse.bins_pe",
+     "line": 271,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PromptTransportResponse.window_charge_orders_pe",
+     "line": 275,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PromptTransportResponse.outside_window_pe",
+     "line": 278,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PromptTransportResponse.select",
+     "line": 284,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PromptTransportResponse.save",
+     "line": 301,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PromptTransportResponse.load",
+     "line": 319,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "PromptTransportResponse.viewer_components",
+     "line": 337,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_json_default",
+     "line": 349,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "acceptance_monomials",
+     "line": 361,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "acceptance_polynomial",
+     "line": 383,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_spectral_tables",
+     "line": 393,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_thread_count",
+     "line": 418,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_track_segments",
+     "line": 438,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_element_segments",
+     "line": 452,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_source_elements",
+     "line": 465,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_prompt",
+     "line": 480,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_jit_state",
+     "line": 916,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_ballistic_backend",
+     "line": 927,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_ballistic_fields",
+     "line": 937,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_ballistic_fields.<locals>.spectral",
+     "line": 941,
+     "kind": "python",
+     "executed_by": [
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_ballistic_fields.<locals>.track",
+     "line": 962,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ballistic_fields.<locals>.shower",
+     "line": 967,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_min_distance_to_segments",
+     "line": 975,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_order1",
+     "line": 986,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_order1.<locals>.grouped",
+     "line": 1071,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_blocks",
+     "line": 1209,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "compress",
+     "line": 1218,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "compress.<locals>.run",
+     "line": 1241,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.prompt_reference": {
+   "file": "lighthit/prompt_reference.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "pencil_geometry",
+     "line": 44,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_integrand",
+     "line": 64,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_chi_of_path",
+     "line": 74,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "pencil_order1_bins",
+     "line": 80,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "pencil_order1_monte_carlo",
+     "line": 113,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ring_order1_bins",
+     "line": 140,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ring_order1_bins.<locals>.pencil",
+     "line": 160,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.providers": {
+   "file": "lighthit/providers.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "load_bgvd_water",
+     "line": 13,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "load_bgvd_water.<locals>.sample",
+     "line": 43,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.readout": {
+   "file": "lighthit/readout.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "frequency_weights",
+     "line": 9,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "inverse_bins",
+     "line": 18,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TimeProfile.values_per_m2",
+     "line": 52,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TimeProfile.rate_per_m2_ns",
+     "line": 56,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TimeProfile.centers_ns",
+     "line": 60,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "time_bins",
+     "line": 64,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.selftest": {
+   "file": "lighthit/selftest.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "run",
+     "line": 11,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "main",
+     "line": 50,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.shower": {
+   "file": "lighthit/shower/__init__.py",
+   "imported_by": [
+    "shower",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": []
+  },
+  "lighthit.shower.api": {
+   "file": "lighthit/shower/api.py",
+   "imported_by": [
+    "shower",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_default_prompt",
+     "line": 37,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ShowerConfig.__post_init__",
+     "line": 81,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "shower_kernel",
+     "line": 92,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ShowerTransport.__init__",
+     "line": 122,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ShowerTransport.tables",
+     "line": 135,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ShowerTransport.__call__",
+     "line": 157,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ShowerTransport._event",
+     "line": 179,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_shower",
+     "line": 198,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_shower.<locals>.compiled_part",
+     "line": 278,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_shower.<locals>.exact",
+     "line": 377,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.shower.data": {
+   "file": "lighthit/shower/data.py",
+   "imported_by": [
+    "shower",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "ShowerData.of",
+     "line": 33,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "ShowerData.load",
+     "line": 43,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "ShowerData.find",
+     "line": 62,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.shower.ge2": {
+   "file": "lighthit/shower/ge2.py",
+   "imported_by": [
+    "shower",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "ntsim-electron",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc"
+   ],
+   "functions": [
+    {
+     "qualname": "_band_field",
+     "line": 21,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "node_sources",
+     "line": 35,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "collapse",
+     "line": 70,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "apply_folded",
+     "line": 99,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "delay_groups",
+     "line": 122,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    }
+   ]
+  },
+  "lighthit.shower_basis": {
+   "file": "lighthit/shower_basis.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "ShowerBasis.__post_init__",
+     "line": 75,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2KernelStore.__init__",
+     "line": 124,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2KernelStore.__len__",
+     "line": 129,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "Ge2KernelStore.nbytes",
+     "line": 133,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "Ge2KernelStore._key",
+     "line": 146,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2KernelStore._adopt",
+     "line": 151,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2KernelStore.bundle",
+     "line": 172,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "Ge2KernelStore.kernel",
+     "line": 232,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "Ge2KernelStore.save",
+     "line": 260,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "Ge2KernelStore.load",
+     "line": 275,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_frequency_indices",
+     "line": 295,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_radial_window_report",
+     "line": 307,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_window_report_from_photons",
+     "line": 332,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "transport_hybrid_basis",
+     "line": 360,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis",
+     "line": 629,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis.<locals>.band_pieces",
+     "line": 691,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis.<locals>.one_band",
+     "line": 719,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis.<locals>.source_field",
+     "line": 724,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis.<locals>.compile_field",
+     "line": 736,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis.<locals>.apply_spectral_group",
+     "line": 761,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis.<locals>.apply_spectral_group.<locals>.subset",
+     "line": 790,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_transport_hybrid_spectral_basis.<locals>.spectral_groups",
+     "line": 845,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.single": {
+   "file": "lighthit/single.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "hg_phase",
+     "line": 12,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_unit_rule",
+     "line": 18,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_single_scattering_path_rate_numpy",
+     "line": 23,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_check_single_backend",
+     "line": 49,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_path_rate_backend",
+     "line": 56,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_quadrature_backend",
+     "line": 75,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_quadrature_geometry",
+     "line": 80,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_scattering_rate",
+     "line": 92,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_spectrum",
+     "line": 141,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_spectrum.<locals>.integrand",
+     "line": 162,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_spectrum.<locals>.integrand",
+     "line": 167,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_bins",
+     "line": 185,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_bins.<locals>.rate",
+     "line": 206,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_bins.<locals>.integrand",
+     "line": 223,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.single_fast": {
+   "file": "lighthit/single_fast.py",
+   "imported_by": [],
+   "functions": [
+    {
+     "qualname": "_hg_phase_scalar",
+     "line": 17,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_scattering_path_rate",
+     "line": 28,
+     "kind": "numba-inlined",
+     "executed_by": []
+    },
+    {
+     "qualname": "single_spectrum_integrand",
+     "line": 67,
+     "kind": "numba",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.sources": {
+   "file": "lighthit/sources.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_unit_vector",
+     "line": 12,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "_principal_axis",
+     "line": 22,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_rotation_between",
+     "line": 39,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "SourcePose.__post_init__",
+     "line": 67,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "IsotropicFlash.__post_init__",
+     "line": 88,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "IsotropicFlash.monochromatic",
+     "line": 102,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "IsotropicFlash.broadband",
+     "line": 106,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SpectralLightElements.__post_init__",
+     "line": 139,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "SpectralLightElements.__len__",
+     "line": 164,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "SpectralLightElements.midpoints_m",
+     "line": 168,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "SpectralLightElements.centroid_m",
+     "line": 172,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "SpectralLightElements.extent_m",
+     "line": 177,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SpectralLightElements.principal_axis",
+     "line": 183,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SpectralLightElements.photon_density_per_nm",
+     "line": 186,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "SpectralLightElements.field",
+     "line": 193,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "SpectralLightElements.subset",
+     "line": 207,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "SpectralLightElements.moved",
+     "line": 219,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SpectralLightElements.placed",
+     "line": 231,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "CherenkovTrack.centered",
+     "line": 276,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CherenkovTrack.placed",
+     "line": 286,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CherenkovTrack.earliest_arrival_ns",
+     "line": 292,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CherenkovTrack.to_elements",
+     "line": 321,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "G4Shower.centroid_m",
+     "line": 347,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "G4Shower.principal_axis",
+     "line": 351,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "G4Shower.extent_m",
+     "line": 355,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "G4Shower.placed",
+     "line": 358,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "G4Shower.from_hdf5",
+     "line": 362,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "prompt",
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "SyntheticShower.gaussian",
+     "line": 403,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SyntheticShower.centroid_m",
+     "line": 444,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SyntheticShower.principal_axis",
+     "line": 448,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SyntheticShower.extent_m",
+     "line": 452,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "SyntheticShower.placed",
+     "line": 455,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.transport": {
+   "file": "lighthit/transport.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "KernelConfig.__post_init__",
+     "line": 57,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "CacheBuildEntry.as_dict",
+     "line": 109,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CacheBuildReport.built",
+     "line": 119,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CacheBuildReport.loaded",
+     "line": 123,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "CacheBuildReport.as_dict",
+     "line": 126,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ConsoleCacheProgress.__init__",
+     "line": 132,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ConsoleCacheProgress.plan",
+     "line": 135,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ConsoleCacheProgress.__call__",
+     "line": 149,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_ConsoleCacheProgress.complete",
+     "line": 166,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportComponent.rate_pe_per_ns",
+     "line": 184,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportResponse.charge_pe",
+     "line": 203,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportResponse.bins_pe",
+     "line": 207,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportResponse.select",
+     "line": 210,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportResponse.components_at_frequency_cutoff",
+     "line": 226,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportResponse.save",
+     "line": 251,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "HybridTransportResponse.charge_pe",
+     "line": 283,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "HybridTransportResponse.bins_pe",
+     "line": 287,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "HybridTransportResponse.select",
+     "line": 290,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "HybridTransportResponse.save",
+     "line": 301,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TransportKernel.__init__",
+     "line": 331,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel.register_method",
+     "line": 371,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel.available_methods",
+     "line": 376,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._solver_settings",
+     "line": 380,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel.resolved_angular_backend",
+     "line": 385,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel.acceptance",
+     "line": 400,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._band_key",
+     "line": 436,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._cache_key",
+     "line": 447,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._table_key",
+     "line": 457,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._table_path",
+     "line": 462,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._stored_tables",
+     "line": 468,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._table_matches",
+     "line": 484,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._stored_table",
+     "line": 502,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "laser",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._directional_cache_aliases",
+     "line": 531,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._notify_cache",
+     "line": 541,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "hybrid",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._atomic_cache_save",
+     "line": 546,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._json_value",
+     "line": 556,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._write_cache_manifest",
+     "line": 565,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._cache_for",
+     "line": 595,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._cache_for.<locals>.update",
+     "line": 629,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._directional_cache_key",
+     "line": 653,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._directional_cache_for",
+     "line": 663,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._directional_cache_for.<locals>.update",
+     "line": 697,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel.cache_kinds",
+     "line": 723,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel.source_wavelengths",
+     "line": 743,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel.build",
+     "line": 755,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel.build_folded_directional",
+     "line": 819,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._auto_method",
+     "line": 830,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel.transport",
+     "line": 839,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel.transport_prompt",
+     "line": 850,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "event",
+      "event-stopping-muon",
+      "prompt",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TransportKernel.transport_hybrid",
+     "line": 868,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "TransportKernel.ge2_kernel_store",
+     "line": 908,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._response",
+     "line": 923,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._flash_nodes",
+     "line": 929,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._transport_isotropic",
+     "line": 941,
+     "kind": "python",
+     "executed_by": [
+      "laser",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._source_elements",
+     "line": 1042,
+     "kind": "python",
+     "executed_by": [
+      "shower",
+      "muon",
+      "event",
+      "event-stopping-muon",
+      "event-muon-near-om",
+      "hybrid",
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._transport_elements",
+     "line": 1052,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._transport_axial_full",
+     "line": 1067,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._transport_axial",
+     "line": 1071,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "TransportKernel._transport_directional",
+     "line": 1226,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._transport_directional.<locals>.compile_spectral",
+     "line": 1319,
+     "kind": "python",
+     "executed_by": [
+      "hybrid"
+     ]
+    },
+    {
+     "qualname": "TransportKernel._directional_apply",
+     "line": 1721,
+     "kind": "python",
+     "executed_by": []
+    }
+   ]
+  },
+  "lighthit.viewer": {
+   "file": "lighthit/viewer.py",
+   "imported_by": [
+    "shower",
+    "muon",
+    "event",
+    "event-stopping-muon",
+    "event-muon-near-om",
+    "laser",
+    "prompt",
+    "hybrid",
+    "ntsim-electron",
+    "ntsim-muon",
+    "ntsim-nue-cc",
+    "ntsim-numu-cc",
+    "ntsim-laser"
+   ],
+   "functions": [
+    {
+     "qualname": "_identifier",
+     "line": 26,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "source_timing",
+     "line": 36,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_display_source",
+     "line": 69,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "_display_track_uid",
+     "line": 107,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "_display_primary_track",
+     "line": 127,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-muon",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_weighted_quantiles",
+     "line": 185,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_display_spindle",
+     "line": 191,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "_display_item",
+     "line": 218,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "_display_sources",
+     "line": 237,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "viewer_payload",
+     "line": 265,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "validate_event_viewer",
+     "line": 316,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "_validate_timing",
+     "line": 387,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "merge_event_viewers",
+     "line": 404,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc"
+     ]
+    },
+    {
+     "qualname": "save_event_result",
+     "line": 425,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "load_event_result",
+     "line": 435,
+     "kind": "python",
+     "executed_by": []
+    },
+    {
+     "qualname": "_embedded_payload",
+     "line": 440,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "_fill",
+     "line": 445,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    },
+    {
+     "qualname": "write_event_viewer",
+     "line": 451,
+     "kind": "python",
+     "executed_by": [
+      "ntsim-electron",
+      "ntsim-muon",
+      "ntsim-nue-cc",
+      "ntsim-numu-cc",
+      "ntsim-laser"
+     ]
+    }
+   ]
+  }
+ }
+}
