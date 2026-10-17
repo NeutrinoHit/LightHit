@@ -141,6 +141,42 @@ reads out on. The spline resolves waveforms much shorter than the table period
 (a 20 ns exponential keeps its charge to 0.5 %); a tail comparable to half the
 period is attenuated (an 80 ns exponential loses 10 %).
 
+## Direct light on the OM sphere (`ballistic_interval`)
+
+Order 0 of spectral elements (`ballistic_interval`, used by the shower, muon
+and event routes) treats an OM as the sphere whose cross-section is its
+`effective_area_m2` (radius 0.216 m for Baikal-GVD, the OM of NTSim's photon
+Monte Carlo) for elements that come closer than
+`BallisticIntervalConfig.finite_receiver_m` (default 20 m) to the OM centre,
+and as its centre for farther elements.
+
+A short step lights a thin conical shell. At one wavelength the rays through
+the OM centre leave the step from one point, so a point receiver counts the
+whole shell when it passes the centre and nothing when it misses it. The rays
+crossing the sphere leave the step from a window of half-width `R/sin(theta)`
+around that point, weighted by the semicircle law of the sphere's chords
+across the cone surface; the charge of an element is the part of this window
+inside the element (the hard window `[0, L)` of the point receiver). This is
+the leading order in `R/rho`: attenuation, acceptance and arrival time stay
+those of the centre ray, attenuation is taken to the centre (the reference
+plane of the effective area), and a step whose line passes through the sphere
+(`rho < R`) is not described. Collinear pieces of a straight track tile their
+windows, so splitting a track does not change its charge. The support in
+phase index widens by the angular radius of the sphere, and the two inner
+indices where the window starts to leave the element at either end split the
+spectral panels.
+
+Measured against an independent integration of the rays from every emission
+point and wavelength that cross the sphere, on the 6 GeV muon passing OM 267
+at 1.76 m: OM 267 59.70 pe against 59.65 pe, OMs 266 and 268 within 1.2 %;
+farther OMs of showers agree within 0.1 % (`finite-receiver-order0` in the
+registry; numbers and the photon Monte-Carlo comparison in `accuracy.md`).
+Beyond `finite_receiver_m` the point receiver stays; its order-0 error per OM
+is `accuracy.md`'s table. `finite_receiver_m=0` is the point receiver
+everywhere (bitwise the earlier results), `inf` the sphere everywhere (10-14
+times the order-0 time: a far short step then reaches the sphere over most of
+the spectrum instead of a narrow band).
+
 ## Near passes (`near_field.py`)
 
 The order >=2 tables start at `radial_range_m[0]` (3 m). The muon and shower
@@ -159,7 +195,7 @@ tables and are unaffected.
 
 Measured on a 6 GeV muon passing an OM at 1.76 m (`muon-near-om` of the
 registry): the clamp gives 0.051 pe of the OM's 0.167 pe order >=2 (orders 0
-and 1: 63.6 and 3.6 pe). The NTSim photon Monte Carlo of the same event (31
+and 1: 59.7 and 3.6 pe; order 0 was 63.6 pe with the point receiver). The NTSim photon Monte Carlo of the same event (31
 runs, hits split by their number of scatterings) gives 0.145 +- 0.024 pe for
 order >=2 at that OM; without the near part LightHit would give 0.116 pe. Moving
 the clamp radius from 3 m to 3.5 m or 4 m lowers the OM's order >=2 by 6 % or

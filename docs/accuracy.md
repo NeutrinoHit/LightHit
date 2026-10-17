@@ -50,6 +50,59 @@ scatterings, the regenerated events), the total charge of `EventTransport` is
 (100 GeV muon, computed by the shower fallback) times the MC charge. The
 regenerated 100 GeV muon fails in `MuonTransport` (`known-issues.md`).
 
+### Order 0 near emitters: the OM sphere
+
+The direct light of a short step is a thin conical shell; a point receiver at
+the OM centre samples it, the OM sphere (radius 0.216 m) averages it. Order 0
+uses the sphere for steps within 20 m of the OM and the centre beyond
+(`transport-kernel.md`, Direct light on the OM sphere). On the 6 GeV muon
+passing OM 267 at 1.76 m, against the NTSim photon Monte Carlo of the same
+Geant4 event (31 runs, hits without scattering), registry case
+`finite-receiver-order0/muon-near-om-mc`:
+
+| OM (nearest step) | point receiver | sphere within 20 m | same, chord yields | photon MC |
+|---|---:|---:|---:|---:|
+| 266 (6.2 m) | 0.020 | 0.211 | 0.171 | 0.172 +- 0.017 |
+| 267 (1.76 m) | 63.60 | 59.70 | 57.92 | 58.10 +- 0.49 |
+| 268 (10.8 m) | 1.402 | 0.613 | 0.571 | 0.555 +- 0.038 |
+| 269 (25.8 m) | 0.048 | 0.048 | 0.041 | 0.019 +- 0.004 |
+
+At OM 267 the point receiver had 39.2 pe from one 8.5 cm muon step whose
+shell passes the centre and 16.5 pe from one delta-electron step at 3.6 m
+(about 2 pe on the sphere). Two differences between LightHit and the Monte Carlo
+remain by design:
+
+* **Photon yield per step.** LightHit's source (NTSim `source_from_event`)
+  emits along the true Geant4 step length; NTSim's `CherenkovGenerator` emits
+  along the chord between the step points. The delta electrons of this event
+  have 7.09 m of true path and 5.88 m of chord (median step ratio 1.52). With
+  chord yields LightHit gives the column "chord yields": -1.8 pe at OM 267.
+  Every comparison with the photon Monte Carlo carries this difference in the
+  light of low-energy electrons.
+* **Attenuation reference.** The Monte Carlo attenuates each photon to its
+  entry point on the glass sphere, LightHit to the centre plane (the reference
+  of the effective area). The sphere integral with entry-point attenuation is
+  1.5 % higher at OM 267 (60.54 against 59.65 pe); for a plane wave the factor
+  is about `exp(mu_ext 2R/3)`, 1.0-1.4 % at any distance. It is within the
+  Monte-Carlo error of this comparison.
+
+Beyond 20 m the point receiver stays. Its order-0 error against the sphere
+everywhere, per OM with at least 1e-3 pe (cases `finite-receiver-order0/far-*`):
+
+| Input | OMs 20-50 m: median / 90 % / max | OMs 50-100 m: median / 90 % / max | sum point / sphere |
+|---|---|---|---|
+| 100 GeV e (bundle) | 3.7 / 7.2 / 24 % | 3.2 / 8.9 / 20 % | 2.638 / 2.636 pe |
+| 100 GeV pi+ | 8.3 / 23 / 46 % | 7.0 / 20 / 46 % | 1.869 / 1.898 pe |
+| nu_e CC | 8.4 / 44 / 98 % | 5.5 / 19 / 40 % | 2.277 / 2.368 pe |
+| 100 GeV muon | 11 / 18 / 20 % | 6.7 / 16 / 18 % | 0.861 / 0.836 pe |
+
+Order 0 is 40-50 % of an OM's charge at 20-100 m, so this is 1-4 % of the
+OM's total charge (median), the sum over the event within 4 %. The error is
+largest on dim OMs reached by few steps; it is not a bias. The sphere
+everywhere (`finite_receiver_m=inf`) costs 10-14 times the order-0 time; within
+20 m the default routes keep their time (100 GeV electron 13.8 s, 1 TeV muon
+51.6 s at one thread).
+
 ## Reported during development (LightHit 0.3.0a1, not reproduced)
 
 NTSim/Geant4 events in five Baikal-GVD clusters (1440 OMs), one CPU thread,

@@ -442,7 +442,7 @@ source.
 Measured during development on Geant4 events in five Baikal-GVD clusters
 (1440 OMs), one CPU thread: a 100 GeV electron in about 6 s, 1 TeV in 42 s, a
 1 TeV muon in 10 s, a nu_mu CC event in 73 s. Order 0 is exact on the Geant4
-steps; the largest numerical error is the grouped order 1 (at most about 3%
+steps (the OM is its sphere for steps within 20 m, its centre beyond); the largest numerical error is the grouped order 1 (at most about 3%
 bin L1 against original-step integration). Against NTSim's photon Monte Carlo
 on one 100 GeV electron: LightHit 5.89 pe in about 6 s; three Monte-Carlo runs
 5.48-5.86 pe (+- 0.23 statistical each) in about 320 s. Details, and what the tests check: `docs/accuracy.md`.

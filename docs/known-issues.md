@@ -24,6 +24,14 @@ stated. Fixed items are removed from this list.
   passes), checked against the photon Monte Carlo on one event only (6 GeV
   muon at 1.76 m: 0.167 pe vs 0.145 +- 0.024 pe). `TransportKernel.transport`
   and `transport_hybrid_basis` (default `near_points="raise"`) still refuse them.
+* Order 0 sees the OM sphere only for steps within
+  `BallisticIntervalConfig.finite_receiver_m` (20 m); beyond, the point
+  receiver at the OM centre samples the conical shells of short steps: 3-11 %
+  median, up to 98 % on single dim OMs at 20-100 m (`accuracy.md`). The sphere
+  is the leading order in `R/rho` (2 % off at the window edge at 2 m) and does
+  not describe a step whose line crosses the sphere. Orders 1 and >=2 and the
+  frozen-cone order 0 (`ballistic.py`, `ballistic_fast.py`, the quadrature
+  method and the flash path) use the OM centre at every distance.
 * Muon route: order >=2 charge and time profile of the same pair can come from
   different methods (atlas or batch charge, direct Filon profile), so a bin sum
   need not equal the charge column; near-field errors other than "unvalidated
@@ -33,6 +41,22 @@ stated. Fixed items are removed from this list.
 * `ShowerData.load` does not check that `ge2_band_fold` exists; a missing fold
   is silently recomputed in memory.
 * `lighthit.muon.preview.check_atlas_optics` does not compare the HG `g`.
+
+## Comparison with NTSim's photon Monte Carlo
+
+Differences by design, measured on the 6 GeV muon passing OM 267 at 1.76 m
+(`accuracy.md`, Order 0 near emitters):
+
+* NTSim's `CherenkovGenerator` emits along the chord between two step points,
+  LightHit's source (`source_from_event`) along the true Geant4 step length.
+  The delta electrons of that event have 21 % more true path than chord
+  (median step ratio 1.52); order 0 at OM 267 is 1.8 pe (3 %) higher in
+  LightHit for this reason alone. Why the ratio is that large for single
+  steps was not checked on the NTSim side.
+* The Monte Carlo attenuates each photon to its entry point on the glass
+  sphere, LightHit to the OM centre plane: about 1-1.5 % more light in the
+  Monte Carlo at every distance, below the statistical error of the
+  comparisons made so far.
 
 ## Interface
 

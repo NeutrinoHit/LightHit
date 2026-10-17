@@ -44,7 +44,8 @@ order, arguments and what each bundle file records: `tools/tables/README.md`). T
 
 1. **Time origin** per OM: `earliest_element_arrival` over all steps at the
    fastest group speed, or the caller's `time_origin_ns`.
-2. **Order 0 for all OMs**: `ballistic_interval` on all original steps.
+2. **Order 0 for all OMs**: `ballistic_interval` on all original steps (the
+   OM sphere for steps within 20 m, its centre beyond).
 3. **Preview** (`muon/preview.py`): steps are grouped (4 m cells, direction and
    beta classes) and the positive fluence atlas gives a cheap order 1 and >=2
    estimate per OM. It is an estimate, not a bound.

@@ -59,7 +59,9 @@ frozen, so use `replace(elements, cone_model="spectral")`. Steps with
    * order 0: `ballistic_interval` on the original steps over the continuous
      spectrum (wavelength support per step-OM pair from geometry, split at
      arrival-time stationary points and bin edges, Gauss order doubled from 8
-     to at most 64 until the charge changes by <= 1e-10 + 2e-6 |q|);
+     to at most 64 until the charge changes by <= 1e-10 + 2e-6 |q|); the OM
+     is its sphere for steps within 20 m and its centre beyond
+     (`transport-kernel.md`, Direct light on the OM sphere);
    * order 1: the exact single-scattering integral (full HG, extinction on both
      legs, group velocity, acceptance at the true arrival direction) evaluated
      by grouped pencils; steps above threshold in every band form one fused
@@ -80,7 +82,9 @@ speed, or `earliest_element_arrival` per OM for large or long sources).
 
 ## What is exact and what is approximated
 
-* Exact: order 0 on the original steps.
+* Exact: order 0 on the original steps over the continuous spectrum. The
+  receiver is the OM sphere to leading order in R/rho for steps within 20 m
+  and the OM centre beyond (`accuracy.md`: the point receiver's order-0 error).
 * Approximated: order 1 grouping and band fusion; the order >=2 source basis
   (axial interpolation, transverse stencil, time lattice); node-band
   interpolation of the kernels, cubic refit of the folded kernels, `complex64`
