@@ -239,3 +239,65 @@ def test_relativistic_source_skips_q1_shape_mode(monkeypatch):
     r=transport.transport_universal_primary(k,s,First(.001),Ge2(k,.002),first_beta_atlas=mode)
     assert r.metadata['q1_beta_charge_requested'] is True
     assert r.metadata['q1_beta_charge_active'] is False
+
+
+def _far_short_piece(om_position):
+    """A 5 cm piece at the origin along z and one OM at ``om_position``."""
+    k,s=setup()
+    k.detector=replace(k.detector,positions_m=np.array([om_position],float))
+    s=replace(s,length_m=np.array([.05]),coefficient0=np.array([1e5]),coefficient2=np.array([-1e5]),
+        end_ns=np.array([.05/.299792458]))
+    return k,s
+
+
+def _no_first_order(monkeypatch):
+    def zero(k,s,**kw):return SimpleNamespace(charge_pe=np.zeros(1),bins_pe=np.zeros((1,len(k.config.relative_time_edges_ns)-1)))
+    monkeypatch.setattr(transport,'ballistic_interval',zero)
+    monkeypatch.setattr(transport,'combined_first_scattering_segment_bounds',lambda k,s,*a,**kw:(np.ones(len(s)),{}))
+    monkeypatch.setattr(transport,'first_scattering_charge_only',lambda *a,**kw:(np.zeros(1),{}))
+
+
+def test_line_passing_an_om_far_from_the_piece_is_not_near_field(monkeypatch):
+    # The line of the piece passes 0.5 m from the OM, the piece itself is 100 m
+    # away: the order >=2 integral goes to the direct fallback, not to an error.
+    k,s=_far_short_piece([.5,0.,100.])
+    _no_first_order(monkeypatch)
+    calls=[]
+    def direct(self,rho,look,beta,clock,lo,hi,density,closest,full):
+        calls.append((rho,lo,hi));return np.zeros(65,complex)
+    monkeypatch.setattr(transport.DirectGe2,'__call__',direct)
+    result=transport.transport_universal_primary(k,s,First(0.),Ge2(k,0.))
+    assert result.metadata['ge2_fallback_pairs']==1
+    (rho,lo,hi),=calls
+    assert rho==pytest.approx(.5) and lo==pytest.approx(99.95) and hi==pytest.approx(100.)
+
+
+def test_part_of_a_piece_inside_the_inner_radius_is_left_to_the_near_field(monkeypatch):
+    # A 10 m piece passes 1 m from the OM: only its part closer than 3 m
+    # (|x| < sqrt(8)) leaves the tables; the rest goes to the direct fallback.
+    k,s=_far_short_piece([1.,0.,5.])
+    s=replace(s,length_m=np.array([10.]),end_ns=np.array([10/.299792458]))
+    _no_first_order(monkeypatch)
+    calls=[]
+    def direct(self,rho,look,beta,clock,lo,hi,density,closest,full):
+        calls.append((lo,hi));return np.zeros(65,complex)
+    monkeypatch.setattr(transport.DirectGe2,'__call__',direct)
+    result=transport.transport_universal_primary(k,s,First(0.),Ge2(k,0.))
+    inner=np.sqrt(8.)
+    np.testing.assert_allclose(sorted(calls),[(-5.,-inner),(inner,5.)])
+    assert result.metadata['ge2_near_field_oms']==[0]
+
+
+def test_cone_evaluator_accepts_small_impact_only_outside_the_radial_minimum():
+    from lighthit.experimental.track_ge2_primitive import cone_point_evaluator
+    coefficients=np.zeros((1,2,3,3,4,3),np.complex64)
+    bundle=dict(degree=2,acceptance_degree=1,omega=np.array([0.,.3,.6]),
+        pair_lambda=np.array([0,1,1]),pair_mu=np.array([0,0,1]),
+        log_r=np.log([3.,20.,300.]),coefficients=coefficients,absorption=np.array([.03]),
+        speed=np.array([.22]),phase='flight')
+    evaluate=cone_point_evaluator(bundle,impact_m=.5,look=np.array([0.,0.,1.]),alpha=np.array([4*np.pi,1.]),
+        wavelength_nm=np.array([480.]),wavelength_weight_nm=np.ones(1),phase_index=np.array([1.35]),
+        efficiency=np.ones(1),effective_area_m2=.05,backend='fused-looks')
+    assert np.isfinite(evaluate(np.array([-100.,-50.]))).all()
+    with pytest.raises(ValueError,match='radial minimum'):
+        evaluate(np.array([-100.,-1.]))

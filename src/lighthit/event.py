@@ -130,10 +130,11 @@ class EventTransport:
     def _run(self, component, **options):
         """One route call for one component (full detector or ``receivers``).
 
-        A muon whose track the muon route refuses (a primary-track piece whose
-        line passes within its validated 3 m inner radius of an OM, typical of
-        the scattered end of a stopping muon) is transported by the shower
-        route instead; the substitution is recorded in ``route_fallbacks``.
+        A muon whose track the muon route refuses (a primary-track line through
+        the centre of an OM) is transported by the shower route instead; the
+        substitution is recorded in ``route_fallbacks``. Tracks passing an OM
+        closer than 3 m need no fallback: both routes add the near-field clamp
+        (``lighthit.near_field``).
         """
         key = id(component)
         if component.kind == "shower" or key in self.route_fallbacks:

@@ -142,6 +142,11 @@ class MuonTransport:
                                  fallback_pack=self.data.ge2_pack))
         response.metadata['muon_data'] = str(self.data.manifest)
         response.metadata['route'] = 'lighthit.muon'
+        # Source points closer than the radial minimum of the >=2 tables were
+        # left out of the route's >=2 sums; add them with the near-field clamp.
+        from ..near_field import add_near_field
+        bundle = tables['ge2_store'].bundle(kernel, np.arange(len(kernel.config.omega_per_ns)))
+        add_near_field(response, kernel, source, bundle, label='muon')
         return response
 
 

@@ -359,7 +359,8 @@ def _window_report_from_photons(kernel, points, photons, positions, low, high,
 
 def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
                            prompt_config=None, store=None, representation="basis",
-                           source_partition=None, track_stencil_center="axis"):
+                           source_partition=None, track_stencil_center="axis",
+                           near_points="raise"):
     """Prompt orders 0+1 and order >=2 on the axial-slice shower basis.
 
     The prompt orders and readout grid follow
@@ -371,9 +372,14 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
     validation reference for sources the default hybrid rejects (long muons).
     The optional ``track_uid`` decomposition leaves the prompt calculation
     on all original segments and applies only to ``representation="basis"``.
+    ``near_points="exclude"`` (spectral cones only) leaves source points closer
+    than the radial minimum out of order >=2 instead of raising; the caller
+    adds them (:mod:`lighthit.near_field`).
     """
     if representation not in ("basis", "cells"):
         raise ValueError("representation must be 'basis' or 'cells'")
+    if near_points not in ("raise", "exclude"):
+        raise ValueError("near_points must be 'raise' or 'exclude'")
     from ._directional_numba import PreparedDirectionalKernel  # noqa: F401 (numba check)
     from ._shower_basis import (apply_multi, compile_axial_slices,
                                 earliest_element_arrival)
@@ -402,7 +408,9 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
             kernel, source, basis, frequency_nodes=frequency_nodes,
             prompt_config=prompt_config, store=store,
             representation=representation, source_partition=source_partition,
-            track_stencil_center=track_stencil_center)
+            track_stencil_center=track_stencil_center, near_points=near_points)
+    if near_points != "raise":
+        raise ValueError("near_points='exclude' requires the spectral cone model")
     if source_partition is not None or track_stencil_center != "axis":
         raise ValueError("component source policies require spectral transport")
     if basis.apply_tolerance_pe:
@@ -628,7 +636,8 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
 
 def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
                                      prompt_config, store, representation,
-                                     source_partition=None, track_stencil_center="axis"):
+                                     source_partition=None, track_stencil_center="axis",
+                                     near_points="raise"):
     """Compile the wavelength-dependent cone one band at a time.
 
     The two wavelength-independent Cherenkov yield fields are combined only
@@ -897,7 +906,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
         far += part_far
         near += part_near
         tail += part_tail
-        if np.any(part_near):
+        if np.any(part_near) and near_points == "raise":
             raise ValueError(
                 f"{int(np.count_nonzero(part_near))} OMs have source points closer than "
                 f"the validated radial minimum {low:g} m")
@@ -930,7 +939,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
     # unnecessarily increases the peak memory of long events.
     zero_entries.clear()
     entries = group = compiled = field = None
-    if np.any(near):
+    if np.any(near) and near_points == "raise":
         raise ValueError(
             f"{int(np.count_nonzero(near))} OMs have source points closer than "
             f"the validated radial minimum {low:g} m")
@@ -975,7 +984,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
             kernel, source, replace(basis, apply_tolerance_pe=0.),
             frequency_nodes=frequency_nodes, prompt_config=prompt_config,
             store=store, representation=representation, source_partition=source_partition,
-            track_stencil_center=track_stencil_center)
+            track_stencil_center=track_stencil_center, near_points=near_points)
     computable = (used > 0) | (prompt.charge_pe > 0)
     active = computable & (charge.sum(axis=1) >= kernel.config.threshold_pe)
     if kernel.config.threshold_pe == 0:

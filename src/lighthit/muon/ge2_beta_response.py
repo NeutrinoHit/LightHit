@@ -105,7 +105,9 @@ def transport_ge2_tail_batch(kernel,source,store,*,full=False,cell_m=.25,
     basis=ShowerBasis(cell_m=cell_m,track_uid=None,spectral_fusion=True,transverse='stencil',
         time_step_ns=.02,radial_high_m=local.config.radial_range_m[1],radial_tail_tolerance_pe=1e-4)
     wall=perf_counter();cpu=process_time()
-    response=transport_hybrid_basis(local,filtered,basis,frequency_nodes=len(local.config.omega_per_ns),store=store)
+    # Points closer than the radial minimum are added by lighthit.near_field.
+    response=transport_hybrid_basis(local,filtered,basis,frequency_nodes=len(local.config.omega_per_ns),store=store,
+        near_points='exclude')
     cpu=process_time()-cpu;wall=perf_counter()-wall
     origins=response.time_origin_ns if time_origin_ns is None else np.asarray(time_origin_ns,float)
     if origins.shape!=(count,) or not np.isfinite(origins).all():raise ValueError('invalid receiver time origins')

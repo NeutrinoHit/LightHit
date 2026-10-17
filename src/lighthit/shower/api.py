@@ -295,6 +295,7 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
     used = np.zeros(len(positions), np.int64)
     far = np.zeros(len(positions), np.int64)
     tail = np.zeros(len(positions))
+    near = np.zeros(len(positions), bool)
     absorption_min = float(np.min(sample["absorption_per_m"]))
     weight_ratio = float(np.sum(fold.scale) / np.sum(fold.scale[list(fold.bands)]))
     for group in [sources] + ([late_zero] if late_zero is not None else []):
@@ -303,9 +304,9 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
             part_used, part_far, part_near, part_tail = _window_report_from_photons(
                 kernel, item.points_m(), photons, positions, low, high, absorption_min,
                 float(efficiency[band]))
-            if np.any(part_near):
-                raise ValueError(f"{int(np.count_nonzero(part_near))} OMs have source points closer "
-                                 f"than the validated radial minimum {low:g} m")
+            # Points closer than the radial minimum are left out of the
+            # tables' sums; lighthit.near_field adds them back below.
+            near |= np.asarray(part_near) > 0
             used = np.maximum(used, part_used)
             far = np.maximum(far, part_far)
             tail += weight_ratio * part_tail
@@ -502,6 +503,10 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
         "inactive_order1_charge_may_be_coarse": bool(np.any(
             np.asarray(prompt.metadata.get("order1_level", [])) == 1)),
     }
-    return HybridTransportResponse(
+    response = HybridTransportResponse(
         kernel.detector, omega.copy(), kernel.config.relative_time_edges_ns.copy(),
         spectrum, components, charge, origins, active, "shower", metadata)
+    if np.any(near):
+        from ..near_field import add_near_field
+        add_near_field(response, kernel, elements, store.bundle(kernel, indices), label="shower")
+    return response

@@ -221,7 +221,8 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     beta_batch_metadata=None
     phases=kernel.medium.phase_index; alpha0=1/first_store.metadata['speed_m_per_ns']
     alpha2=float(ge2_store.metadata['clock_ns_per_m'])
-    high=float(ge2_store.metadata.get('radius_window_m',[3.,300.])[1])
+    low,high=map(float,ge2_store.metadata.get('radius_window_m',[3.,300.]))
+    near_oms=set()
     lengths=pieces.length_m
     clocks=(pieces.end_ns-pieces.start_ns)/lengths
     densities=pieces.coefficient0/lengths
@@ -263,14 +264,21 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
             if rho>=high:continue
             reach=np.sqrt(high*high-rho*rho);a=min(z,reach);b=max(z-L,-reach)
             if a<=b:continue
-            if rho<3.01:raise ValueError('primary enters unvalidated inner >=2 radius; separate near-field solver required')
             look=-orientation
-            row=(om,i,rho,look,a,b,density,closest,clock,beta)
-            if (ge2_store.impact_nodes_m[0]<=rho<=ge2_store.impact_nodes_m[-1]
-                    and abs(beta-1)<=1e-5
-                    and ge2_store.query_supported(rho,a,b,charge_only=True)):
-                ge2_pairs.append(row)
-            else:ge2_fallback.append(row)
+            # Only the part of the piece itself closer than the radial minimum
+            # (not its line) leaves the tables; lighthit.near_field adds it.
+            intervals=[(b,a)]
+            if rho<low:
+                inner=np.sqrt(low*low-rho*rho)
+                intervals=[(lo_,hi_) for lo_,hi_ in ((b,min(a,-inner)),(max(b,inner),a)) if hi_>lo_]
+                if (b,a) not in intervals:near_oms.add(om)
+            for b_,a_ in intervals:
+                row=(om,i,rho,look,a_,b_,density,closest,clock,beta)
+                if (ge2_store.impact_nodes_m[0]<=rho<=ge2_store.impact_nodes_m[-1]
+                        and abs(beta-1)<=1e-5
+                        and ge2_store.query_supported(rho,a_,b_,charge_only=True)):
+                    ge2_pairs.append(row)
+                else:ge2_fallback.append(row)
         if parts:
             partial=split_source(pieces,parts)
             bounds,_=combined_first_scattering_segment_bounds(local,partial,pos,
@@ -493,6 +501,7 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
         ge2_beta_negative_pair_mass_pe=negative_beta_mass.tolist(),ge2_beta_nonfinite_fallbacks=beta_nonfinite_fallbacks,
         ge2_direct_charge_pairs=sum(not beta_tail[p[1]] and (p[0],p[1]) not in beta_charge_keys for p in ge2_fallback),
         q1_omitted_bound_pe=bound_sum.tolist(),q1_tail_budget_pe=tail_budget_pe,
+        ge2_near_field_oms=sorted(near_oms),ge2_near_field_radius_m=low,
         negative_charge_counts=(charge<0).sum(0).tolist(),selection_margin=selection_margin,
         q1_time_row_loads=first_store.time_row_loads,ge2_time_row_loads=ge2_store.full_row_loads,
         atlas_resident_bytes=first_store.resident_bytes+ge2_store.resident_bytes+beta_charge_payload_bytes+

@@ -83,7 +83,8 @@ class SegmentPrimitive:
 
 def cone_point_evaluator(bundle, *, impact_m, look, alpha, wavelength_nm,
                          wavelength_weight_nm, phase_index, efficiency, beta=1.,
-                         effective_area_m2=1.,backend='generic',source_harmonics=None):
+                         effective_area_m2=1.,backend='generic',source_harmonics=None,
+                         near_field=False):
     """Use existing full directional >=2 cache with spectral cone harmonics.
 
     Returns spectrum per unit source coefficient0 (not per emitted photon).
@@ -92,12 +93,17 @@ def cone_point_evaluator(bundle, *, impact_m, look, alpha, wavelength_nm,
     Explicit ``source_harmonics`` replaces the cone coefficients, including
     lambda^-2. It supports signed linear response modes, not a new physical
     cone; caller owns that normalization and approximation.
+    ``near_field=True`` (fused-looks only) evaluates points closer than the
+    table's radial minimum with the amplitude at that minimum along the same
+    directions (see lighthit.near_field); otherwise such points raise.
     """
     from scipy.special import eval_legendre
     from .._shower_basis import apply_multi_spectral
     from ..axial_source import AxisFrame, AxialSource, channel_index
     low,high=np.exp(bundle['log_r'][[0,-1]])
-    if not low <= impact_m < high:
+    # An impact below the radial minimum is allowed for points that stay
+    # outside it (a short piece far along its own line); evaluate() checks.
+    if not 0 < impact_m < high:
         raise ValueError('impact must lie in validated radial interval')
     look=np.asarray(look,float)
     single_look=look.ndim==1
@@ -126,6 +132,7 @@ def cone_point_evaluator(bundle, *, impact_m, look, alpha, wavelength_nm,
             harmonics=np.sqrt((2*ell+1)/(4*np.pi))*eval_legendre(ell,1/(beta*index))*coefficient
         spectral_harmonics[band]=harmonics
     if backend not in ('generic','fused-looks'):raise ValueError('unknown cone backend')
+    if near_field and backend!='fused-looks':raise ValueError('near_field requires the fused-looks backend')
     if backend=='fused-looks':
         from .._directional_numba import _start_norm_table
         norm=_start_norm_table(int(bundle['acceptance_degree']))
@@ -139,11 +146,13 @@ def cone_point_evaluator(bundle, *, impact_m, look, alpha, wavelength_nm,
     def evaluate(u):
         """>=2 spectrum of unit emission at track positions ``u``."""
         u=np.asarray(u,float)
+        if not near_field and impact_m<low and np.any(np.hypot(impact_m,u)<low*(1-1e-12)):
+            raise ValueError('track point closer than the validated radial minimum')
         if backend=='fused-looks':
             result=_cone_many_looks(float(impact_m),u,looks,spectral_harmonics,weights,np.asarray(alpha,float),
                 bundle['pair_lambda'],bundle['pair_mu'],bundle['log_r'],bundle['coefficients'],
                 bundle['absorption'],bundle['speed'],omega,bundle['phase']=='flight',norm,
-                int(bundle['acceptance_degree']),float(low),float(high))
+                int(bundle['acceptance_degree']),float(low),float(high),0. if near_field else float(low))
             return result[0] if single_look else result
         receivers=np.column_stack([np.full(len(u),impact_m),np.zeros(len(u)),u])
         result=apply_multi_spectral(bundle,sources,np.tile(receivers,(len(looks),1)),np.repeat(looks,len(u),axis=0),alpha,
@@ -588,8 +597,15 @@ from .._directional_numba import _wigner_into as _ge2_wigner, _harmonics_into as
 
 @_ge2_njit(cache=True)
 def _cone_many_looks(impact,u,looks,harmonics,weights,alpha,pair_lambda,pair_mu,log_r,coefficients,
-                     absorption,velocity,omega,flight,start_norm,max_out,radial_low,radial_high):
-    """Contract spectral RTE once per point, then project every OM orientation."""
+                     absorption,velocity,omega,flight,start_norm,max_out,radial_low,radial_high,
+                     clamp_low):
+    """Contract spectral RTE once per point, then project every OM orientation.
+
+    Points closer than ``clamp_low`` are skipped. Points between ``clamp_low``
+    and ``radial_low`` take the radial amplitude at ``radial_low`` (same
+    directions, flight phase at the actual radius); ``clamp_low=radial_low``
+    disables this near-field clamp.
+    """
     degree=harmonics.shape[1]-1;nfreq=len(omega);npair=len(pair_lambda);nlam=len(weights)
     result=np.zeros((len(looks),len(u),nfreq),np.complex128)
     wigner=np.empty((degree+1,2*max_out+1,1),np.float64)
@@ -598,13 +614,14 @@ def _cone_many_looks(impact,u,looks,harmonics,weights,alpha,pair_lambda,pair_mu,
     phase=np.empty((nlam,nfreq),np.complex128)
     for point in range(len(u)):
         radius=np.hypot(impact,u[point])
-        if radius<radial_low or radius>radial_high:continue
+        if radius<clamp_low or radius>radial_high or radius==0.:continue
         cosine=u[point]/radius;sine=impact/radius
         _ge2_wigner(degree,max_out,0,cosine,start_norm,max_out,wigner)
-        j=min(max(np.searchsorted(log_r,np.log(radius),side='right')-1,0),len(log_r)-2)
-        t=np.log(radius)-log_r[j]
+        amplitude_radius=max(radius,radial_low)
+        j=min(max(np.searchsorted(log_r,np.log(amplitude_radius),side='right')-1,0),len(log_r)-2)
+        t=np.log(amplitude_radius)-log_r[j]
         for lam in range(nlam):
-            scale=weights[lam]*np.exp(-absorption[lam]*radius)/(4*np.pi*radius*radius)
+            scale=weights[lam]*np.exp(-absorption[lam]*amplitude_radius)/(4*np.pi*amplitude_radius*amplitude_radius)
             for f in range(nfreq):
                 angle=omega[f]*radius/velocity[lam] if flight else 0.
                 phase[lam,f]=scale*(np.cos(angle)+1j*np.sin(angle))
