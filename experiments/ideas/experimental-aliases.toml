@@ -1,0 +1,56 @@
+id = "experimental-aliases"
+title = """
+lighthit.experimental.<name> aliases of modules that moved to lighthit.* and lighthit.muon.*
+"""
+area = "core"
+question = "Which old import names still resolve, and who uses them?"
+kind = "tool"
+status = "tool"
+verdict = "Not measured: the idea has no case; it is an inventory of import aliases and records only code facts in its notes."
+cases = []
+how-to-run = """
+python -c "import lighthit.experimental.joint_muon" (each alias is the same module object as its target)
+"""
+inputs = []
+notes = [
+  """
+No module of src/lighthit imports through an alias; tests and scripts do, and tests monkeypatch through alias names (tests/test_joint_muon.py, tests/test_universal_primary.py).
+""",
+  """
+Shipped in the wheel: axial_fast, axial_source, ballistic_fast, event_moments, g4_source, hdf5_minimal (packaging_filter.REQUIRED_EXPERIMENTAL); lighthit.experimental.hdf5_minimal has no user.
+""",
+]
+
+[code]
+modules = [
+  "lighthit.experimental.axial_fast",
+  "lighthit.experimental.axial_source",
+  "lighthit.experimental.ballistic_fast",
+  "lighthit.experimental.event_moments",
+  "lighthit.experimental.g4_source",
+  "lighthit.experimental.hdf5_minimal",
+  "lighthit.experimental.adaptive_screen",
+  "lighthit.experimental.filon_ge2",
+  "lighthit.experimental.first_charge_beta_atlas",
+  "lighthit.experimental.first_charge_only",
+  "lighthit.experimental.ge2_beta_response",
+  "lighthit.experimental.ge2_charge_beta_atlas",
+  "lighthit.experimental.joint_muon",
+  "lighthit.experimental.joint_source",
+  "lighthit.experimental.muon_integral",
+  "lighthit.experimental.muon_packets",
+  "lighthit.experimental.packet_skip",
+  "lighthit.experimental.point_ge2",
+  "lighthit.experimental.point_ge2_blas",
+  "lighthit.experimental.positive_fluence",
+  "lighthit.experimental.primary_polyline",
+  "lighthit.experimental.secondary_first",
+  "lighthit.experimental.track_first_bounds",
+  "lighthit.experimental.track_first_primitive",
+  "lighthit.experimental.track_ge2_primitive",
+  "lighthit.experimental.universal_primary",
+]
+functions = []
+options = []
+scripts = []
+tests = []

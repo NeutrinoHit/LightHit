@@ -1,0 +1,22 @@
+id = "viewer-vendor-bundle"
+title = "Pinned three.js bundle of the event viewer"
+area = "tools"
+question = "Rebuild src/lighthit/assets/vendor/three.min.js."
+kind = "tool"
+status = "tool"
+verdict = "Not measured: the idea has no case; rebuilding the pinned three.js bundle needs network access and is not a physics computation."
+cases = []
+how-to-run = "PYTHONPATH=src python experiments/run.py run 'viewer-vendor-bundle/*'"
+inputs = ["Node.js and the npm registry (three 0.160.1, esbuild 0.24.0)"]
+notes = [
+  """
+Not a physics idea; listed so that every script has a registry entry. Not run here (needs network).
+""",
+]
+
+[code]
+modules = ["lighthit.viewer"]
+functions = []
+options = []
+scripts = ["scripts/build_three_vendor.sh"]
+tests = []

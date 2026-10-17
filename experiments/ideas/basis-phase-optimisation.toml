@@ -1,0 +1,26 @@
+id = "basis-phase-optimisation"
+title = "Common-phase contraction in the axial basis apply (old vs new _shower_basis)"
+area = "muon"
+question = "Speed-up of the phase contraction optimisation at identical results."
+kind = "probe"
+status = "not-reproducible"
+verdict = "Not measured: not reproducible because the pre-optimisation baseline copy of lighthit/_shower_basis.py cannot be identified among the three earlier git versions (3278934, 5808579, ec553be)."
+not_reproducible_reason = """
+--baseline must be the pre-optimisation copy of lighthit/_shower_basis.py; its path and hash were only in a deleted report, and git holds three earlier versions (3278934, 5808579, ec553be) without a record of which one it was.
+"""
+cases = []
+how-to-run = "PYTHONPATH=src python experiments/run.py run 'basis-phase-optimisation/*'"
+inputs = [
+  "bundle 1 TeV muon (= the old muon1000.npz, sha256 e472ed6b...) and ancestry",
+  """
+regenerated 300 and 3000 GeV muons (same generator and seed as benchmark_long_muon.py generate; analyze_muon_secondaries.py --capture-source confirmed identical steps)
+""",
+]
+notes = []
+
+[code]
+modules = ["lighthit._shower_basis"]
+functions = []
+options = []
+scripts = ["scripts/shower_basis/benchmark_basis_phase.py"]
+tests = []
