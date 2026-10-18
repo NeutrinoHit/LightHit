@@ -213,7 +213,7 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
     from ..band_fold import BandFold, fold_bundle, zero_frequency
     from .._shower_basis import earliest_element_arrival
     from ..readout import inverse_bins
-    from ..shower_basis import _frequency_indices, _window_report_from_photons
+    from ..shower_basis import _frequency_indices, _window_report_from_photons, spectral_attenuation
     from ..transport import HybridTransportResponse
     from .ge2 import apply_folded, collapse, delay_groups, node_sources
 
@@ -289,20 +289,21 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
     timings["compile_seconds"] = perf_counter() - stage
 
     # ---- radial windows: every node-band point set (prompt and delayed);
-    # the far-tail estimate uses the least absorbing band and scales the
-    # node bands' detector weight to the whole quadrature (screening only).
+    # the far-tail estimate attenuates with the detected spectrum's mean
+    # absorption factor and scales the node bands' detector weight to the
+    # whole quadrature (screening only).
     stage = perf_counter()
     used = np.zeros(len(positions), np.int64)
     far = np.zeros(len(positions), np.int64)
     tail = np.zeros(len(positions))
     near = np.zeros(len(positions), bool)
-    absorption_min = float(np.min(sample["absorption_per_m"]))
+    attenuation = spectral_attenuation(kernel)
     weight_ratio = float(np.sum(fold.scale) / np.sum(fold.scale[list(fold.bands)]))
     for group in [sources] + ([late_zero] if late_zero is not None else []):
         for band, item in zip(fold.bands, group):
             photons = np.sqrt(4 * np.pi) * np.abs(item.channels[:, 0, 0]) / efficiency[band]
             part_used, part_far, part_near, part_tail = _window_report_from_photons(
-                kernel, item.points_m(), photons, positions, low, high, absorption_min,
+                kernel, item.points_m(), photons, positions, low, high, attenuation,
                 float(efficiency[band]))
             # Points closer than the radial minimum are left out of the
             # tables' sums; lighthit.near_field adds them back below.

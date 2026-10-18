@@ -334,14 +334,39 @@ def _radial_window_report(kernel, source0, source2, positions, low, high):
         amplitude0 * np.sum(weights / wavelengths ** 2)
         + amplitude2 * np.sum(weights / (wavelengths ** 2 * sample["phase_index"] ** 2)))
     return _window_report_from_photons(
-        kernel, points, photons, positions, low, high,
-        float(np.min(sample["absorption_per_m"])),
+        kernel, points, photons, positions, low, high, spectral_attenuation(kernel),
         float(np.max(kernel.detector.spectral_weight(wavelengths))))
+
+
+def spectral_attenuation(kernel):
+    """Absorption factor of the detected Cherenkov spectrum as a function of distance.
+
+    ``sum_k s_k exp(-mu_a,k r) / sum_k s_k`` over the kernel's wavelength
+    nodes, ``s_k = w_k eta_k / lambda_k^2``. At large r the least absorbing
+    nodes dominate with their share of the spectrum; the minimum absorption
+    applied to the whole spectrum overstates the far light by that share's
+    inverse (about 16 times at 300 m with 32 nodes in Baikal water).
+    """
+    wavelengths = np.asarray(kernel.wavelength.wavelength_nm, float)
+    weights = (np.asarray(kernel.wavelength.weight_nm, float)
+               * np.asarray(kernel.detector.spectral_weight(wavelengths), float) / wavelengths ** 2)
+    absorption = np.asarray(kernel.medium.sample(wavelengths)["absorption_per_m"], float)
+    lowest = float(absorption.min())
+    radius = np.geomspace(1e-3, 1e5, 1025)
+    log_factor = (np.log(np.exp(-np.outer(radius, absorption - lowest)) @ weights / weights.sum())
+                  - lowest * radius)
+    return lambda distance: np.exp(np.interp(distance, radius, log_factor))
 
 
 def _window_report_from_photons(kernel, points, photons, positions, low, high,
                                 absorption, efficiency):
-    """Count usable basis points and estimate the omitted far contribution."""
+    """Count usable basis points and estimate the omitted far contribution.
+
+    ``absorption`` is one absorption coefficient (1/m) or a function of the
+    distance returning the absorption factor (:func:`spectral_attenuation`).
+    """
+    attenuation = absorption if callable(absorption) else (
+        lambda distance: np.exp(-absorption * distance))
     peak_acceptance = float(np.max(np.abs(np.asarray(
         kernel.detector.angular_acceptance(np.linspace(-1, 1, 257)), float))))
     area = np.asarray(kernel.detector.effective_area_m2, float)
@@ -362,7 +387,7 @@ def _window_report_from_photons(kernel, points, photons, positions, low, high,
         distance = np.where(far_mask, radius, 1.)
         tail[start:stop] = (10 * area[start:stop] * peak_acceptance * efficiency
                             * np.sum(np.where(far_mask,
-                                photons[None] * np.exp(-absorption * distance)
+                                photons[None] * attenuation(distance)
                                 / (4 * np.pi * distance ** 2), 0.), axis=1))
     return used, far, near, tail
 

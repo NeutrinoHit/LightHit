@@ -135,6 +135,14 @@ source point is within 3 m, so the near-field clamp is not involved); beyond
 130 m order 1 is 2.8 sigma low on 0.03 pe, while nine nodes lose 40-60 %
 there.
 
+The far-tail screening of the shower routes (light of source points beyond
+the 300 m table range, refused above 1e-4 pe per OM) attenuated the whole
+spectrum with the smallest node absorption. With 32 nodes a node falls into
+the transparency window, the estimate grew 16 times at 300 m and refused the
+nu_mu CC event (largest 1.5e-4 pe); it now uses the mean absorption factor of
+the detected spectrum (`shower_basis.spectral_attenuation`), which at 300 m
+is the old nine-node value.
+
 Cost of 32 nodes: the tables of a bundle grow from 1.2 + 1.3 + 0.9 GB (RTE,
 >=2 pack, muon) to 4.3 + 4.5 + 1.0 GB, and building them takes about 20
 minutes (RTE tables 16 s per node). `EventTransport` on one thread

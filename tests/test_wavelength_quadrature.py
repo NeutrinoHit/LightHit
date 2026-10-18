@@ -72,3 +72,14 @@ def test_muon_tables_of_another_quadrature_are_refused_by_name():
     atlas = SimpleNamespace(metadata={"tables": {"wavelength_nm": list(np.linspace(355., 605., 9))}})
     with pytest.raises(ValueError, match="hold 9 wavelength nodes, the kernel uses 32"):
         check_atlas_optics(atlas, kernel())
+
+
+def test_far_tail_screening_uses_the_spectral_mean_absorption():
+    from lighthit.shower_basis import spectral_attenuation
+    k = kernel()
+    tables = _spectral_tables(k)
+    radius = np.array([1., 50., 300., 1000.])
+    expected = (np.exp(-np.outer(radius, tables["mua"])) @ tables["s0w"]) / tables["s0w"].sum()
+    np.testing.assert_allclose(spectral_attenuation(k)(radius), expected, rtol=1e-4)
+    # Far light is carried by the clear part of the spectrum, not all of it.
+    assert spectral_attenuation(k)(300.) < 0.5 * np.exp(-min(ABSORPTION) * 300.)
