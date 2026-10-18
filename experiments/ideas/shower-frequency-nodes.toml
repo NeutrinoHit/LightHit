@@ -4,7 +4,7 @@ area = "shower"
 question = "How much does order >=2 change when only every second table frequency is used?"
 kind = "alternative-option"
 status = "default"
-verdict = "Using 33 instead of 65 RTE frequencies leaves order >=2 charge unchanged but raises its bin L1 from 0.309% to 1.33% (electron) and from 0.044% to 1.27% (pion), total L1 0.58% and 3.55%, at 0.93x and 0.83x wall."
+verdict = "Using 33 instead of 65 RTE frequencies leaves order >=2 charge unchanged but raises its bin L1 from 0.309% to 1.33% (electron) and from 0.044% to 1.27% (pion), total L1 0.58% and 3.55%, at 0.95x and 0.84x wall."
 baseline = "default-shower-route"
 cases = [
   "shower-frequency-nodes/electron-100GeV-33",
@@ -31,12 +31,12 @@ tests = []
 
 [result.electron-100GeV-33]
 status = "ok"
-date = "2026-10-16T22:21:04Z"
-commit = "97372c7f529b"
+date = "2026-10-18T03:56:11Z"
+commit = "48a44bb91cf2"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.99512, 4.01953, 4.31592], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.65088, 4.4375, 4.02783], numba_threads = 1 }
 inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "geant4-electron-100GeV.h5" = "f496788e96093951" }
-timing = { wall_s = 13.393, cpu_s = 13.393, peak_rss_mib = 4565.19 }
+timing = { wall_s = 11.496, cpu_s = 11.496, peak_rss_mib = 3766.41 }
 summary = { active = 28, charge_pe_by_order = [2.63757, 1.89579, 1.05281] }
 reference = "reference-shower/electron-100GeV"
 order_0 = { charge_bias = 0.0, bin_l1 = 0.0, worst_om = 0.0 }
@@ -44,16 +44,16 @@ order_1 = { charge_bias = -0.00504, bin_l1 = 0.011435, worst_om = 0.020828 }
 order_ge2 = { charge_bias = -3.5e-05, bin_l1 = 0.013251, worst_om = 5.2e-05 }
 order_total = { charge_bias = -0.001727, bin_l1 = 0.00576, worst_om = 0.007307 }
 active_agreement = { both = 28, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
-wall_vs_baseline = 0.9329
+wall_vs_baseline = 0.9457
 
 [result.pion-100GeV-33]
 status = "ok"
-date = "2026-10-16T22:21:42Z"
-commit = "97372c7f529b"
+date = "2026-10-18T03:56:49Z"
+commit = "48a44bb91cf2"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.3667, 4.12256, 4.33936], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.99609, 4.50146, 4.06543], numba_threads = 1 }
 inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "pion-100GeV-steps.npz" = "3c9fa7540b378e19", "pion-100GeV-parts.npz" = "9fec6278f4fc2810" }
-timing = { wall_s = 17.203, cpu_s = 17.202, peak_rss_mib = 4110.83 }
+timing = { wall_s = 17.124, cpu_s = 17.123, peak_rss_mib = 3408.58 }
 summary = { active = 26, charge_pe_by_order = [1.86906, 1.20109, 0.61668] }
 reference = "reference-shower/pion-100GeV"
 order_0 = { charge_bias = 0.0, bin_l1 = 0.0, worst_om = 0.0 }
@@ -61,4 +61,4 @@ order_1 = { charge_bias = -0.005736, bin_l1 = 0.105997, worst_om = 0.01783 }
 order_ge2 = { charge_bias = 7e-05, bin_l1 = 0.012667, worst_om = 7.1e-05 }
 order_total = { charge_bias = -0.001867, bin_l1 = 0.035496, worst_om = 0.005997 }
 active_agreement = { both = 26, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
-wall_vs_baseline = 0.8309
+wall_vs_baseline = 0.8376

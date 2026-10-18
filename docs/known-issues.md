@@ -44,15 +44,8 @@ stated. Fixed items are removed from this list.
 
 ## Comparison with NTSim's photon Monte Carlo
 
-Differences by design, measured on the 6 GeV muon passing OM 267 at 1.76 m
-(`accuracy.md`, Order 0 near emitters):
+Difference by design (`accuracy.md`, Order 0 near emitters):
 
-* NTSim's `CherenkovGenerator` emits along the chord between two step points,
-  LightHit's source (`source_from_event`) along the true Geant4 step length.
-  The delta electrons of that event have 21 % more true path than chord
-  (median step ratio 1.52); order 0 at OM 267 is 1.8 pe (3 %) higher in
-  LightHit for this reason alone. Why the ratio is that large for single
-  steps was not checked on the NTSim side.
 * The Monte Carlo attenuates each photon to its entry point on the glass
   sphere, LightHit to the OM centre plane: about 1-1.5 % more light in the
   Monte Carlo at every distance, below the statistical error of the

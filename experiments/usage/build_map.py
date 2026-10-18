@@ -31,9 +31,9 @@ DESCRIPTION = {
     "muon": "MuonTransport, bundle 1 TeV muon with its secondaries",
     "event": "EventTransport, 1 TeV muon + 100 GeV electron shower",
     "event-stopping-muon": "EventTransport, regenerated 6 GeV muon aimed 1.5 m past an OM, "
-                           "stopping 15 m before it (route fallback to the shower route)",
+                           "stopping 15 m before it (muon route)",
     "event-muon-near-om": "EventTransport, regenerated 6 GeV muon passing 1.76 m from an OM "
-                          "(fallback entered, then the shower route raises)",
+                          "(muon route with the near-field clamp)",
     "laser": "EventTransport with laser_kernel, 532 nm flash (bundle laser table)",
     "prompt": "TransportKernel.transport_prompt, 100 GeV electron (orders 0 and 1)",
     "hybrid": "TransportKernel.transport_hybrid, 100 GeV electron (per-band order >=2)",

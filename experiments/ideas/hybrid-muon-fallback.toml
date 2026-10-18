@@ -8,7 +8,7 @@ What NTSim computes for a muon when the muon route is off or unavailable: accura
 """
 kind = "alternative-option"
 status = "superseded-by:default-muon-route"
-verdict = "Against reference-muon, NTSim's muon fallback on the 1 TeV muon has order-0 L1 35.2% (worst OM 208%), order-1 bias -0.09%, total L1 21.5%, at 1131 s (21.7x default); on the 300 GeV muon order >=2 L1 3.18%, total L1 16.0%, at 497 s (8.2x)."
+verdict = "Against reference-muon, NTSim's muon fallback on the 1 TeV muon has order-0 L1 35.4% (worst OM 208%), order-1 bias -0.09%, total L1 21.7%, at 1067 s (23.8x default); on the 300 GeV muon order >=2 L1 3.18%, total L1 16.0%, at 490 s (8.5x)."
 cases = ["hybrid-muon-fallback/muon-1TeV", "hybrid-muon-fallback/muon-300GeV"]
 how-to-run = "PYTHONPATH=src python experiments/run.py run 'hybrid-muon-fallback/*'"
 inputs = ["bundle 1 TeV muon; regenerated 300 GeV muon"]
@@ -32,33 +32,33 @@ tests = []
 
 [result.muon-1TeV]
 status = "ok"
-date = "2026-10-16T00:51:50Z"
-commit = "97372c7f529b"
+date = "2026-10-17T22:50:38Z"
+commit = "48a44bb91cf2"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.22266, 3.65918, 3.46094], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [5.67334, 4.44238, 4.18164], numba_threads = 1 }
 inputs_sha256 = { "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
-timing = { wall_s = 1131.4, cpu_s = 1128.94, peak_rss_mib = 5918.98 }
+timing = { wall_s = 1067.02, cpu_s = 1066.75, peak_rss_mib = 7525.45 }
 summary = { active = 29, charge_pe_by_order = [2.16952, 1.41399, 0.70534] }
 reference = "reference-muon/muon-1TeV"
-order_0 = { charge_bias = -0.003942, bin_l1 = 0.351843, worst_om = 2.08253 }
+order_0 = { charge_bias = -0.007311, bin_l1 = 0.354078, worst_om = 2.08253 }
 order_1 = { charge_bias = -0.000937, bin_l1 = 0.0, worst_om = 0.0 }
-order_total = { charge_bias = -0.002767, bin_l1 = 0.215321, worst_om = 1.08739 }
+order_total = { charge_bias = -0.004824, bin_l1 = 0.216979, worst_om = 1.08739 }
 active_agreement = "none"
-wall_vs_baseline = 21.6622
+wall_vs_baseline = 23.7974
 
 [result.muon-300GeV]
 status = "ok"
-date = "2026-10-16T01:08:32Z"
-commit = "97372c7f529b"
+date = "2026-10-17T23:07:00Z"
+commit = "48a44bb91cf2"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.70654, 3.60449, 3.54834], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.97461, 4.43994, 4.22266], numba_threads = 1 }
 inputs_sha256 = { "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
-timing = { wall_s = 497.187, cpu_s = 497.047, peak_rss_mib = 5210.42 }
+timing = { wall_s = 490.208, cpu_s = 490.128, peak_rss_mib = 6162.12 }
 summary = { active = 22, charge_pe_by_order = [1.18996, 0.70652, 0.33153] }
 reference = "reference-muon/muon-300GeV"
-order_0 = { charge_bias = -0.019285, bin_l1 = 0.281413, worst_om = 0.689399 }
+order_0 = { charge_bias = -0.020604, bin_l1 = 0.282396, worst_om = 0.689399 }
 order_1 = { charge_bias = -0.000889, bin_l1 = 0.0, worst_om = 0.0 }
 order_ge2 = { charge_bias = 0.002601, bin_l1 = 0.031783, worst_om = 0.025611 }
-order_total = { charge_bias = -0.010585, bin_l1 = 0.159559, worst_om = 0.348844 }
+order_total = { charge_bias = -0.011321, bin_l1 = 0.1602, worst_om = 0.348844 }
 active_agreement = { both = 21, only_response = 1, only_reference = 1, missed_reference_charge_pe = 0.0107781 }
-wall_vs_baseline = 8.2153
+wall_vs_baseline = 8.54

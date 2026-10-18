@@ -451,11 +451,15 @@ on one 100 GeV electron: LightHit 5.89 pe in about 6 s; three Monte-Carlo runs
 
 * Point OMs in a homogeneous medium with an HG phase function: no
   boundaries, shadowing, electronics, noise or trigger.
-* The muon route refuses a primary-track piece whose line passes within 3 m
-  of an OM, which happens at the scattered end of stopping muons.
-  `EventTransport` (and NTSim) then transports that muon by the shower route
-  (`route_fallbacks`), correctly but more slowly; `MuonTransport` called
-  directly raises.
+* Order >=2 tables start at 3 m from an OM. Closer source points are added by
+  an explicit near-field clamp (their order >=2 contribution taken as at 3 m),
+  and the OMs that used it are listed in `metadata["near_field"]`; it was
+  checked on one event against the photon Monte Carlo (`docs/accuracy.md`).
+  A primary muon line through the very centre of an OM still raises in
+  `MuonTransport`; `EventTransport` then uses the shower route
+  (`route_fallbacks`).
+* Order 0 uses the OM sphere for steps within 20 m of the OM and the OM centre
+  beyond (1-4 % of an OM's charge at 20-100 m, `docs/accuracy.md`).
 * The laser is an isotropic flash; a collimated beam or a measured diffuser
   pattern is not represented.
 * Tables (RTE cache, >=2 pack, muon atlases) belong to one medium and OM

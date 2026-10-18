@@ -2,11 +2,11 @@ id = "finite-receiver-order0"
 title = "Order 0 on the OM sphere instead of its centre (BallisticIntervalConfig.finite_receiver_m)"
 area = "core"
 question = """
-Why does order 0 near a muon disagree with the photon Monte Carlo (OM 267 at 1.76 m: 63.6 against 58.1 +- 0.5 pe; OM 268 1.40 against 0.55; OM 266 0.02 against 0.17), and what does the finite OM change elsewhere?
+Why does order 0 near a muon disagree with the photon Monte Carlo (OM 267 at 1.76 m: 63.6 against 58.1 +- 0.5 pe, OM 268 1.40 against 0.55, OM 266 0.02 against 0.17 in NTSim's photon MC with chord yields), and what does the finite OM change elsewhere?
 """
 kind = "alternative-option"
 status = "default"
-verdict = "The point receiver samples the thin conical shells of short steps; on the OM sphere (within 20 m) order 0 of the muon passing OM 267 is 59.70 pe (57.92 with the chord yields of NTSim's generator) against MC 58.10 +- 0.49, OM 266 0.171 against 0.172 +- 0.017, OM 268 0.571 against 0.555 +- 0.038; beyond 20 m the point stays (order-0 error per OM 3-11% median, up to 98% on dim OMs), shower routes are bitwise unchanged and the default routes keep their time."
+verdict = "The point receiver samples the thin conical shells of short steps; on the OM sphere (within 20 m) order 0 of the muon passing OM 267 is 59.70 pe against 60.16 +- 0.50 pe in NTSim's photon MC with the yield per true step length (point receiver 63.60 pe, chord yields 57.92 pe); beyond 20 m the point stays (order-0 error per OM 3-11% median, up to 98% on dim OMs), shower routes are bitwise unchanged and the default routes keep their time."
 baseline = "default-shower-route"
 cases = [
   "finite-receiver-order0/far-electron-100GeV",
@@ -33,7 +33,7 @@ At OM 267 the point receiver had 39.2 pe from one 8.5 cm muon step whose cone pa
 Independent check: rays from every emission point and wavelength crossing the 0.216 m sphere (Gauss in step position, azimuth interval of the cone hitting the sphere, spectral panels): OM 267 59.65 pe with attenuation to the ray's closest approach to the centre (LightHit 59.70), 60.54 pe with attenuation to the entry point as in NTSim's ray tracer; far OMs of showers agree within 0.1 %.
 """,
   """
-NTSim's CherenkovGenerator emits along the chord of a step, LightHit's source along the true Geant4 step length: the delta electrons of muon-near-om have 7.09 m true path and 5.88 m chord.
+NTSim's CherenkovGenerator emitted along the chord of a step until NTSim d5993d8 (full-rte), LightHit's source along the true Geant4 step length, as G4Cerenkov: the delta electrons of muon-near-om have 7.09 m true path and 5.88 m chord. The MC of the current results uses the true step length.
 """,
   """
 Pairs within 20 m only: the sphere everywhere costs 10-14 times the order-0 time (a far short step reaches the sphere over most of the spectrum). With the default 20 m the shower inputs and muon-100GeV are bitwise unchanged; muon-1TeV changes OM 1241 (18.7 m) by +0.0073 pe, muon-300GeV by +0.0016 pe, muon-1TeV-seed43 (6.3 m) its order 0 by +9 %.
@@ -59,55 +59,50 @@ tests = ["tests/test_ballistic_finite_receiver.py"]
 
 [result.far-electron-100GeV]
 status = "ok"
-date = "2026-10-17T17:12:07Z"
-commit = "4eccd0f7e872"
+date = "2026-10-17T20:55:37Z"
+commit = "48a44bb91cf2"
 threads = "1"
-src_modified = true
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [7.85986, 7.08057, 6.32568], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.40332, 4.04443, 3.95508], numba_threads = 1 }
 inputs_sha256 = { "geant4-electron-100GeV.h5" = "f496788e96093951", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
-timing = { wall_s = 51.681, cpu_s = 51.005, peak_rss_mib = 449.016 }
-metrics = { point_pe = 2.63757, sphere_pe = 2.6356, default_equals_point = true, nearest_om_m = 23.4263, sphere_over_point_seconds = 10.0155 }
+timing = { wall_s = 47.348, cpu_s = 47.344, peak_rss_mib = 447.812 }
+metrics = { point_pe = 2.63757, sphere_pe = 2.6356, default_equals_point = true, nearest_om_m = 23.4263, sphere_over_point_seconds = 10.6535 }
 
 [result.far-muon-100GeV]
 status = "ok"
-date = "2026-10-17T17:13:04Z"
-commit = "4eccd0f7e872"
+date = "2026-10-17T20:56:29Z"
+commit = "48a44bb91cf2"
 threads = "1"
-src_modified = true
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [8.52393, 7.35205, 6.47021], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.52734, 4.01904, 3.95312], numba_threads = 1 }
 inputs_sha256 = { "muon-100GeV-steps.npz" = "1a5f9f31d5093b3d", "muon-100GeV-parts.npz" = "8cdc6d7b0b74ec1c", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
-timing = { wall_s = 11.825, cpu_s = 11.79, peak_rss_mib = 305.641 }
-metrics = { point_pe = 0.860845, sphere_pe = 0.836041, default_equals_point = true, nearest_om_m = 19.2867, sphere_over_point_seconds = 9.53885 }
+timing = { wall_s = 11.315, cpu_s = 11.314, peak_rss_mib = 340.734 }
+metrics = { point_pe = 0.860845, sphere_pe = 0.836041, default_equals_point = true, nearest_om_m = 19.2867, sphere_over_point_seconds = 9.67013 }
 
 [result.far-nue-cc]
 status = "ok"
-date = "2026-10-17T17:12:39Z"
-commit = "4eccd0f7e872"
+date = "2026-10-17T20:56:06Z"
+commit = "48a44bb91cf2"
 threads = "1"
-src_modified = true
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [8.32422, 7.22461, 6.40137], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.86865, 4.12598, 3.98828], numba_threads = 1 }
 inputs_sha256 = { "nue-cc-steps.npz" = "6173603aa0f562f6", "nue-cc-parts.npz" = "3457b0ef225e9dbb", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
-timing = { wall_s = 9.796, cpu_s = 8.534, peak_rss_mib = 244.594 }
-metrics = { point_pe = 2.27722, sphere_pe = 2.36814, default_equals_point = true, nearest_om_m = 24.7022, sphere_over_point_seconds = 13.5757 }
+timing = { wall_s = 7.938, cpu_s = 7.938, peak_rss_mib = 249.203 }
+metrics = { point_pe = 2.27722, sphere_pe = 2.36814, default_equals_point = true, nearest_om_m = 24.7022, sphere_over_point_seconds = 11.2437 }
 
 [result.far-pion-100GeV]
 status = "ok"
-date = "2026-10-17T17:12:20Z"
-commit = "4eccd0f7e872"
+date = "2026-10-17T20:55:49Z"
+commit = "48a44bb91cf2"
 threads = "1"
-src_modified = true
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [7.5542, 7.04395, 6.32129], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.1084, 4.18457, 4.00684], numba_threads = 1 }
 inputs_sha256 = { "pion-100GeV-steps.npz" = "3c9fa7540b378e19", "pion-100GeV-parts.npz" = "9fec6278f4fc2810", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
-timing = { wall_s = 6.047, cpu_s = 6.032, peak_rss_mib = 220.062 }
-metrics = { point_pe = 1.86906, sphere_pe = 1.89764, default_equals_point = true, nearest_om_m = 22.4392, sphere_over_point_seconds = 11.1642 }
+timing = { wall_s = 5.692, cpu_s = 5.69, peak_rss_mib = 233.094 }
+metrics = { point_pe = 1.86906, sphere_pe = 1.89764, default_equals_point = true, nearest_om_m = 22.4392, sphere_over_point_seconds = 10.9546 }
 
 [result.muon-near-om-mc]
 status = "ok"
-date = "2026-10-17T17:10:22Z"
-commit = "4eccd0f7e872"
+date = "2026-10-17T20:54:02Z"
+commit = "48a44bb91cf2"
 threads = "1"
-src_modified = true
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [5.98682, 6.61963, 6.09229], numba_threads = 1 }
-inputs_sha256 = { "muon-near-om-run0-steps.npz" = "c616e0a0a8b60917", "muon-near-om-run0-hits.npz" = "bcfe5930cd27e2c8", "muon-near-om-run1-hits.npz" = "f9fe543f873ece24", "muon-near-om-run2-hits.npz" = "ee509fee27bdd3d4", "muon-near-om-run3-hits.npz" = "884cb793a04e0d78", "muon-near-om-run4-hits.npz" = "e2583ea030624978", "muon-near-om-run5-hits.npz" = "ee68d786dd3e1d7d", "muon-near-om-run6-hits.npz" = "03cf531b4deaf1f1", "muon-near-om-run7-hits.npz" = "0812f22f7d56f440", "muon-near-om-run8-hits.npz" = "487f46bc1f530908", "muon-near-om-run9-hits.npz" = "581156556e0be0e5", "muon-near-om-run10-hits.npz" = "bf8c2200563a66c1", "muon-near-om-run11-hits.npz" = "92bcd143c898b50b", "muon-near-om-run12-hits.npz" = "0be7072486094d12", "muon-near-om-run13-hits.npz" = "19808e040d32852f", "muon-near-om-run14-hits.npz" = "8ea7ca26ab3b0fbd", "muon-near-om-run15-hits.npz" = "d960ace038b143f5", "muon-near-om-run16-hits.npz" = "b05c480d74d4d840", "muon-near-om-run17-hits.npz" = "2bebfbe288506ca4", "muon-near-om-run18-hits.npz" = "5fd582a0fbcabe07", "muon-near-om-run19-hits.npz" = "b79c6c8485242154", "muon-near-om-run20-hits.npz" = "9752e8f9ab7f2bf4", "muon-near-om-run21-hits.npz" = "d8b8c5c3536e6328", "muon-near-om-run22-hits.npz" = "2b83c6db004cae8d", "muon-near-om-run23-hits.npz" = "9d7411fe5a6b020e", "muon-near-om-run24-hits.npz" = "f14251934544d6fb", "muon-near-om-run25-hits.npz" = "8fb2f15e4a343ba5", "muon-near-om-run26-hits.npz" = "8faf956570b4ae27", "muon-near-om-run27-hits.npz" = "000c725efd98fa4c", "muon-near-om-run28-hits.npz" = "69262aad29f62704", "muon-near-om-run29-hits.npz" = "8db4ac9f0481f333", "muon-near-om-run30-hits.npz" = "a03cceffdde90e4b", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
-timing = { wall_s = 0.549, cpu_s = 0.545, peak_rss_mib = 170.891 }
-metrics = { om267_point_pe = 63.5991, om267_default_pe = 59.7035, om267_chord_pe = 57.918, om267_mc_pe = 58.0958, om267_mc_sigma_pe = 0.491745, runs = 31 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [5.31836, 4.46484, 4.07959], numba_threads = 1 }
+inputs_sha256 = { "muon-near-om-run0-steps.npz" = "676e48ae0c84abe6", "muon-near-om-run0-hits.npz" = "78ba4532aec94b04", "muon-near-om-run1-hits.npz" = "34cc48a81129d49b", "muon-near-om-run2-hits.npz" = "ec0ff53c16d676d9", "muon-near-om-run3-hits.npz" = "25ebfd63611d49c0", "muon-near-om-run4-hits.npz" = "bf6e30ec3f19a91a", "muon-near-om-run5-hits.npz" = "14f8a0d721d4d2b2", "muon-near-om-run6-hits.npz" = "b2bb6113fda95c75", "muon-near-om-run7-hits.npz" = "f030aa665cb89042", "muon-near-om-run8-hits.npz" = "e57b11e5a6d69da5", "muon-near-om-run9-hits.npz" = "59cc6e24e54985d5", "muon-near-om-run10-hits.npz" = "80ca24456bde4613", "muon-near-om-run11-hits.npz" = "f19b61b3bcebeb66", "muon-near-om-run12-hits.npz" = "e5754f49b4e60481", "muon-near-om-run13-hits.npz" = "a3d2f197b6e75d91", "muon-near-om-run14-hits.npz" = "812420b2d5c02498", "muon-near-om-run15-hits.npz" = "4b34e14dd0148cc3", "muon-near-om-run16-hits.npz" = "b76f0e4e5f28638c", "muon-near-om-run17-hits.npz" = "cf46a2a8d1f79228", "muon-near-om-run18-hits.npz" = "e27fb863293b5224", "muon-near-om-run19-hits.npz" = "befe0bca015f57a2", "muon-near-om-run20-hits.npz" = "fb3ffdfa8a7da270", "muon-near-om-run21-hits.npz" = "dff896b8bda92c18", "muon-near-om-run22-hits.npz" = "bd1cad43ce573d7e", "muon-near-om-run23-hits.npz" = "8b810f6ed9a5765b", "muon-near-om-run24-hits.npz" = "2296ef3f63606baa", "muon-near-om-run25-hits.npz" = "9d910add21ebb0cc", "muon-near-om-run26-hits.npz" = "0a62a10b1d27513f", "muon-near-om-run27-hits.npz" = "a71f736690aee8c0", "muon-near-om-run28-hits.npz" = "3aab29dff57bcd70", "muon-near-om-run29-hits.npz" = "a61c21f3690e973f", "muon-near-om-run30-hits.npz" = "f8c78321ef276d31", "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg" }
+timing = { wall_s = 0.508, cpu_s = 0.508, peak_rss_mib = 164.062 }
+metrics = { om267_point_pe = 63.5991, om267_default_pe = 59.7035, om267_chord_pe = 57.918, om267_mc_pe = 60.1604, om267_mc_sigma_pe = 0.499559, runs = 31 }

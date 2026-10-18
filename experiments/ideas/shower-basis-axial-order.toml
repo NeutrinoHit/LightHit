@@ -4,7 +4,7 @@ area = "shower"
 question = "Is the cubic axial weight (axial_order=3) needed at 0.25 m slices?"
 kind = "alternative-option"
 status = "default"
-verdict = "Linear instead of cubic axial weights raise order >=2 L1 from 0.309% to 0.356% (electron) and from 0.044% to 0.636% (pion) at the same charge (bias -0.0009% vs -0.0035% electron, 0.007% pion) and save no time (1.00x and 0.93x wall)."
+verdict = "Linear instead of cubic axial weights raise order >=2 L1 from 0.309% to 0.356% (electron) and from 0.044% to 0.636% (pion) at the same charge (bias -0.0009% vs -0.0035% electron, 0.007% pion) and save no time (1.00x and 0.91x wall)."
 baseline = "default-shower-route"
 cases = [
   "shower-basis-axial-order/electron-100GeV-linear",
@@ -31,12 +31,12 @@ tests = []
 
 [result.electron-100GeV-linear]
 status = "ok"
-date = "2026-10-16T22:10:42Z"
-commit = "97372c7f529b"
+date = "2026-10-18T03:46:22Z"
+commit = "48a44bb91cf2"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.71191, 4.21777, 4.56055], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [2.95557, 3.48486, 3.64648], numba_threads = 1 }
 inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "geant4-electron-100GeV.h5" = "f496788e96093951" }
-timing = { wall_s = 14.411, cpu_s = 14.411, peak_rss_mib = 4951.77 }
+timing = { wall_s = 12.113, cpu_s = 12.114, peak_rss_mib = 4021.83 }
 summary = { active = 28, charge_pe_by_order = [2.63757, 1.89579, 1.05284] }
 reference = "reference-shower/electron-100GeV"
 order_0 = { charge_bias = 0.0, bin_l1 = 0.0, worst_om = 0.0 }
@@ -44,16 +44,16 @@ order_1 = { charge_bias = -0.00504, bin_l1 = 0.011435, worst_om = 0.020828 }
 order_ge2 = { charge_bias = -9e-06, bin_l1 = 0.003556, worst_om = 0.000126 }
 order_total = { charge_bias = -0.001722, bin_l1 = 0.004078, worst_om = 0.007304 }
 active_agreement = { both = 28, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
-wall_vs_baseline = 1.0038
+wall_vs_baseline = 0.9966
 
 [result.pion-100GeV-linear]
 status = "ok"
-date = "2026-10-16T22:11:25Z"
-commit = "97372c7f529b"
+date = "2026-10-18T03:47:04Z"
+commit = "48a44bb91cf2"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [5.94385, 4.69434, 4.71436], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [2.67578, 3.34473, 3.58594], numba_threads = 1 }
 inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "pion-100GeV-steps.npz" = "3c9fa7540b378e19", "pion-100GeV-parts.npz" = "9fec6278f4fc2810" }
-timing = { wall_s = 19.268, cpu_s = 19.267, peak_rss_mib = 4537.19 }
+timing = { wall_s = 18.551, cpu_s = 18.549, peak_rss_mib = 3679.33 }
 summary = { active = 26, charge_pe_by_order = [1.86906, 1.20109, 0.61667] }
 reference = "reference-shower/pion-100GeV"
 order_0 = { charge_bias = 0.0, bin_l1 = 0.0, worst_om = 0.0 }
@@ -61,4 +61,4 @@ order_1 = { charge_bias = -0.005736, bin_l1 = 0.105997, worst_om = 0.01783 }
 order_ge2 = { charge_bias = 7e-05, bin_l1 = 0.006359, worst_om = 3.5e-05 }
 order_total = { charge_bias = -0.001867, bin_l1 = 0.035086, worst_om = 0.005997 }
 active_agreement = { both = 26, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
-wall_vs_baseline = 0.9306
+wall_vs_baseline = 0.9074

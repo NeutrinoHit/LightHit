@@ -14,6 +14,8 @@ from .cases import case
 from . import references as R
 
 INPUTS = ("muon-1TeV", "muon-300GeV")
+# references also for the 100 GeV muon (it reaches the muon route since the near-field fix)
+REFERENCE_INPUTS = INPUTS + ("muon-100GeV",)
 
 
 class _Muon:
@@ -230,7 +232,7 @@ def _muon_ge2_reference(name):
 GE2_REFERENCE_CHUNK: dict = {}
 
 
-for _name in INPUTS:
+for _name in REFERENCE_INPUTS:
     case("reference-original-steps", _name, heavy=True, warmup=False,
          notes="orders 0 and 1: transport_prompt on all original steps with "
                "PromptConfig(element_method='grouped', ballistic_method='interval', screen=False, "

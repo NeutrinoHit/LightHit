@@ -6,7 +6,7 @@ What do orders 0 and 1 cost with the default PromptConfig, and how far is the de
 """
 kind = "alternative-option"
 status = "tool"
-verdict = "With the default PromptConfig, orders 0 and 1 on the 100 GeV electron take 118.0 s (7.53x the shower route) with order-0 bias -8.87%, L1 34.5% and order-1 bias -1.72%, L1 1.93%, against the route's exact order 0 and order-1 -0.50%, L1 1.14%."
+verdict = "With the default PromptConfig, orders 0 and 1 on the 100 GeV electron take 108.3 s (8.91x the shower route) with order-0 bias -8.87%, L1 34.5% and order-1 bias -1.72%, L1 1.93%, against the route's exact order 0 and order-1 -0.50%, L1 1.14%."
 cases = ["kernel-transport-prompt/electron-100GeV"]
 how-to-run = "PYTHONPATH=src python experiments/run.py run 'kernel-transport-prompt/*'"
 inputs = ["bundle electron 100 GeV"]
@@ -32,16 +32,16 @@ tests = ["tests/test_prompt.py"]
 
 [result.electron-100GeV]
 status = "ok"
-date = "2026-10-15T06:53:03Z"
-commit = "97372c7f529b"
+date = "2026-10-17T20:51:17Z"
+commit = "48a44bb91cf2"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.87451, 4.7876, 5.0459], numba_threads = 1 }
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.19678, 4.05322, 3.9043], numba_threads = 1 }
 inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "geant4-electron-100GeV.h5" = "f496788e96093951" }
-timing = { wall_s = 118.04, cpu_s = 117.432, peak_rss_mib = 1651.89 }
+timing = { wall_s = 108.325, cpu_s = 108.318, peak_rss_mib = 1054.61 }
 summary = { active = 24, charge_pe_by_order = [2.41145, 1.87668, 0.0] }
 reference = "reference-shower/electron-100GeV"
 order_0 = { charge_bias = -0.088662, bin_l1 = 0.345195, worst_om = 1.20918 }
 order_1 = { charge_bias = -0.017247, bin_l1 = 0.019306, worst_om = 0.02992 }
 order_total = { charge_bias = -0.058762, bin_l1 = 0.201961, worst_om = 0.691359 }
 active_agreement = "none"
-wall_vs_baseline = 8.2222
+wall_vs_baseline = 8.912

@@ -42,7 +42,7 @@ for _name in SHOWERS:
          notes="ShowerTransport with defaults")(_shower(_name))
 for _name in MUONS:
     case("default-muon-route", _name,
-         reference=f"reference-muon/{_name}" if _name in ("muon-1TeV", "muon-300GeV") else None,
+         reference=f"reference-muon/{_name}" if _name in ("muon-1TeV", "muon-300GeV", "muon-100GeV") else None,
          notes="MuonTransport with defaults")(_muon(_name))
 for _name in EVENTS:
     case("default-event-route", _name, notes="EventTransport with defaults")(_event(_name))
@@ -201,6 +201,8 @@ def _linked_cache(name):
     target.mkdir(parents=True, exist_ok=True)
     for path in bundle_path("tables", "rte-cache").glob("directional-*.npz"):
         link = target / path.name
+        if link.is_symlink() and link.readlink() != path:
+            link.unlink()           # points to a moved bundle
         if not link.exists():
             link.symlink_to(path)
     return target
