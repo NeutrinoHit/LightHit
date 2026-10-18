@@ -15,6 +15,7 @@ plain_ru.toml             short Russian name and plain outcome of every idea, fo
 map.html                  generated: tree by area and status, superseded chains, table, records
 regenerate_inputs.py      NTSim/Geant4 events -> inputs/ (not in git)
 photon_mc.py              NTSim photon Monte Carlo of one event -> inputs/mc/ (not in git)
+photon_mc_point.py        NTSim photon Monte Carlo of an isotropic point source -> inputs/mc/ (not in git)
 usage/                    usage tracer, scenarios, usage-map.json (-> docs/usage-map.md)
 harness/                  inputs, references, metrics, provenance, case definitions
 inputs/, results/         generated, not in git
@@ -72,7 +73,11 @@ directional tables (`$LIGHTHIT_RTE_CACHE_321`) for the full-table checks, and
   for order 1 (all original steps, no screen).
 * Photon Monte Carlo (`photon_mc.py`): NTSim CherenkovGenerator with every
   photon, MCPhotonPropagator with 30 scatterings, SmartRayTracer; compared per
-  OM with its statistical error (`photon-mc-comparison`).
+  OM with its statistical error (`photon-mc-comparison`); per scattering order
+  and distance, also for an isotropic point source (`photon_mc_point.py`), in
+  `wavelength-quadrature`. The references above use the kernel's own
+  wavelength quadrature, so its error shows only against the photon Monte
+  Carlo and against finer quadratures (`wavelength-quadrature`).
 * Script ideas report the scripts' own metrics (the script's JSON, and its log in
   `results/<idea>/<case>.log`).
 * Metrics against a reference (`harness/metrics.py`), per order and total:

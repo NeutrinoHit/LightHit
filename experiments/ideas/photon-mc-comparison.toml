@@ -25,6 +25,9 @@ NTSim: CherenkovGenerator (photon_suppression=1) -> MCPhotonPropagator (HG, n_sc
 notes = [
   "The Monte-Carlo error of an OM is the square root of the summed squared hit weights.",
   """
+The results below were measured with nine wavelength nodes (LightHit <= 0.3.0a4 tables); the deficit came from that quadrature. With 32 nodes the same comparison, split by scattering order and distance, is wavelength-quadrature/mc-*.
+""",
+  """
 docs/accuracy.md quotes an earlier comparison (notebook): LightHit 5.89 pe, MC 5.82 / 5.86 / 5.48 +- 0.23.
 """,
 ]
