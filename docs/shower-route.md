@@ -106,7 +106,7 @@ For each degree l, the detector-weighted Cherenkov spectral columns
 the worst residual for beta > 0.8). Folded kernels
 `sum_lambda L_l[lambda, j] K_lambda` are refitted as cubics in log r relative to
 a common attenuation and flight speed; a source is then compiled in three bands
-instead of nine.
+instead of all wavelength nodes (32).
 
 ## Tests
 

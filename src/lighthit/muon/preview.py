@@ -145,6 +145,11 @@ def check_atlas_optics(atlas, kernel, rtol=1e-9):
     if not stored:
         raise ValueError('preview atlas carries no optical tables')
     tables = _spectral_tables(kernel)
+    if len(stored['wavelength_nm']) != len(tables['wavelength_nm']):
+        raise ValueError(
+            f"the muon tables hold {len(stored['wavelength_nm'])} wavelength nodes, the kernel "
+            f"uses {len(tables['wavelength_nm'])} (KernelConfig.wavelength_nodes); use tables "
+            "built for this quadrature or set wavelength_nodes to the tables'")
     for key in ('wavelength_nm', 'mus', 'mut', 'phase_index', 's0w', 's2w'):
         if not np.allclose(np.asarray(stored[key], float), tables[key], rtol=rtol, atol=0):
             raise ValueError(f'preview atlas optics differ from the kernel ({key})')

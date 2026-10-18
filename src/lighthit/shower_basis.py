@@ -200,6 +200,16 @@ class Ge2KernelStore:
             subset["coefficients"].setflags(write=False)
             self._bundles[key] = subset
             return subset
+        stored = {len(old_key[0]) for old_key in self._bundles}
+        if (stored and len(key[0]) not in stored
+                and kernel.config.cache_policy == "require"):
+            # A prepared pack of another wavelength quadrature (LightHit <=
+            # 0.3.0a4 tables have nine nodes): say so instead of failing on
+            # the first missing directional table.
+            raise ValueError(
+                f"the order >=2 pack holds {sorted(stored)} wavelength nodes, the kernel "
+                f"uses {len(key[0])} (KernelConfig.wavelength_nodes); use tables built "
+                "for this quadrature or set wavelength_nodes to the pack's")
         coefficients, absorption, speed = None, [], []
         for lam, wavelength in enumerate(kernel.wavelength.wavelength_nm):
             cache = kernel._directional_cache_for(float(wavelength))

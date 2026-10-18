@@ -139,7 +139,7 @@ class PromptConfig:
     ``s0w``-weighted mean phase index, and grouped once per module for all
     bands (each band keeps its own optics, yield and clock in the batches).
     Elements above threshold in only some bands stay per-band units; the
-    coarse screen uses the same units. This replaces nine per-band
+    coarse screen uses the same units. This replaces the per-band
     compressions. It changes the grouping discretisation and was accepted
     against original-step (``segment``) controls: worst-case error and bias
     did not increase (docs/accuracy.md). Default off.

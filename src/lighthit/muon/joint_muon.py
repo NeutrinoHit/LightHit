@@ -15,7 +15,7 @@ import numpy as np
 class JointMuonConfig:
     """Settings of the muon route; the defaults are the validated fast choice.
 
-    Secondary Q1: grouped physical-time solver with the nine bands fused and weak
+    Secondary Q1: grouped physical-time solver with the spectral bands fused and weak
     packet-OM pairs omitted under a certified bound (``first_*``). Secondary >=2:
     point RTE sources applied in float32 batches, with predicted weak pairs omitted
     (``ge2_*``). ``first_backend='atlas'``, ``ge2_backend='basis'`` and

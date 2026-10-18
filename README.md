@@ -153,7 +153,7 @@ command-line tool.
 * **Charged steps.** `lh.SpectralLightElements` (start, direction, chord and
   true length, beta, times, UID per step) or `lh.G4Shower.from_hdf5`.
 * **Prepared tables**, built once per medium and OM response and reused: the
-  RTE tables (65 frequencies to 1.2 rad/ns, 9 wavelengths), the >=2 kernel pack
+  RTE tables (65 frequencies to 1.2 rad/ns, 32 wavelengths), the >=2 kernel pack
   and, for muons, five atlases of the primary track. A manifest next to the
   cache lists them (`shower-data.json`: `rte_cache`, `ge2_pack`;
   `muon-data.json`: those plus the atlases), so the routes find them from the

@@ -32,7 +32,12 @@ class KernelConfig:
     omega_per_ns: np.ndarray = field(default_factory=lambda: np.linspace(0.0, 1.2, 321))
     relative_time_edges_ns: np.ndarray = field(
         default_factory=lambda: np.arange(-60.0, 740.0 + 5.0, 5.0))
-    wavelength_nodes: int = 9
+    # Scattered light integrates exp(-mu_a(lambda) r) over the detected
+    # spectrum. The Baikal absorption has a narrow transparency window
+    # (0.042 /m near 496 nm, kinked table) that nine nodes miss: orders 1 and
+    # >=2 then lose 6 % at 50 m and 15-30 % beyond 80 m. 32 nodes keep the
+    # spectral integral within 1 % to 200 m.
+    wavelength_nodes: int = 32
     wavelength_range_nm: tuple[float, float] | None = None
     scattering_degree: int = 24
     source_degree: int = 32

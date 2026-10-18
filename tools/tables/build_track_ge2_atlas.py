@@ -44,7 +44,7 @@ def load_optics(pack,cache):
     metadata.update(cache_keys=list(key[0]),source_degree=int(bundle['degree']),acceptance_degree=int(bundle['acceptance_degree']),
         radius_window_m=np.exp(bundle['log_r'][[0,-1]]).tolist(),
         normalization='positive orientation-average local-infinite-track charge; fallback absolute channel norm',
-        physical_limitations=['nine existing wavelength nodes; spectral convergence not established',
+        physical_limitations=[f'{len(key[0])} Gauss-Legendre wavelength nodes of the RTE cache (the kernel quadrature)',
             'same finite angular/frequency RTE approximation; no new independent transport solver',
             'local radial cutoff300m is not a bound on omitted physical light',
             'fixed beta=1 and clock1/c; nonrelativistic sources need direct fallback'],

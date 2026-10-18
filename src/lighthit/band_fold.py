@@ -9,7 +9,7 @@ geometry, real harmonics of the step direction, emission clock) and
 ``Q_i(lambda) = C0_i (1 - 1/(beta_i n_lambda)^2) / lambda^2`` above threshold.
 With the detector scale ``a_lambda = w_lambda * eta_lambda`` the response is
 ``sum_lambda a_lambda K_lambda c_lambda``.  The phase index changes by about
-1% over the spectrum, so for every ``l`` the nine-vector
+1% over the spectrum, so for every ``l`` the vector over the nodes
 ``F_l(lambda; beta) = a_lambda Q(lambda; beta) P_l(1/(beta n_lambda))`` lies,
 for every ``beta``, close to the span of its values in three bands ``J``:
 
@@ -20,7 +20,7 @@ for every ``beta``, close to the span of its values in three bands ``J``:
 on the event.  The response becomes ``sum_j Kt_j,l (a_j c_j,l)`` with folded
 kernels ``Kt_j,l = sum_lambda L_l[lambda, j] exp(-mua_lambda r)
 exp(i w r / v_lambda) K_lambda,l``; a source is compiled in the ``J`` bands
-only and applied with ``len(J)`` instead of nine bands.  ``fold_bundle``
+only and applied with ``len(J)`` instead of all bands.  ``fold_bundle``
 re-fits the folded kernels as cubics in log r on the radial intervals of the
 pack (optionally subdivided), relative to a common attenuation and flight
 phase, in the format of :class:`lighthit.shower_basis.Ge2KernelStore` bundles.

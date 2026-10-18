@@ -51,6 +51,30 @@ Difference by design (`accuracy.md`, Order 0 near emitters):
   Monte Carlo at every distance, below the statistical error of the
   comparisons made so far.
 
+Open (`accuracy.md`, Wavelength quadrature):
+
+* Muon route far from the track: on the 100 GeV muon, OMs 60-100 m from the
+  track piece get 1.9 times the Monte-Carlo order 1 and 2.6 times its order
+  >=2, OMs beyond 100 m 3.5 times its order >=2 (0.05 pe of 1.58 pe in all).
+  The isotropic point source agrees at these distances, so the excess comes
+  from the muon route (primary >=2 atlas or direct batch, secondaries), not
+  from the RTE tables. One event only.
+* With 32 wavelength nodes the direct order >=2 batch of the muon primary
+  runs over every node: 100 GeV muon 36 -> 84 s (48.6 s in that batch). The
+  shower route folds the nodes onto three bands; the muon batch does not.
+
+Data bundles of LightHit <= 0.3.0a4 hold tables for nine wavelength nodes,
+which lost 6 % of the scattered light at 50 m and 15-30 % beyond 80 m
+(`accuracy.md`, Wavelength quadrature). The routes refuse such a bundle with
+the default `KernelConfig` (32 nodes); `KernelConfig(wavelength_nodes=9)`
+reads it and reproduces the old results.
+
+The water table of the `bgvd_model` package (used by NTSim and by the bundle
+model alike) places its 26 absorption and scattering values on
+`linspace(350, 610, 26)`, a 10.4 nm step. If the values belong to 350-600 nm
+in 10 nm steps, the water is more transparent at a given wavelength than both
+programs assume: about 2 % more detected light at 20 m and 3 % at 50-100 m.
+
 ## Interface
 
 * Sources default to `cone_model="frozen"` while every event route needs

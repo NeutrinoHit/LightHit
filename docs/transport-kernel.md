@@ -11,7 +11,7 @@ sibling kernels from it (same medium and detector, their own frequency grids).
 |---|---|---|
 | `omega_per_ns` | `linspace(0, 1.2, 321)` | table frequency grid; must start at 0 and increase |
 | `relative_time_edges_ns` | `arange(-60, 745, 5)` | 5 ns bins relative to each OM's time origin |
-| `wavelength_nodes` | 9 | Gauss-Legendre wavelength nodes |
+| `wavelength_nodes` | 32 | Gauss-Legendre wavelength nodes of orders 1 and >=2 and of the tables (nine until 0.3.0a4: `accuracy.md`, Wavelength quadrature) |
 | `wavelength_range_nm` | None | None: the medium's full range |
 | `scattering_degree` | 24 | Henyey-Greenstein (HG) truncation L |
 | `source_degree` | 32 | source/output multipole degree (`SolverSettings.spatial_degree`) |

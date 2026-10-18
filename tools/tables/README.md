@@ -12,13 +12,13 @@ package installed (`pip install -e $LIGHTHIT_DATA/bgvd-model`).
 
 | Step | Command | Produces (bundle file) | Needs |
 |---|---|---|---|
-| 1 | `kernel.build(source=...)` and `kernel.ge2_kernel_store().save(...)` (see `docs/transport-kernel.md`) with the 65-frequency `KernelConfig` of the routes | `tables/rte-cache/directional-*.npz`, the full order >=2 tensor of `tables/ge2-pack` | the BGVD model |
+| 1 | `kernel.build(source=...)` and `kernel.ge2_kernel_store().save(...)` (see `docs/transport-kernel.md`) with the 65-frequency `KernelConfig` of the routes (default 32 wavelength nodes) | `tables/rte-cache/directional-*.npz`, the full order >=2 tensor of `tables/ge2-pack` | the BGVD model |
 | 2 | `build_ge2_charge_pack.py --source PACK --output OUT` | `tables/ge2-pack/charge-0.npy` (exact zero-frequency slice) and its `pack.json` entry | step 1 |
 | 3 | `build_track_first_atlas.py --output OUT ...` | `tables/muon/q1-atlas` (order 1 of beta = 1 track pieces) | `bgvd_model` |
 | 4 | `build_track_ge2_atlas.py --pack PACK --cache RTE --output OUT` | `tables/muon/ge2-atlas` (order >=2 of beta = 1 track pieces) | steps 1, `bgvd_model` |
 | 5 | `build_response_cubature.py --output OUT` | `basis-rank16.npz` (not in the bundle; input of step 6) | `bgvd_model` |
 | 6 | `build_first_beta_charge.py --base Q1_ATLAS --cubature OUT/basis-rank16.npz --output OUT` | `tables/muon/first-beta-charge.npz` | steps 3, 5 |
-| 7 | `build_ge2_beta_charge.py --base GE2_ATLAS --pack PACK --cache RTE --output OUT` | `tables/muon/ge2-beta-charge.npz` | steps 1, 4 |
+| 7 | `build_ge2_beta_charge.py --base GE2_ATLAS --pack PACK --cache RTE --output OUT` | `OUT/beta-charge.npz`, copied to `tables/muon/ge2-beta-charge.npz` (OUT is a directory with rows and `report.json`) | steps 1, 4 |
 | 8 | `build_positive_fluence.py --output FILE ...` | `tables/muon/preview-atlas.npz` | the BGVD model (bundle `model/bgvd-model.npz`) |
 | 9 | `lighthit.muon.write_manifest(...)` | `tables/muon-data.json` | all of the above |
 
@@ -30,7 +30,7 @@ The laser table (`tables/laser-cache`) is built by
 
 What each bundle file records about its own build (read from its metadata):
 
-* **ge2-pack**: `pack.json` holds the keys (the nine directional table keys,
+* **ge2-pack**: `pack.json` holds the keys (the directional table key of each of the 32 wavelength nodes,
   source degree 32, 65 frequencies). The bundle names the full tensor
   `full-0.npy` inside the pack, while step 2 writes a relative path to its
   source pack: the bundle was repacked after step 2. Only `--source` is a
@@ -45,9 +45,10 @@ What each bundle file records about its own build (read from its metadata):
 * **ge2-atlas**: `manifest.json` and `report.json` hold the optics (cache keys,
   source degree 32, acceptance degree 3, radius window 3-300 m), order 10 per
   row and the validation settings (tolerance 0.01, bright charge 1e-5 pe,
-  backward tolerance 1e-6 pe); 42 rows. `--passes`, `--max-nodes` and the
-  initial `--nodes` are not recorded (the script defaults are 3, 65 and the
-  13 nodes 3.01 ... 299 m, all of which are among the 42 rows).
+  backward tolerance 1e-6 pe); 44 rows (42 with the nine-node tables of
+  LightHit <= 0.3.0a4). `--passes`, `--max-nodes` and the initial `--nodes`
+  are not recorded; the 32-node bundle was built with the script defaults (3,
+  65 and the 13 nodes 3.01 ... 299 m) and `NUMBA_NUM_THREADS=1`.
 * **first-beta-charge.npz**: anchor beta 0.999, `base_manifest_sha256` of the
   q1-atlas, `cubature_sha256` 49cefe0b... of `basis-rank16.npz`, 17 spectral
   nodes. A rebuilt cubature can be checked against that hash before step 6.

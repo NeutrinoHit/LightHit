@@ -80,7 +80,7 @@ Not distributed publicly. Layout:
 
 ```text
 model/bgvd-model.npz        clusters 1-5 (1440 OMs), the model NTSim builds
-tables/rte-cache/           RTE tables, 65 frequencies, 9 wavelengths
+tables/rte-cache/           RTE tables, 65 frequencies, 32 wavelengths
 tables/ge2-pack/            order >=2 pack
 tables/muon/                the five muon atlases
 tables/laser-cache/         532 nm laser table (5 ns bins)

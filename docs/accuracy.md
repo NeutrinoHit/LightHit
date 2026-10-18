@@ -47,12 +47,104 @@ the OMs active in both; order 0 agrees exactly on all inputs.
 
 Against one NTSim photon Monte Carlo run per event (every photon, 30
 scatterings, the regenerated events; NTSim with the photon yield per true step
-length, `full-rte` d5993d8), the total charge of `EventTransport` is 0.941
-(100 GeV e, MC 6.26 +- 0.24 pe), 0.974 (pi+, 3.78 +- 0.21 pe), 0.946 (nu_e CC,
-4.99 +- 0.23 pe) and 0.926 (100 GeV muon, `MuonTransport`, 1.68 +- 0.14 pe)
-times the MC charge, with per-OM pull RMS 0.90, 1.20, 0.66 and 0.45. Each ratio
-is within 1.6 sigma of 1; together they give 0.948 +- 0.025. Of this, 1-1.5 %
-is the attenuation reference below; the rest is not explained yet.
+length, `full-rte` d5993d8), the total charge of `EventTransport` with 32
+wavelength nodes is 0.971 (100 GeV e, MC 6.26 +- 0.24 pe), 1.000 (pi+, 3.78 +-
+0.21 pe), 0.976 (nu_e CC, 4.99 +- 0.23 pe) and 0.939 (100 GeV muon,
+`MuonTransport`, 1.68 +- 0.14 pe) times the MC charge; the three showers
+together 0.980 +- 0.026, the 1-1.5 % attenuation reference below included.
+The table rows above (and the registry outside `wavelength-quadrature`) were
+measured with nine nodes, which gave 0.941, 0.974, 0.946 and 0.926
+(`photon-mc-comparison`).
+
+### Wavelength quadrature of the scattered orders
+
+Orders 1 and >=2 (and the RTE tables) integrate over wavelength with
+`KernelConfig.wavelength_nodes` Gauss-Legendre nodes on 350-610 nm; order 0 is
+integrated over the continuous spectrum. Until LightHit 0.3.0a4 there were
+nine nodes. The integrand contains `exp(-mu_a(lambda) r)`, and the Baikal
+absorption table has a narrow, kinked transparency window (0.042 /m at
+495.6 nm) between the nodes 480 and 522 nm (0.0545 and 0.0512 /m). Nine
+nodes therefore lose light with distance; the detected Cherenkov spectrum
+after r metres of attenuation, relative to a fine trapezoid on the bundle
+model (registry `wavelength-quadrature/spectral-integral`):
+
+| Nodes | 0 m | 20 m | 50 m | 80 m | 120 m | 200 m |
+|---:|---:|---:|---:|---:|---:|---:|
+| 9 | +4.1 % | -1.0 % | -6.1 % | -14.6 % | -28.8 % | -56.2 % |
+| 17 | +0.3 % | -1.0 % | -2.4 % | -4.4 % | -7.5 % | -13.7 % |
+| 32 | -0.4 % | -0.1 % | -0.1 % | -0.3 % | -0.5 % | -0.8 % |
+
+Order 1 of the prompt solver on the Monte-Carlo events, against 64 nodes
+(`wavelength-quadrature/order1-*`): nine nodes give 0.935 (100 GeV e), 0.945
+(pi+) and 0.938 (nu_e CC), 32 nodes 0.995, 0.997 and 0.996.
+
+Against the photon Monte Carlo, per scattering order (sum over OMs; MC errors
+in brackets), `wavelength-quadrature/mc-*`:
+
+| Input | Nodes | Order 0 | Order 1 | Order >=2 | Total |
+|---|---:|---:|---:|---:|---:|
+| 100 GeV e | 9 | 0.977 (0.059) | 0.886 (0.063) | 0.957 (0.084) | 0.941 (0.038) |
+| | 32 | 0.977 | 0.943 | 1.014 | 0.971 |
+| 100 GeV pi+ | 9 | 0.945 (0.080) | 1.038 (0.095) | 0.948 (0.119) | 0.974 (0.055) |
+| | 32 | 0.945 | 1.094 | 0.999 | 1.000 |
+| nu_e CC | 9 | 0.913 (0.069) | 1.031 (0.077) | 0.896 (0.092) | 0.946 (0.045) |
+| | 32 | 0.913 | 1.096 | 0.948 | 0.976 |
+| 100 GeV muon | 9 | 0.907 (0.115) | 0.829 (0.146) | 1.403 (0.217) | 0.925 (0.084) |
+| | 32 | 0.907 | 0.845 | 1.493 | 0.939 |
+
+The muon's primary order 1 comes from an atlas built over 82 wavelength nodes
+and never had the nine-node error; its comparison is limited by statistics,
+and 15.5 % of its light is emitted outside the Monte Carlo's emission volume
+(NTSim's world cylinder with a 100 m margin), so the case drops those steps on
+the LightHit side too. Far from the track the muon route gives more light
+than the Monte Carlo: OMs 60-100 m from the track piece (37 OMs) order 1
+0.029 against 0.016 +- 0.005 pe and order >=2 0.038 against 0.015 +- 0.003
+pe, beyond 100 m order >=2 0.008 against 0.002 pe (32 nodes; 0.05 pe of
+1.58 pe). The point source below shows no such excess, so it lies in the
+muon route, not in the RTE tables (`known-issues.md`).
+
+The three showers by distance from the light-weighted shower centre (total
+charge, MC error in brackets):
+
+| Nodes | 20-40 m | 40-60 m | 60-100 m | > 100 m | all |
+|---:|---:|---:|---:|---:|---:|
+| 9 | 0.955 (0.083) | 0.976 (0.035) | 0.911 (0.034) | 0.731 (0.063) | 0.951 (0.026) |
+| 32 | 0.962 | 0.996 | 0.964 | 0.918 | 0.980 |
+
+The isotropic point source of `photon_mc_point.py` (four runs, 2.5e8
+photons, 8 m from the central string of cluster 1), `wavelength-quadrature/
+point-mc-nodes*`, per order (MC error in brackets):
+
+| Distance | OMs | Order 0 | Order 1, 9 / 32 nodes | Order >=2, 9 / 32 nodes | Total, 9 / 32 nodes |
+|---|---:|---:|---:|---:|---:|
+| 8-15 m | 2 | 0.981 (0.008) | 0.990 / 0.968 (0.018) | 1.147 / 1.111 (0.049) | 0.986 / 0.981 (0.008) |
+| 15-30 m | 2 | 0.994 (0.023) | 0.969 / 0.974 (0.036) | 0.971 / 0.972 (0.064) | 0.986 / 0.987 (0.019) |
+| 30-50 m | 2 | 0.966 (0.047) | 0.888 / 0.912 (0.059) | 0.963 / 0.979 (0.090) | 0.940 / 0.950 (0.034) |
+| 50-60 m | 14 | 1.021 (0.031) | 0.922 / 0.984 (0.033) | 0.894 / 0.938 (0.041) | 0.957 / 0.989 (0.020) |
+| 60-70 m | 24 | 0.990 (0.028) | 0.923 / 1.009 (0.029) | 0.909 / 0.975 (0.034) | 0.946 / 0.993 (0.017) |
+| 70-80 m | 14 | 0.967 (0.051) | 0.873 / 0.983 (0.049) | 0.862 / 0.950 (0.052) | 0.903 / 0.968 (0.029) |
+| 80-100 m | 31 | 0.977 (0.049) | 0.834 / 0.988 (0.045) | 0.846 / 0.979 (0.044) | 0.883 / 0.982 (0.027) |
+| 100-130 m | 34 | 1.004 (0.089) | 0.708 / 0.935 (0.070) | 0.811 / 1.044 (0.055) | 0.819 / 0.998 (0.039) |
+| 130-170 m | 46 | 0.816 (0.136) | 0.466 / 0.721 (0.098) | 0.617 / 0.930 (0.064) | 0.606 / 0.850 (0.050) |
+| 170-250 m | 248 | 0.999 (0.188) | 0.396 / 0.820 (0.113) | 0.487 / 0.991 (0.053) | 0.513 / 0.957 (0.047) |
+
+Order 0 does not depend on the nodes; 0.981 +- 0.008 at the two nearest OMs
+is the attenuation reference below. With 32 nodes the ratios up to 130 m lie
+within 2 sigma of 0.985 apart from order >=2 at 8-15 m (+11 %, 2.3 sigma; no
+source point is within 3 m, so the near-field clamp is not involved); beyond
+130 m order 1 is 2.8 sigma low on 0.03 pe, while nine nodes lose 40-60 %
+there.
+
+Cost of 32 nodes: the tables of a bundle grow from 1.2 + 1.3 + 0.9 GB (RTE,
+>=2 pack, muon) to 4.3 + 4.5 + 1.0 GB, and building them takes about 20
+minutes (RTE tables 16 s per node). `EventTransport` on one thread
+(`wavelength-quadrature/mc-*`, nine against 32 nodes): 100 GeV e 6.6 -> 8.4 s,
+pi+ 22.9 -> 38.2 s, nu_e CC 14.9 -> 22.6 s, 100 GeV muon 36 -> 84 s (the
+direct order >=2 batch of the primary runs over every wavelength node: 48.6 s
+of the 84 s); peak resident memory
+of a shower event 3.5-4.2 -> 6.6-6.8 GB, mostly the band fold built in memory
+from the larger >=2 pack (a prepared fold, `shower-data.json`
+`ge2_band_fold`, is not part of the bundle yet).
 
 ### Order 0 near emitters: the OM sphere
 
@@ -135,7 +227,13 @@ Geant4 steps or to a finer source basis, not to photon Monte Carlo.
 `examples/LightHit/lighthit-in-ntsim.ipynb` in NTSim (section 2) runs one
 Geant4 event (100 GeV electron) through `LightHitTransport` and through
 NTSim's `CherenkovGenerator` -> `MCPhotonPropagator` (up to 30 scatterings,
-full photon statistics) -> `SmartRayTracer`. LightHit gives 5.89 pe in about
-6 s; three Monte-Carlo runs gave 5.82, 5.86 and 5.48 pe (each +- 0.23
-statistical) in about 320 s. Per-OM charges and arrival times agree within
-about two Monte-Carlo standard deviations.
+full photon statistics) -> `SmartRayTracer`; it is the event of
+`wavelength-quadrature/mc-electron-100GeV-*`. With 32 wavelength nodes
+LightHit gives 6.08 pe (nine nodes: 5.89 pe) in a few seconds; the Monte
+Carlo of the notebook run gave 6.56 +- 0.25 pe in about 5 minutes and the
+registry's run of the same event 6.26 +- 0.24 pe, together 6.41 +- 0.17 pe
+(LightHit/MC 0.95 +- 0.03, of which 1-1.5 % is the attenuation reference).
+The brightest OM, 13206: LightHit 1.58 pe, Monte Carlo 1.97 +- 0.15 pe in
+the notebook run and 1.61 +- 0.13 pe in the registry run. Single Monte-Carlo
+runs scatter by their quoted errors; LightHit returns the same numbers every
+time.

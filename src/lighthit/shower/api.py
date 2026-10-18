@@ -6,7 +6,7 @@ This is the route used by default for electromagnetic and hadronic showers
 * direct light (order 0): exact on the original steps over the continuous
   spectrum (:func:`lighthit.ballistic_interval.ballistic_interval`);
 * first scattering (order 1): the grouped physical-time prompt solver with
-  the nine spectral bands fused into one pencil set (``PromptConfig.fuse_bands``);
+  the spectral bands fused into one pencil set (``PromptConfig.fuse_bands``);
 * multiple scattering (order >=2): the axial shower basis compiled in three
   node bands and applied with band-folded RTE kernels
   (:mod:`lighthit.band_fold`); the zero-frequency charge used to select
