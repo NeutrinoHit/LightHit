@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # NTSim's run_lighthit.py scenarios under the usage tracer, one after another.
 #
-#   NTSIM=/path/to/ntsim NTSIM_PYTHON=/path/to/ntsim_env/bin/python \
+#   NTSIM=/path/to/ntsim NTSIM_PYTHON="$(pyenv prefix ntsim)/bin/python" \
 #   LIGHTHIT_DATA=/path/to/lighthit-bgvd-data experiments/usage/run_ntsim.sh [name ...]
 #
 # The lighthit package is taken from this checkout (PYTHONPATH=src).

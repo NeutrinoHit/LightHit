@@ -5,7 +5,7 @@ Fit stable collision-conditioned moments inside the causal ball at each age;
 then integrate absorption and the >=2 Poisson probability over path length.
 Compare volume-integrated cells with independent absorption-endpoint MC.
 
-Run with OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 using ntsim_env Python.
+Run with OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 using the pyenv `ntsim` Python.
 """
 import paths  # inputs and outputs: scripts/shower_basis/paths.py
 import argparse
