@@ -85,12 +85,18 @@ Open (`accuracy.md`, Photon Monte Carlo over energies):
   (`accuracy.md`). That deficit is not reproduced. The production calculation
   still needs actual glass-entry attenuation and timing. The older 10 TeV
   electron ratio, 0.975, has not been remeasured on the glass reference.
-* Muon route far from the track: the 1 TeV muon gets 1.12 +- 0.02 of the
-  Monte Carlo at 100-150 m (0.4 % of its charge); the 100 GeV muon passes in
-  every bin in the older measurements. Those measurements used an isotropic
-  acceptance factor on unselected OMs. The current fast estimate uses
-  arrival-direction moments and the actual OM acceptance (`muon-route.md`);
-  the 1 TeV distance bins still need checking with this version.
+* Muon route far from the track: at 100-150 m, an addressed reconstruction
+  with the current angular preview and first-entry Q0 gives 1.094 +- 0.021
+  of MC, versus the older isotropic estimate 1.118 +- 0.021 (0.4% of event
+  charge). It retains four saved detailed scattered responses and is not a
+  new full-event selection pass. The group still fails. Ready-RTE and
+  independent collision controls do not yet separate kernel truncation from
+  the limited MC statistics; squared weights give a larger ratio error,
+  0.042. Details and the unchanged criterion are in `accuracy.md`.
+* The 10 GeV electron at 20-50 m passes for total charge (1.035 +- 0.036),
+  while Q0 remains 1.130 +- 0.062 of saved MC. Direct positive-ray controls
+  on all fourteen receivers confirm its numerical first-entry integral;
+  the component discrepancy is not declared resolved.
 
 Data bundles of LightHit <= 0.3.0a4 hold tables for nine wavelength nodes,
 which lost 6 % of the scattered light at 50 m and 15-30 % beyond 80 m

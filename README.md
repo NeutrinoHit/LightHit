@@ -479,15 +479,30 @@ other particles, numerical controls and limitations: `docs/accuracy.md`.
   A primary muon line through the very centre of an OM still raises in
   `MuonTransport`; `EventTransport` then uses the shower route
   (`route_fallbacks`).
-* Order 0 uses the supplied OM sphere at every distance, to leading order in
-  R/rho. Its attenuation and time, and the scattered-light tables, still
-  refer to the centre; the glass-reference calculation remains unfinished.
-  The explicit direct entry evaluator and its current speed limitation are
-  described in `docs/direct-first-entry.md`; it is not the default route.
+* Order 0 integrates to first entry on the supplied OM sphere. The scattered
+  orders still use centre-reference tables; their transfer to the glass is
+  unfinished. Geometry, error budgets and measured cost are described in
+  `docs/direct-first-entry.md`.
 * The laser is an isotropic flash; a collimated beam or a measured diffuser
   pattern is not represented.
 * Tables (RTE cache, >=2 pack, muon atlases) belong to one medium and OM
   response; a change of either requires new tables.
+
+## Directed-photon laboratory
+
+The [student guide](docs/pencil-validation.md) compares a single directed
+photon with independent Monte Carlo, RTE and analytic limits. It separates
+orders 0, 1 and >=2, finite-volume probes, numerical resolution, statistical
+errors and time-frequency effects. No detector bundle or Geant4 is needed.
+
+```bash
+python -m pip install -e '.[validation]'
+lighthit-pencil-check --profile quick --output results/pencil
+```
+
+The full profile adds finer resolution controls and 1.6 million main photon
+histories. Its charge checks and time diagnostics have separate criteria;
+it does not change the fast event routes.
 
 ## Release
 
@@ -510,7 +525,7 @@ or documentation sources (`MANIFEST.in` and `packaging_filter.py`).
 ## Licence and data
 
 BSD 3-Clause, see `LICENSE`. The free-moment recursion and free-tail ratios in
-`angular.py` derive from the author's earlier `baikal-rte` code. Optical
+`angular.py` derive from DN's earlier `baikal-rte` code. Optical
 coefficients, the OM response and geometry are read at run time from a
 separately supplied model; no private code, calibration table, G4 event or
 prepared table is distributed. Synthetic media and detectors in this package

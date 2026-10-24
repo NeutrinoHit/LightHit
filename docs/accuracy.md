@@ -17,6 +17,68 @@ methods, for example:
 
 They do not check the Geant4/Baikal-GVD numbers below.
 
+## Directed-photon laboratory (2026-10-24)
+
+The independent [student laboratory](pencil-validation.md), registered as
+`pencil-green-validation`, tests one monochromatic unit photon along +z.
+Both methods measure scalar fluence averaged over identical spherical-sector
+volumes, including recrossings. This is not a finite-OM first-entry test for
+scattered light and does not exercise event grouping or atlases.
+
+The full synthetic protocol uses 1.6 million independent main histories in
+32 batches, three radii (10, 30 and 125 m), four angular sectors and separate
+orders 0, 1 and >=2. Its parameters and 3% precision requirement are fixed
+before comparison. On Mac, all 27 nonzero charge comparisons satisfy the
+statistical and observed numerical-resolution criteria; nine off-axis
+ballistic components are exactly zero. The largest charge residual is
+2.244 SE. The maximum observed spread of the fine RTE controls is 0.906%
+of the larger MC/RTE value; this is a convergence diagnostic, not a rigorous
+error bound. The finer reference uses L=96, J=512 and k_max=10 m^-1.
+
+The short 60,000-history profile remains a diagnostic exercise: eight charge
+comparisons agree, six are structural zeros, nine lack histories/precision,
+and the 125 m forward >=2 component differs by 3.49 SE. That result is kept
+in the registry; its seed and criterion were not changed to obtain a pass.
+The full protocol above uses the separately declared larger ensemble and
+importance sampling, rather than treating the short run as conclusive.
+
+Analytic whole-space collision-order spectra agree with MC within 2.362 SE
+and with RTE at k=0 to 4.8e-16 relative. Independent coordinate-space
+quadrature for order 1 agrees to 1.4e-14 relative. The no-scattering volume
+test differs by at most 8.4e-17 m^-2. Supplementary analog absorption,
+physical-HG sampling, roulette, isotropic-source and isotropic-scattering
+checks have maximum charge residuals below 2.40 SE; their weaker statistics
+do not uniformly meet the main 3% precision requirement. Ballistic first
+entry on a sphere is checked separately, including a grazing miss and a
+receiver behind the source (maximum residual 2.563 SE).
+
+A supplementary full charge test with the exported model's water at 450 nm
+(mu_a=0.076 m^-1, mu_s=0.019 m^-1, g=0.9,
+n_g=1.3713237239062512) also resolves 27 nonzero comparisons and nine exact
+zeros; its maximum charge residual is 1.989 SE. This checks the coefficients
+at one wavelength, not the complete Cherenkov spectrum or NTSim tracer.
+
+Coarse spatial angular resolution can produce large errors for a narrow
+pencil. The diagnostic J=32 run changes some weak components by more than
+100%. It does not reproduce the complete event route and cannot be used
+to assign that error to its atlases or grouping.
+
+Time is checked separately in the regular 30 m forward sector. On a
+385-frequency grid up to 1.2 ns^-1, RTE and MC reconstructed with the same
+frequency band differ by 0.662% in bin L1. The MC histogram before/after that
+band restriction differs by 0.358%. Halving the frequency spacing changes
+RTE bins by 0.00284%, but doubling the upper cutoff from 0.6 to 1.2 ns^-1
+changes them by 4.245%. Thus the unrestricted pulse shape is not certified
+at 3%, even when `--strict` accepts the charge/analytic checks. The stored
+histogram covers 99.99999987% of its measured charge. No negative Fourier
+bins are clipped. These figures refer to the synthetic medium; the
+supplementary model-water run used the earlier 0.6 ns^-1 time grid.
+
+The local validation covers 128 relevant unit tests, wheel construction,
+installation and the installed command. Linux execution of this new
+laboratory has not been verified. The production fast routes and scattered
+receiver tables are unchanged.
+
 ## Current measurements
 
 `experiments/REPORT.md` holds the measured accuracy and speed of the default
@@ -375,6 +437,105 @@ all 12 active OMs and both scattered orders are preserved. The pion and νe
 entry calls take 30.29 s and 26.67 s. Opening/preparing tables affects the
 first call of those pairs, so their times are not a precise relative-speed
 benchmark. Compilation and Geant4 event generation are excluded.
+
+### Addressed pion residual at 50–100 m
+
+The same 76 receivers and 16 saved native photon-MC runs were checked without
+changing the production route. All hits match the recorded hashes; the source
+steps are identical between runs, and photon suppression is 1. The group has
+about 4,821 effective weighted hits. MC standard error of the total is
+0.023786 pe from run spread or 0.021963 pe from squared weights. The original
+ratio, 0.96595 ± 0.01507, remains a failed group under the unchanged criterion.
+
+| Order | Fast route, pe | Saved MC, pe | (MC−fast) / MC standard error |
+|---|---:|---:|---:|
+| 0 | 0.573263 | 0.597339 ± 0.020945 | 1.15 |
+| 1 | 0.535128 | 0.545666 ± 0.015762 | 0.67 |
+| >=2 | 0.364650 | 0.381954 ± 0.011664 | 1.48 |
+| Total | 1.473041 | 1.524959 ± 0.023786 | 2.18 |
+
+Only zero frequency on this group was used for the >=2 source controls.
+Computing every receiver in detail changes >=2 to 0.364965 pe, an increase
+of 0.087%. Halving the source cell, stencil and time step changes that answer
+by −5.27e−8 relative; all 32 wavelength nodes instead of the three folded node
+bands change it by +3.61e−7. Prompt and delayed sources retain their separate
+frames as in the production route. These approximations do not explain the
+0.051918 pe difference in the total charge.
+
+An independent continuous-spectrum next-event control on the original steps,
+with two million histories and seed 241027, takes 31.0 s on the VM. It gives
+first-entry Q1 = 0.539953 ± 0.005157 pe and >=2 = 0.369982 ± 0.005095 pe.
+The fast centre-reference answers agree within about one standard error per
+order. This is a diagnostic reference; no surface atlas is built or enabled.
+No new native photon-MC or Geant4 event was generated. Point-receiver scores
+from the same estimator are not used to assign uncertainty because their
+second moment need not exist.
+
+At OM 272 (69.44 m), where the Q1 residual is largest, two stationary
+original-step quadratures give 0.052478608449 and 0.052478608423 pe. Their
+relative difference is 4.9e−10; the fast answer 0.052755948180 pe is 0.528%
+higher, while saved MC gives 0.064527 ± 0.004978 pe. Thus source grouping does
+not reproduce the apparent Q1 deficit at this receiver. At OM 127 (68.24 m),
+where the Q0 residual is largest, tightening the tolerance tenfold and then
+splitting every emitting step in half changes Q0 by less than 0.077 of its
+original numerical tolerance. A separate full positive-ray control of that
+OM was stopped after 60 s without a result and is not counted as a successful
+independent check.
+
+These addressed controls favour an MC sampling fluctuation, together with a
+small unresolved centre/surface difference, over a demonstrated 3.4% error
+of the fast algorithm. They do not prove every model error zero. The failed
+MC flag is retained; no normalization, numerical-tolerance change, slower
+production path or scattering-atlas conversion is applied.
+
+### Addressed 1 TeV muon and 10 GeV electron groups
+
+The next bounded checks used the exact original steps and saved native MC
+runs: 260 OMs at 100–150 m for the 1 TeV muon (8 runs), then 14 OMs at
+20–50 m for the 10 GeV electron (32 runs). Hits hashes and identical source
+steps between runs were verified; photon suppression is 1 in both cases.
+The runtime configuration and scattering tables were unchanged.
+
+The muon check reconstructs the group with the current angular preview and
+first-entry Q0, retaining the four previously detailed scattered responses.
+It is not a new full MuonTransport call or a repeat of its global selection.
+Its scalar preview matches the saved one within 3.1e−9 relative; reconstructing
+the old isotropic result reproduces the recorded group Q1/>=2 sums within
+4.3e−11. The result changes from 1.1184 ± 0.0211 to **1.0939 ± 0.0206** of MC
+and still fails the unchanged total-charge criterion. The per-order ratios
+are Q0 1.199 ± 0.147, Q1 1.008 ± 0.067 and >=2 1.114 ± 0.041.
+Using angular preview on all 260 OMs instead gives total ratio 1.09468;
+the retained four detailed scattered answers account for 1.92% of group charge.
+
+A zero-frequency source-basis control on the ready RTE kernels gives >=2
+0.01236072 pe for the full muon group, compared with preview 0.01247799 pe.
+It takes 19.1 s on the VM with 16 threads; it is a charge diagnostic, not an
+event-throughput measurement. On the five brightest >=2 receivers, halving
+the source cell/stencil/time step changes their charge by 1.3e−7 relative.
+An independent continuous-spectrum first-entry control (2 million histories,
+seed 241031, 24.1 s) gives Q1 0.004699 ± 0.000298 pe and >=2
+0.011190 ± 0.000927 pe. Its >=2 uncertainty is too large to distinguish
+unambiguously the remaining RTE-kernel difference from sampling noise.
+The source-basis control also retains the existing angular truncation and
+radial window; it does not independently validate those approximations.
+
+The muon group has only about 674 effective weighted hits (412 for >=2).
+The total MC standard error is 0.000340 pe from eight-run spread, or
+0.000696 pe from squared weights. The latter would give ratio uncertainty
+0.0421 rather than 0.0206. The predefined criterion is not changed after
+observing this difference, and the failed muon group remains open.
+
+For the electron, one default ShowerTransport call restricted to its 14 OMs
+gives total **1.0345 ± 0.0357**, passing the same criterion. The separate
+ratios are Q0 **1.1302 ± 0.0623**, Q1 0.9479 ± 0.0439 and >=2
+0.9875 ± 0.0827. The Q0 component discrepancy, about 2.36 standard errors
+of the charge difference, is retained despite the passing total. Direct
+positive-ray quadrature of all 14 receivers, with ten-times tighter tolerance,
+gives Q0 0.15877301298 pe against 0.15877301496 pe from the fast evaluator;
+the largest receiver error uses 0.01446 of the original numerical tolerance.
+This control takes 5.96 s. Thus Q0 quadrature error does not explain the
+component excess, but a shared source/model/MC error is not proved zero.
+No normalization, new full matrix or surface-scattering atlas is introduced.
 
 ### Addressed distance check after the path-moment order 0
 

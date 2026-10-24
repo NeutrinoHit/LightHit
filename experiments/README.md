@@ -43,6 +43,13 @@ Everything above the line `# ---- measured ...` is written by hand;
 
 ## Inputs
 
+The standalone `pencil-green-validation/quick` and `/full` cases require none
+of the bundles below. They use one monochromatic directed photon in an
+explicit synthetic medium; [the student guide](../docs/pencil-validation.md)
+defines their observables, analytic checks and precision criteria. Matching
+stored arrays can be reused, so their registry timing is not an event-speed
+benchmark.
+
 * The data bundle `$LIGHTHIT_DATA` (`lighthit-bgvd-data`): model, tables, the
   Geant4 100 GeV electron (events 0-9; event 5 placed at (5, -269.5, 330) m
   along (0.35, -0.20, 0.915) as in the stand-alone notebook), the 1 TeV muon

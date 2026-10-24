@@ -26,6 +26,7 @@ classifiers = [
 accelerate = ["numba>=0.61"]
 viewer = ["plotly>=5"]
 demo = ["numba>=0.61", "plotly>=5"]
+validation = ["numba>=0.61", "matplotlib>=3.8"]
 test = ["pytest>=8"]
 dev = ["pytest>=8", "build>=1"]
 
@@ -33,6 +34,7 @@ dev = ["pytest>=8", "build>=1"]
 lighthit = "lighthit.cli:main"
 lighthit-demo = "lighthit.examples.synthetic:main"
 lighthit-selftest = "lighthit.selftest:main"
+lighthit-pencil-check = "lighthit.examples.pencil_validation:main"
 
 [project.urls]
 Repository = "https://github.com/NeutrinoHit/LightHit"

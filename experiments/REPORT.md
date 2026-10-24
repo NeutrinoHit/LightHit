@@ -30,6 +30,7 @@ baseline case's wall time on the same input and thread count (< 1 is faster).
 | [method-survey](ideas/method-survey.toml) | probe | superseded-by:default-shower-route | 1 ok | On the 100 GeV electron (6 control OMs) the median errors (order 1 / >=2) are: moments 1.6e-3/1.7e-3 (apply 578.7 s), axial 3-D 7.2e-3/3.1e-3 (64.7 s), axial 1-D 4.4e-3/2.5e-3 (0.64 s), effective segments 1.37/0.91 (8.27 s). |
 | [om-acceptance-legendre](ideas/om-acceptance-legendre.toml) | validation | used-by-default | 1 ok | The OM acceptance is band-limited at Legendre degree 2: coefficients above degree 2 are at most 1.6e-13 and the reconstruction error is 6.7e-14, with all checks passing. |
 | [overview-track-example](ideas/overview-track-example.toml) | validation | tool | 1 ok | kernel.build plus kernel.transport(method='track') on the toy detector with a directional OM runs in 74.4 s and reports reproducible = True for the repeated call. |
+| [pencil-green-validation](ideas/pencil-green-validation.toml) | validation | tool | 2 ok | The full synthetic protocol resolves 27 nonzero charge comparisons at the declared 3% precision and gives nine exact ballistic zeros; finer RTE controls and independent photon histories agree. Coarse angular/spatial settings and finite time-frequency bandwidth are reported separately. |
 | [point-green-backends](ideas/point-green-backends.toml) | validation | tool | 1 ok | NumPy and Numba backends of the point Green solver agree to 4.2e-16 in charge and 6.0e-15 in bins; the warm Numba solve is 1.12x faster (2.39 s vs 2.67 s). |
 | [prompt-vs-full-order1](ideas/prompt-vs-full-order1.toml) | validation | tool | 2 ok | Full-table order 1 at (L, L_s) = (12,16), (24,32), (36,48) gives 3.95, 3.64 and 3.29 pe against 3.24 pe (ring reference) for a shower and 1.024, 1.051, 1.062 pe against 1.058 pe for a track; on the BGVD 100 GeV electron one prompt call takes 5.6 s against 368 s for the full method. |
 | [readout-ringing](ideas/readout-ringing.toml) | probe | used-by-default | 1 ok | For exact first scattering at 50 m the finite-band readout has relative L1 error 0.68 at the baseline cutoff, 0.36 with a higher cutoff and 0.21 with cutoff 2.4 and wide bins; more nodes at fixed cutoff do not help (0.69). |
@@ -281,6 +282,8 @@ baseline case's wall time on the same input and thread count (< 1 is faster).
 | ntsim-spectral-basis/muon-100GeV-cluster1-track | 1 | 1308.93 | 1306.77 | 6593 |  | 0: bias 0%, L1 0%, worst 0%; 1: bias 0%, L1 0%, worst 0%; >=2: bias -0.0282%, L1 1.31%, worst 0.555%; total: bias -0.000989%, L1 0.0453%, worst 0.541% |
 | om-acceptance-legendre/example | 1 | 0.62 | 0.61 | 83 |  | checks_failed none; geometry.orientation_norm_error 0; geometry.head_on_cosine_error 0; response.angular_error 3.469e-17; legendre.alpha_error_to_degree_2 1.188e-13; legendre.relative_alpha_error_to_degree_2 2.148e-14; legendre.max_abs_alpha_above_degree_2 1.629e-13; legendre.max_relative_alpha_above_degree_2 2.946e-14; legendre.reconstruction_max_error 6.672e-14 |
 | overview-track-example/example | 1 | 74.44 | 74.50 | 2583 |  | configuration.relative_time_edges_ns[0] -60; configuration.relative_time_edges_ns[1] -40; configuration.relative_time_edges_ns[2] -20; configuration.k_max_per_m 8 |
+| pencil-green-validation/full | 1 | 0.84 | 0.78 | 229 |  | photons 1600000; cells 12; consistent 27; structural_zeros 9; discrepancies 0; global_maximum_pull 2.361; numerical_work_seconds 332.1; invocation_seconds 0.8049; cached_mc True |
+| pencil-green-validation/quick | 1 | 22.02 | 21.88 | 583 |  | photons 60000; cells 8; consistent 8; structural_zeros 6; discrepancies 1; global_maximum_pull 1.378; numerical_work_seconds 21.91; invocation_seconds 21.98; cached_mc False |
 | photon-mc-comparison/electron-100GeV-run0 | 1 | 7.89 | 7.89 | 2062 |  | lighthit_pe 6.245; mc_pe 6.328; mc_total_sigma_pe 0.2527; total_ratio 0.987; pull_rms 1.381; oms_compared 14; bright_profile_l1_median 0.1676 |
 | photon-mc-comparison/muon-100GeV-run0 | 1 | 83.53 | 83.48 | 4204 |  | lighthit_pe 1.626; mc_pe 1.551; mc_total_sigma_pe 0.1377; total_ratio 1.049; pull_rms 1.728; oms_compared 6; bright_profile_l1_median None |
 | photon-mc-comparison/nue-cc-run0 | 1 | 21.58 | 21.58 | 2239 |  | lighthit_pe 4.988; mc_pe 5.285; mc_total_sigma_pe 0.2327; total_ratio 0.9439; pull_rms 1.084; oms_compared 13; bright_profile_l1_median 0.6223 |
@@ -440,7 +443,7 @@ baseline case's wall time on the same input and thread count (< 1 is faster).
 
 ## Provenance
 
-Commits of the measured source: 003b55fed0b4, 2c858cbc6047, 48a44bb91cf2, 97372c7f529b.
+Commits of the measured source: 003b55fed0b4, 2c858cbc6047, 48a44bb91cf2, 97372c7f529b, f9eed1983246.
 Machines:
 
 * Apple M4 Pro (14 cores), Python 3.12.3, numpy 2.5.3, numba 0.67.0
