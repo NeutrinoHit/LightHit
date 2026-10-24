@@ -156,8 +156,16 @@ class EventTransport:
         :class:`lighthit.IsotropicFlash` (transported by ``laser_kernel``).
         """
         from .sources import IsotropicFlash
+        from .transport import detail_threshold
         if isinstance(components, IsotropicFlash):
             return self.flash(components)
+        # each source route lowers its own kernel's threshold to the detail
+        # threshold; the event's ``active`` is set at ``threshold_pe`` here
+        return detail_threshold(self.kernel).report(self._components(components, progress))
+
+    def _components(self, components, progress):
+        """The event response of a list of source components."""
+        from .sources import IsotropicFlash
         components = list(components)
         if not components:
             raise ValueError("an event needs at least one source component")
@@ -194,6 +202,9 @@ class EventTransport:
         n = len(kernel.detector.positions_m)
         edges = np.asarray(kernel.config.relative_time_edges_ns, float)
         threshold = float(kernel.config.threshold_pe)
+        if kernel.config.detail_threshold_pe is not None:
+            # completion rounds decide which OMs get every source in detail
+            threshold = min(threshold, float(kernel.config.detail_threshold_pe))
         origins = common_time_origins(kernel, [c.source for c in components])
         order = sorted(range(len(components)), key=lambda i: components[i].kind != "shower")
         parts = [None] * len(components)

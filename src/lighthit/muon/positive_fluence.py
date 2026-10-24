@@ -162,6 +162,7 @@ class PositiveFluenceAtlas:
     density: np.ndarray
     sigma: np.ndarray
     metadata: dict
+    angular_moments: np.ndarray | None = None
 
     def __post_init__(self):
         """Check axes and arrays; precompute rho nodes and z prefixes."""
@@ -176,6 +177,12 @@ class PositiveFluenceAtlas:
                 or not np.isfinite(self.density).all() or not np.isfinite(self.sigma).all()
                 or np.any(self.density < 0) or np.any(self.sigma < 0)):
             raise ValueError('invalid positive atlas values')
+        if self.angular_moments is not None:
+            moments = np.asarray(self.angular_moments, float)
+            if (moments.shape != expected+(10,) or not np.isfinite(moments).all()
+                    or not np.allclose(moments[..., 0], self.density, rtol=1e-13, atol=0.)):
+                raise ValueError('invalid arrival-direction moments')
+            self.angular_moments = np.ascontiguousarray(moments)
         self.rho_nodes = np.sqrt((self.rho_edges_m[:-1]**2+self.rho_edges_m[1:]**2)/2)
         self.left, self.right = prefixes(self.density, self.z_edges_m)
 
@@ -184,7 +191,8 @@ class PositiveFluenceAtlas:
         """Read an atlas written by :meth:`save`."""
         with np.load(path, allow_pickle=False) as data:
             return cls(*(data[k].copy() for k in ('rho_edges_m', 'z_edges_m', 'beta_nodes', 'density', 'sigma')),
-                       json.loads(str(data['metadata'])))
+                       json.loads(str(data['metadata'])),
+                       angular_moments=data['angular_moments'].copy() if 'angular_moments' in data else None)
 
     def save(self, path):
         """Write the atlas; an existing file is never overwritten."""
@@ -192,9 +200,10 @@ class PositiveFluenceAtlas:
         if path.exists():
             raise FileExistsError(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        extra = {} if self.angular_moments is None else {'angular_moments': self.angular_moments}
         np.savez_compressed(path, rho_edges_m=self.rho_edges_m, z_edges_m=self.z_edges_m,
                             beta_nodes=self.beta_nodes, density=self.density, sigma=self.sigma,
-                            metadata=json.dumps(self.metadata))
+                            metadata=json.dumps(self.metadata), **extra)
 
     def segments(self, rho, zlo, zhi, beta):
         """Fluence of straight pieces from z prefixes (orders 1 and >=2)."""

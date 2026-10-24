@@ -292,7 +292,11 @@ def test_radial_window_matches_explicitly_retained_source_points(small_kernel):
     look = -small_kernel.detector.orientations[:1]
     radii = np.linalg.norm(first.points_m() - receiver[0], axis=1)
     low = small_kernel.config.radial_range_m[0]
-    high = float(np.median(radii))
+    # halfway between two neighbouring radii: no point lies on the window edge,
+    # where rounding of the radius differs between platforms
+    ordered = np.sort(radii)
+    assert ordered[len(ordered) // 2 - 1] < ordered[len(ordered) // 2]
+    high = float(0.5 * (ordered[len(ordered) // 2 - 1] + ordered[len(ordered) // 2]))
     assert low < high < radii.max()
     keep = (radii >= low) & (radii <= high)
     assert keep.any() and (~keep).any()
@@ -331,12 +335,22 @@ def test_local_time_origin_uses_nearest_segment_instead_of_event_start():
     assert origin[0] < 0. + np.linalg.norm(receiver[0] - starts[0]) * 1.4 / 0.299792458
 
 
-def test_radial_tail_screen_refuses_unchecked_truncation(small_kernel):
+def test_radial_tail_screen_warns_and_lists_or_refuses_unchecked_truncation(small_kernel):
     with pytest.raises(ValueError, match="estimated light beyond"):
         small_kernel.transport_hybrid(
             shower(elements=80), frequency_nodes=17,
-            ge2_basis=lh.ShowerBasis(radial_high_m=30.,
-                                     radial_tail_tolerance_pe=0.))
+            ge2_basis=lh.ShowerBasis(radial_high_m=30., radial_tail_tolerance_pe=0.,
+                                     radial_tail_policy="raise"))
+    with pytest.warns(RuntimeWarning, match="estimated light beyond"):
+        response = small_kernel.transport_hybrid(
+            shower(elements=80), frequency_nodes=17,
+            ge2_basis=lh.ShowerBasis(radial_high_m=30., radial_tail_tolerance_pe=0.))
+    tail = response.metadata["radial_tail"]
+    assert tail["policy"] == "warn" and tail["radial_high_m"] == 30.
+    assert len(tail["oms_above_tolerance"]) == len(tail["estimate_pe"]) > 0
+    assert max(tail["estimate_pe"]) == tail["max_estimate_pe"] > 0
+    with pytest.raises(ValueError, match="radial_tail_policy"):
+        lh.ShowerBasis(radial_tail_policy="ignore")
 
 
 def test_spectral_cone_basis_matches_two_band_hybrid(tmp_path):

@@ -76,8 +76,14 @@ def wavelength_plane(coefficients,band,*,bounded_mapping=True):
         if mapped is not None:mapped._mmap.close()
 
 
-def backward_ge2_filon_many(kernel,bundle,queries,*,order=6,bounded_mapping=True,allow_gauss=False):
+def backward_ge2_filon_many(kernel,bundle,queries,*,order=6,bounded_mapping=True,allow_gauss=False,
+                            spectral=None):
     """Queries are rho,look,beta,clock,lo,hi,density,closest tuples.
+
+    ``spectral`` (wavelength_nm, weight_nm, phase_index, efficiency per band of
+    ``bundle``) replaces the kernel's wavelength nodes; it is how a folded
+    bundle (``band_fold.fold_bundle``: node bands with a common attenuation)
+    is applied. Without it the bundle must hold the kernel's nodes.
 
     All wavelength planes are processed one at a time over all queries. No
     mmap-backed arrays leave the plane scope. Positive clocks of at least
@@ -89,11 +95,20 @@ def backward_ge2_filon_many(kernel,bundle,queries,*,order=6,bounded_mapping=True
     if bundle['phase']!='flight':raise ValueError('Filon needs flight-referenced RTE coefficients')
     if not allow_gauss and any(q[3]*np.min(bundle['speed'])<.5 for q in queries):
         raise ValueError('Filon clock too small for the backward branch')
-    wave=kernel.wavelength;sample=kernel.medium.sample(wave.wavelength_nm)
-    if not np.allclose(sample['absorption_per_m'],bundle['absorption'],rtol=1e-12,atol=0):
-        raise ValueError('RTE optics differ')
-    eff=np.asarray(kernel.detector.spectral_weight(wave.wavelength_nm))
-    eff=np.broadcast_to(eff,wave.wavelength_nm.shape)
+    if spectral is None:
+        wave=kernel.wavelength;sample=kernel.medium.sample(wave.wavelength_nm)
+        from .._portable import RTOL
+        if not np.allclose(sample['absorption_per_m'],bundle['absorption'],rtol=RTOL,atol=0):
+            raise ValueError('RTE optics differ')
+        wavelength_nm=np.asarray(wave.wavelength_nm,float);weight_nm=np.asarray(wave.weight_nm,float)
+        phase_index=np.asarray(sample['phase_index'],float)
+        eff=np.asarray(kernel.detector.spectral_weight(wave.wavelength_nm))
+        eff=np.broadcast_to(eff,wavelength_nm.shape)
+    else:
+        wavelength_nm,weight_nm,phase_index,eff=(np.asarray(spectral[key],float) for key in
+            ('wavelength_nm','weight_nm','phase_index','efficiency'))
+        if not len(wavelength_nm)==len(bundle['speed'])==len(weight_nm)==len(phase_index)==len(eff):
+            raise ValueError('spectral arrays do not match the bundle bands')
     omega=bundle['omega'];x,projection=_projection(order);ell=np.arange(order)
     output=np.zeros((len(queries),len(omega)),complex)
     plans=[]
@@ -115,13 +130,13 @@ def backward_ge2_filon_many(kernel,bundle,queries,*,order=6,bounded_mapping=True
     harmonics={};source_ell=np.arange(bundle['degree']+1);norm=np.sqrt((2*source_ell+1)/(4*np.pi))
     alpha=kernel.acceptance()['alpha']
     for band,speed in enumerate(bundle['speed']):
-        if eff[band]==0 or wave.weight_nm[band]==0:continue
+        if eff[band]==0 or weight_nm[band]==0:continue
         with wavelength_plane(bundle['coefficients'],band,bounded_mapping=bounded_mapping) as coefficients:
             plane_bytes=max(plane_bytes,coefficients.nbytes)
             local=dict(bundle,coefficients=coefficients,absorption=bundle['absorption'][band:band+1],
                 speed=bundle['speed'][band:band+1],phase='unphased')
             for index,(rho,look,beta,clock,lo,hi,density,closest) in enumerate(queries):
-                if beta*sample['phase_index'][band]<=1:continue
+                if beta*phase_index[band]<=1:continue
                 plan=plans[index]
                 if plan['filon']:
                     uedges=plan['edges'];tau=np.hypot(rho,uedges)/speed-clock*uedges
@@ -133,13 +148,13 @@ def backward_ge2_filon_many(kernel,bundle,queries,*,order=6,bounded_mapping=True
                 key=(band,beta)
                 if key not in harmonics:
                     from scipy.special import eval_legendre
-                    phase=sample['phase_index'][band];wavelength=wave.wavelength_nm[band]
+                    phase=phase_index[band];wavelength=wavelength_nm[band]
                     coefficient=(1-1/(beta*phase)**2)/wavelength**2
                     harmonics[key]=(norm*eval_legendre(source_ell,1/(beta*phase))*coefficient)[None,:]
                 evaluator=cone_point_evaluator(local,impact_m=rho,look=look,beta=beta,
-                    alpha=alpha,wavelength_nm=wave.wavelength_nm[band:band+1],
-                    wavelength_weight_nm=wave.weight_nm[band:band+1],
-                    phase_index=sample['phase_index'][band:band+1],efficiency=eff[band:band+1],
+                    alpha=alpha,wavelength_nm=wavelength_nm[band:band+1],
+                    wavelength_weight_nm=weight_nm[band:band+1],
+                    phase_index=phase_index[band:band+1],efficiency=eff[band:band+1],
                     effective_area_m2=float(kernel.detector.effective_area_m2[0]),backend='fused-looks',
                     source_harmonics=harmonics[key])
                 values=evaluator(u.ravel())

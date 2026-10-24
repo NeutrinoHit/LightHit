@@ -130,7 +130,7 @@ lh.write_event_viewer(lh.viewer_payload(response, source=first, event_id="shower
 Expected output (the last digits may differ between platforms):
 
 ```text
-shower 34 active OMs, [66.49 50.68 22.5 ] pe in orders 0, 1, >=2
+shower 34 active OMs, [63.74 50.68 22.5 ] pe in orders 0, 1, >=2
 event 33 active OMs; completed per source: {'A': 14, 'B': 15}
 laser 48 active OMs, 153762.2 pe
 prompt [67.96 50.31]
@@ -364,8 +364,26 @@ response.save("event.npz")
 Bins are defined relative to each OM's origin, a lower bound on the earliest
 possible light arrival. Bin sums can differ from the charge (light outside the
 window). Order >=2 comes from a finite frequency band and may show small
-signed ringing; it is never clipped. OMs below threshold carry estimated
-scattered charges and no bins.
+signed ringing; it is never clipped. What an OM below threshold carries
+depends on the route (`docs/computation.md`, section 2):
+
+* shower: order 0 from the continuous-spectrum interval calculation; coarse
+  or detailed order 1, and order >=2 predicted or exact (`metadata["prompt_order1_level"]`,
+  `metadata["ge2_charge_level"]`); no bins;
+* muon: direct light for every OM; detailed scattered light and bins on
+  selected OMs (`metadata["fine_charge_mask"]`), preview estimates elsewhere.
+  The preview folds arrival-direction moments with the OM acceptance; its
+  finite cells, grouping and sampling retain approximation errors;
+* several sources: the sum of each source's detailed or estimated charges;
+  bins only for OMs that every source computed in detail and whose summed
+  charge reaches the threshold (the detail threshold below, when set);
+* laser: no estimates; all orders inside the table range, order 0 outside
+  it, bins for every OM.
+
+`KernelConfig(detail_threshold_pe=...)` below `threshold_pe` makes the shower,
+muon and event routes compute in detail, bins included, every OM whose
+estimate reaches the detail threshold, while `active` still means a charge of
+at least `threshold_pe`.
 
 ## Interactive viewer
 
@@ -439,13 +457,16 @@ source.
 
 ## Accuracy and speed
 
-Measured during development on Geant4 events in five Baikal-GVD clusters
-(1440 OMs), one CPU thread: a 100 GeV electron in about 6 s, 1 TeV in 42 s, a
-1 TeV muon in 10 s, a nu_mu CC event in 73 s. Order 0 is exact on the Geant4
-steps (the OM is its sphere for steps within 20 m, its centre beyond); the largest numerical error is the grouped order 1 (at most about 3%
-bin L1 against original-step integration). Against NTSim's photon Monte Carlo
-on one 100 GeV electron: LightHit 5.89 pe in about 6 s; three Monte-Carlo runs
-5.48-5.86 pe (+- 0.23 statistical each) in about 320 s. Details, and what the tests check: `docs/accuracy.md`.
+An addressed 100 GeV electron in five Baikal-GVD clusters (1440 OMs) takes
+about 15 s on one CPU thread with the default event route, including all
+three scattering components, receiver selection, charge and time bins.
+Order 0 integrates the original Geant4 steps and continuous spectrum to
+first entry on the supplied OM glass. Grouped order 1 and the source basis,
+band folding and prepared atlases for order >=2 retain their acceleration;
+the scattered orders still use a centre-reference receiver.
+On this exact event, the total is 6.273 pe against 6.341 pe in 16 saved
+photon-Monte-Carlo runs, a ratio of 0.9893 ± 0.0099. Accuracy by distance,
+other particles, numerical controls and limitations: `docs/accuracy.md`.
 
 ## Limitations
 
@@ -458,8 +479,11 @@ on one 100 GeV electron: LightHit 5.89 pe in about 6 s; three Monte-Carlo runs
   A primary muon line through the very centre of an OM still raises in
   `MuonTransport`; `EventTransport` then uses the shower route
   (`route_fallbacks`).
-* Order 0 uses the OM sphere for steps within 20 m of the OM and the OM centre
-  beyond (1-4 % of an OM's charge at 20-100 m, `docs/accuracy.md`).
+* Order 0 uses the supplied OM sphere at every distance, to leading order in
+  R/rho. Its attenuation and time, and the scattered-light tables, still
+  refer to the centre; the glass-reference calculation remains unfinished.
+  The explicit direct entry evaluator and its current speed limitation are
+  described in `docs/direct-first-entry.md`; it is not the default route.
 * The laser is an isotropic flash; a collimated beam or a measured diffuser
   pattern is not represented.
 * Tables (RTE cache, >=2 pack, muon atlases) belong to one medium and OM

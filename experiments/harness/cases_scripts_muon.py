@@ -58,7 +58,8 @@ script_case("muon-secondary-physics-basis", "cone-mixture", [S + "probe_cone_mix
 script_case("shower-order0-continuous-spectrum", "muon-1TeV-primary",
             [S + "benchmark_ballistic_interval.py", "--energy", 1000,
              "--output", out("shower-order0-continuous-spectrum", "muon-1TeV-primary")],
-            report=out("shower-order0-continuous-spectrum", "muon-1TeV-primary") + "/report.json")
+            report=out("shower-order0-continuous-spectrum", "muon-1TeV-primary") + "/report.json",
+            clean=[out("shower-order0-continuous-spectrum", "muon-1TeV-primary")])
 script_case("ballistic-spectral-fused", "muon-1TeV", [S + "probe_ballistic_spectral.py", "--energy", 1000,
             "--output", out("ballistic-spectral-fused", "muon-1TeV")],
             report=out("ballistic-spectral-fused", "muon-1TeV") + "/report.json")

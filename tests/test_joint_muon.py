@@ -33,7 +33,8 @@ def composed_case(monkeypatch):
     q0 = np.array([.002, .0001, .015])
     b0 = np.column_stack((q0, np.zeros(3)))
     preview = SimpleNamespace(charge_components_pe=np.array([[0., .005, .002], [.999, .00001, .00001], [0., .005, .002]]),
-        charge_pe=np.array([0., .999, 0.]), unsafe_mask=np.zeros(3, bool))
+        charge_pe=np.array([0., .999, 0.]), unsafe_mask=np.zeros(3, bool),
+        angular_scattered_pe=np.array([[.004, .001], [.000004, .000006], [.003, .001]]))
     calls = dict(ballistic=0, primary=[], secondary=[])
     def ballistic(*args, **kwargs):
         calls['ballistic'] += 1
@@ -90,15 +91,54 @@ def test_all_orders_conserved_without_primary_ballistic_double_count(composed_ca
     np.testing.assert_array_equal(preview.charge_components_pe, before)
 
 
+def test_glass_direct_charge_selects_globally_but_bins_only_evaluated_oms(composed_case, monkeypatch):
+    from dataclasses import replace
+    from lighthit.receiver import SphereSurface
+    kernel, source, preview, stores, origins, q0, b0, calls = composed_case
+    kernel.detector = replace(kernel.detector, receiver_surface=SphereSurface(.216))
+    binned = []
+
+    class Prepared:
+        def charge(self):
+            return SimpleNamespace(charge_pe=q0.copy(), bins_pe=None,
+                                   metadata={'reference_point': 'first-entry'})
+
+        def bins(self, ids, clock, edges):
+            binned.extend(ids.tolist())
+            np.testing.assert_array_equal(clock, origins[ids])
+            return SimpleNamespace(charge_pe=q0[ids], bins_pe=b0[ids])
+
+    monkeypatch.setattr('lighthit.ballistic_interval._prepare_ballistic_interval',
+                        lambda *args: Prepared())
+    response = joint_muon.transport_joint_muon(kernel, source, {}, preview=preview, **stores)
+    assert calls['ballistic'] == 0
+    assert binned == [0, 2]
+    np.testing.assert_array_equal(response.charge_components_pe[:, 0], q0)
+    np.testing.assert_array_equal(response.components_pe[[0, 2], :, 0], b0[[0, 2]])
+    np.testing.assert_array_equal(response.components_pe[1, :, 0], 0.)
+    assert response.metadata['receiver_reference_by_order'] == {
+        '0': 'first-entry', '1': 'centre', '>=2': 'centre'}
+
+
 def test_uncomputed_scatter_is_labelled_and_keeps_zero_frequency_charge(composed_case):
     kernel, source, preview, stores, origins, q0, b0, calls = composed_case
     response = joint_muon.transport_joint_muon(kernel, source, {}, preview=preview, **stores)
     assert response.metadata['fine_charge_mask'] == [True, False, True]
     assert response.metadata['inactive_order1_charge_may_be_coarse']
     assert response.metadata['inactive_ge2_charge_may_be_coarse']
+    np.testing.assert_array_equal(response.charge_components_pe[1, 1:],
+                                  preview.angular_scattered_pe[1])
+    assert 'inactive_isotropic_acceptance_factor' not in response.metadata
     assert response.spectrum_ge2_pe[0, 1] == response.charge_components_pe[1, 2]
     np.testing.assert_array_equal(response.spectrum_ge2_pe[1:, 1], 0.)
     np.testing.assert_array_equal(response.components_pe[1, :, 1:], 0.)
+
+
+def test_unselected_response_requires_directional_moments(composed_case):
+    kernel, source, preview, stores, *_ = composed_case
+    preview.angular_scattered_pe = None
+    with pytest.raises(ValueError, match='arrival-direction moments'):
+        joint_muon.transport_joint_muon(kernel, source, {}, preview=preview, **stores)
 
 
 @pytest.mark.parametrize('grid', [np.array([0., .1]), np.array([0., .11, .2, .3])])

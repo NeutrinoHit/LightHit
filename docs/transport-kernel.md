@@ -25,6 +25,7 @@ sibling kernels from it (same medium and detector, their own frequency grids).
 | `acceptance_tolerance` | 1e-10 | tolerance of that measurement |
 | `receiver_block` | 8 | Numba task grouping |
 | `threshold_pe` | 0.01 | an OM is active when its charge reaches this |
+| `detail_threshold_pe` | None | event routes compute in detail every OM whose estimate reaches this; None: `threshold_pe`; must be finite and >= 0; no effect at or above `threshold_pe` (below) |
 | `cache_directory` | None | None: tables only in memory |
 | `cache_policy` | "build" | "build" builds missing tables during transport; "require" raises `FileNotFoundError` |
 | `spectral_folded_cache` | "auto" | use a folded cache found on disk; True requires one; False disables |
@@ -35,6 +36,22 @@ sibling kernels from it (same medium and detector, their own frequency grids).
 to `max(2*scattering_degree, 64)`. It raises if the response is not band-limited
 there (unless `acceptance_degree` is set) or if the bandwidth exceeds
 `scattering_degree`.
+
+**Detail threshold** (`transport.py: detail_threshold`). `ShowerTransport`
+and `MuonTransport` run each call inside `with detail_threshold(kernel)`:
+when `detail_threshold_pe < threshold_pe`, the route kernel's config is
+replaced for the call by one with `threshold_pe = detail_threshold_pe` (and
+`detail_threshold_pe = None`), so every selection decision of the route
+(screens, predictors, adaptive candidates) computes in detail each OM whose
+estimate reaches the detail threshold. `report(response, extra)` then sets
+`active &= charge + extra >= threshold_pe` (the original value; `extra` is
+the light of other sources) and records `threshold_pe`,
+`detail_threshold_pe` and `active_modules` in the metadata. A nested block on
+the same kernel sees `detail_threshold_pe = None` and does nothing, so the
+threshold is lowered once. `EventTransport` does not enter the block on its
+own kernel; it uses `min(threshold_pe, detail_threshold_pe)` in its
+completion rounds and applies `report` to its result (`event-and-laser.md`).
+`kernel.transport` and the other kernel paths ignore the field.
 
 ## The tables
 
@@ -52,14 +69,30 @@ phase `exp(-i omega r / v)` removed:
   measured angular acceptance (rows `lambda <= L_A` of the m-block resolvent),
   both scattered orders (exactly 1 at finite L, and >=2).
 
-**Cache keys.** `sha256` (first 20 hex digits) of: the band's medium constants
-without the provenance label (wavelength, absorption, scattering, g, group
-index), the solver settings, the omega list, radial range and node count,
-`phase="flight"`; directional keys add the acceptance degree. Lookup order:
-in-memory, physics key, the LightHit <= 0.3.0a1 key (which included the
-provenance), then a scan of the directory comparing the stored metadata. Not in
-any key: the angular backend, the detector geometry (except the directional
-acceptance degree), `cell_m`, `azimuthal_degree`, the wavelength quadrature.
+**Cache keys** (`_cache_key`, `_directional_cache_key`). `sha256` (first 20
+hex digits) of: the band's medium constants without the provenance label
+(`_band_key`: the node wavelength, absorption, scattering, g, group index),
+the solver settings, the omega list, radial range and node count,
+`phase="flight"`; directional keys add the acceptance degree. Each table
+belongs to one wavelength node, and the >=2 pack key lists the directional
+keys of all nodes, so changing `wavelength_nodes` or `wavelength_range_nm`
+moves the nodes and changes every key. Not in any key: the angular backend,
+the detector geometry (except the directional acceptance degree), the OM
+efficiency and area, `cell_m`, `azimuthal_degree`.
+
+**Lookup** (`_stored_table`): in memory, the file of the physics key, the file
+of the LightHit <= 0.3.0a1 key (which included the provenance), then a scan of
+every `<kind>-*.npz` of the directory (`_table_matches`): the stored band
+coefficients agree with this kernel's within relative 1e-9 per value
+(`_portable.py: same_values`), the solver settings and the omega grid are
+exactly equal, `radial_phase` is `"flight"`, the radii agree within relative
+1e-12, and a directional table has `exact_m_blocks` and the same acceptance
+degree. The tolerance on the band exists because the coefficients are
+interpolated from the water table: a table built on another CPU or maths
+library reproduces them only to the last bits, so its file name (the hash)
+differs while the physics is the same. The muon atlases use the same
+tolerance for their optical contracts (`muon/optics_contract.py:
+contract_matches`, `muon-route.md`).
 
 ## build()
 
@@ -144,11 +177,11 @@ period is attenuated (an 80 ns exponential loses 10 %).
 ## Direct light on the OM sphere (`ballistic_interval`)
 
 Order 0 of spectral elements (`ballistic_interval`, used by the shower, muon
-and event routes) treats an OM as the sphere whose cross-section is its
-`effective_area_m2` (radius 0.216 m for Baikal-GVD, the OM of NTSim's photon
-Monte Carlo) for elements that come closer than
-`BallisticIntervalConfig.finite_receiver_m` (default 20 m) to the OM centre,
-and as its centre for farther elements.
+and event routes) uses `DetectorArray.receiver_surface` for every element-OM
+pair. The BGVD sphere radius is read from geometry, separately from the
+collection area. Distance and source-size switches have been removed.
+`BallisticIntervalConfig(receiver_mode="point")` explicitly requests a point
+receiver for comparisons. Surface mode refuses a detector without geometry.
 
 A short step lights a thin conical shell. At one wavelength the rays through
 the OM centre leave the step from one point, so a point receiver counts the
@@ -171,11 +204,18 @@ point and wavelength that cross the sphere, on the 6 GeV muon passing OM 267
 at 1.76 m: OM 267 59.70 pe against 59.65 pe, OMs 266 and 268 within 1.2 %;
 farther OMs of showers agree within 0.1 % (`finite-receiver-order0` in the
 registry; numbers and the photon Monte-Carlo comparison in `accuracy.md`).
-Beyond `finite_receiver_m` the point receiver stays; its order-0 error per OM
-is `accuracy.md`'s table. `finite_receiver_m=0` is the point receiver
-everywhere (bitwise the earlier results), `inf` the sphere everywhere (10-14
-times the order-0 time: a far short step then reaches the sphere over most of
-the spectrum instead of a narrow band).
+The former 50 m and 8000-element switches are historical. Every pair now
+uses the supplied surface. The standalone leading integral described above
+retains its centre-ray approximation. The shower and muon event routes use
+`first_entry_ballistic` instead (`direct-first-entry.md`).
+The earlier sphere-everywhere measurements cost 10-14 times the point-receiver
+order-0 time because a far short step reaches the sphere over a wider spectrum.
+The current implementation rejects impossible pairs with conservative signed
+distances to the limiting cone lines before the trigonometric support test.
+For a tabulated OM response it evaluates linear QE times exponential linear
+transmission exactly; opaque response callables retain verified cubic panels.
+This reduces the saved 100 GeV electron's all-sphere charge calculation from
+8.93 to 2.79 s on Mac, one thread (`accuracy.md`).
 
 ## Near passes (`near_field.py`)
 

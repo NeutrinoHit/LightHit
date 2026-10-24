@@ -9,7 +9,12 @@ are taken from the file's directory::
      "primary_ge2_atlas": "../primary-universal-20261009/ge2/atlas",
      "primary_first_beta": "../first-charge-beta-20261010/first-beta-charge.npz",
      "primary_ge2_beta": "../ge2-charge-beta-20261010/beta-charge.npz",
-     "preview_atlas": "../positive-map-20261009/atlas-seed81-fine.npz"}
+     "preview_atlas": "../positive-map-20261009/atlas-seed81-fine.npz",
+     "ge2_band_fold": "ge2-band-fold"}
+
+``ge2_band_fold`` is optional: the folded >=2 kernels of the shower route,
+which the primary's direct >=2 fallback then uses for nearly relativistic
+pieces (``universal_primary.DirectGe2``).
 
 All tables depend on the water optics and the OM response, not on the
 detector geometry. They are runtime inputs and are never part of a wheel.
@@ -34,6 +39,7 @@ class MuonData:
     primary_ge2_beta: Path
     preview_atlas: Path
     manifest: Path | None = None
+    ge2_band_fold: Path | None = None
 
     @classmethod
     def load(cls, path):
@@ -42,13 +48,16 @@ class MuonData:
         if path.is_dir():
             path = path / MANIFEST
         entries = json.loads(path.read_text())
-        names = [item.name for item in fields(cls) if item.name != 'manifest']
+        optional = ('manifest', 'ge2_band_fold')
+        names = [item.name for item in fields(cls) if item.name not in optional]
         missing = [name for name in names if name not in entries]
         if missing:
             raise ValueError(f'{path}: missing entries {missing}')
         base = path.parent
+        fold = entries.get('ge2_band_fold')
         data = cls(**{name: (base / entries[name]).resolve() for name in names},
-                   manifest=path.resolve())
+                   manifest=path.resolve(),
+                   ge2_band_fold=None if fold is None else (base / fold).resolve())
         data.check()
         return data
 
@@ -76,7 +85,8 @@ class MuonData:
     def check(self):
         """Fail early when a named table does not exist."""
         absent = [f'{item.name}={getattr(self, item.name)}' for item in fields(self)
-                  if item.name != 'manifest' and not Path(getattr(self, item.name)).exists()]
+                  if item.name != 'manifest' and getattr(self, item.name) is not None
+                  and not Path(getattr(self, item.name)).exists()]
         if absent:
             raise FileNotFoundError('muon data incomplete: ' + ', '.join(absent))
 

@@ -2,8 +2,11 @@
 
 ``TransportKernel.transport_prompt(source)`` computes, for every module,
 
-* order 0 -- unscattered light, with the **same** closed-form ballistic
-  kernel, arguments and conventions as :meth:`TransportKernel.transport`;
+* order 0 -- unscattered light: with ``ballistic_method="quadrature"``
+  (default) the same closed-form ballistic kernel, arguments and conventions
+  as :meth:`TransportKernel.transport`; with ``"interval"`` (the shower
+  route) the continuous-spectrum integral
+  :func:`lighthit.ballistic_interval.ballistic_interval` on the original steps;
 * order 1 -- light scattered **exactly once**, with the full Henyey--Greenstein
   phase function, extinction ``mu_a + mu_s`` on both free flights, one factor
   of ``mu_s``, the wavelength-dependent group velocity, and the module
@@ -52,11 +55,6 @@ from .sources import (CherenkovTrack, G4Shower, SpectralLightElements,
 C_M_PER_NS = 0.299792458
 #: Ring nodes deposited per compression range (bounds its hash table).
 _COMPRESS_RANGE_NODES = 1 << 18
-#: Private scratch per pencil of one grouped receiver block, and the bound
-#: on the scratch of the blocks running at once.
-_GROUPED_BYTES_PER_PENCIL = 160
-_GROUPED_SCRATCH_BYTES = 1 << 30
-
 __all__ = ["PromptConfig", "PromptTransportResponse", "PromptComponent",
            "transport_prompt", "OrderNotComputedError"]
 
@@ -119,13 +117,16 @@ class PromptConfig:
     position covariance corrections are omitted (an O(covariance) error),
     rather than expanding the singular factor ``1/sin(theta)`` alone.
 
-    ``screen`` (grouped algorithm, nonzero threshold): a coarse pass
-    (``screen_cell_m``, ``6 * screen_pixel_face**2`` pixels,
-    ``screen_ring_nodes``) estimates every module; the full-resolution pass
-    runs where ``q0 + screen_margin * q1_coarse >= threshold``.  The ratio of
-    coarse to fine order 1 on the fine modules is reported; if it ever falls
-    below ``1/screen_margin`` the fine set is widened with the observed ratio.
-    Coarse-only modules keep the coarse order-1 charge and no bins.
+    ``screen`` (grouped algorithm, nonzero threshold): a coarse charge pass
+    uses ``screen_cell_m`` cells and ``screen_pixel_face`` pixels per face.
+    Within ``smoothing_factor`` angular extents of a receiver direction a
+    parent pixel is replaced by its ``screen_refine_factor**2`` children.
+    The Gaussian inverse-angle measure uses two positive radial nodes, rather
+    than evaluating the HG profile at one harmonic-mean angle. Charge-only
+    batches group by distance and angle; emission time is irrelevant. The
+    detailed pass runs where ``q0 + screen_margin * q1_coarse >= threshold``.
+    Coarse-only OMs retain their own coarse charge without rescaling from
+    detailed OMs; the observed coarse/fine ratios are reported for diagnosis.
 
     ``batch_charge_tolerance_pe`` optionally omits complete grouped batches
     with a small analytic absolute-charge estimate, with a budget per OM.
@@ -181,16 +182,27 @@ class PromptConfig:
     screen_cell_m: float = 2.0
     screen_pixel_face: int = 8
     screen_ring_nodes: int = 24
+    screen_refine_factor: int = 4
     batch_charge_tolerance_pe: float = 0.0
     max_distance_m: float | None = None
     ballistic_method: str = "quadrature"
     fuse_bands: bool = False
     fused_pixel_face: int = 64
     fused_ring_nodes: int = 192
+    # Private scratch of the grouped order-1 blocks running at once; with many
+    # pencils (TeV showers) it caps the parallel blocks (one thread runs one
+    # block whatever the budget). None uses the needed and currently available
+    # memory (_scratch_budget), including Linux cgroup limits.
+    grouped_scratch_bytes: int | None = None
 
     def __post_init__(self):
-        if self.ballistic_method not in ("quadrature", "interval"):
-            raise ValueError("ballistic_method must be quadrature or interval")
+        if self.grouped_scratch_bytes is not None and (
+                isinstance(self.grouped_scratch_bytes, (bool, np.bool_))
+                or not isinstance(self.grouped_scratch_bytes, (int, np.integer))
+                or self.grouped_scratch_bytes <= 0):
+            raise ValueError('grouped_scratch_bytes must be a positive integer or None')
+        if self.ballistic_method not in ("quadrature", "interval", "first-entry"):
+            raise ValueError("ballistic_method must be quadrature, interval or first-entry")
         if not isinstance(self.fuse_bands, (bool, np.bool_)):
             raise ValueError("fuse_bands must be a boolean")
         positive = ("path_step", "path_step_tail", "tail_exponent", "grade_ratio",
@@ -210,7 +222,8 @@ class PromptConfig:
             if int(getattr(self, name)) < 1:
                 raise ValueError(f"{name} must be a positive integer")
         for name, minimum in (("max_a_breaks", 3), ("max_path_nodes", 3),
-                              ("screen_pixel_face", 1), ("screen_ring_nodes", 1)):
+                              ("screen_pixel_face", 1), ("screen_ring_nodes", 1),
+                              ("screen_refine_factor", 1)):
             value = getattr(self, name)
             if (isinstance(value, (bool, np.bool_))
                     or not isinstance(value, (int, np.integer)) or value < minimum):
@@ -483,6 +496,7 @@ def _source_elements(kernel, source):
 
 # ------------------------------------------------------------ main driver
 
+
 def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
                      compute_bins_for_all=False, selection_extra_charge=None,
                      time_origin_ns=None, _fine_order1=None):
@@ -529,7 +543,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
     original_coefficient = float(elements.coefficient0.sum())
     threshold_phase = (np.max(tables["phase_index"]) if spectral_cone
                        else np.min(tables["phase_index"]))
-    if spectral_cone and config.ballistic_method == "interval":
+    if spectral_cone and config.ballistic_method in ("interval", "first-entry"):
         # A valid narrow wavelength interval can lie before the first global
         # quadrature node. Do not discard its charged step before q0 integrates it.
         spectral_low, spectral_high = kernel.config.wavelength_range_nm or kernel.medium.wavelength_range_nm
@@ -617,20 +631,26 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
     fields = _ballistic_fields(source, elements, tables)
     interval_bins = None
     interval_metadata = None
-    if config.ballistic_method == "interval":
+    interval_prepared = None
+    interval_rows = np.full(len(positions), -1, dtype=np.int64)
+    if config.ballistic_method in ("interval", "first-entry"):
         if not spectral_cone:
             raise ValueError("interval ballistic requires a wavelength-dependent spectral cone")
         from copy import copy
         from .ballistic_interval import ballistic_interval
         local = copy(kernel)
         if len(work):
-            local.detector = replace(detector, positions_m=positions[work],
-                orientations=detector.orientations[work], effective_area_m2=areas[work],
-                identifiers={key: np.asarray(value)[work] for key, value in detector.identifiers.items()})
-            direct = ballistic_interval(local, elements, time_origin_ns=origins[work], relative_edges_ns=edges)
+            local.detector = detector.subset(work)
+            if config.ballistic_method == "first-entry":
+                from .ballistic_interval import _prepare_ballistic_interval
+                interval_prepared = _prepare_ballistic_interval(local, elements)
+                direct = interval_prepared.charge()
+                interval_rows[work] = np.arange(len(work))
+            else:
+                direct = ballistic_interval(local, elements, time_origin_ns=origins[work], relative_edges_ns=edges)
+                interval_bins = np.zeros((len(positions), len(edges)-1))
+                interval_bins[work] = direct.bins_pe
             charge[work, 0] = direct.charge_pe
-            interval_bins = np.zeros((len(positions), len(edges)-1))
-            interval_bins[work] = direct.bins_pe
             interval_metadata = direct.metadata
     for lam in range(len(tables["wavelength_nm"])) if config.ballistic_method == "quadrature" else ():
         band = kernel.medium.band(float(tables["wavelength_nm"][lam]))
@@ -839,6 +859,12 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
     stage = perf_counter()
     bins = np.zeros((len(positions), len(edges) - 1, 2))
     active_index = work if compute_bins_for_all else np.flatnonzero(active)
+    if interval_prepared is not None and len(active_index):
+        direct_bins = interval_prepared.bins(interval_rows[active_index], origins[active_index], edges)
+        charge[active_index, 0] = direct_bins.charge_pe
+        bins[active_index, :, 0] = direct_bins.bins_pe
+        interval_metadata = dict(interval_metadata, bins=direct_bins.metadata,
+                                 binned_receivers=len(active_index))
     if interval_bins is not None:
         bins[active_index, :, 0] = interval_bins[active_index]
     for lam in range(len(tables["wavelength_nm"])) if config.ballistic_method == "quadrature" else ():
@@ -905,7 +931,8 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
                         else "earliest straight-track emission and group flight"
                         if isinstance(source, CherenkovTrack) else
                         "earliest element start and fastest group flight"),
-        "ballistic": ("continuous-spectrum-intervals" if config.ballistic_method == "interval" else
+        "ballistic": ("first-entry-control-variate" if config.ballistic_method == "first-entry" else
+                      "continuous-spectrum-intervals" if config.ballistic_method == "interval" else
                       "identical to TransportKernel.transport: " + ballistic.__module__ + "." + ballistic.__name__),
         "ballistic_interval": interval_metadata,
         "backend": "numba",
@@ -1076,7 +1103,13 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
     # grouped pencils, optionally screened by a coarse pass
     def grouped(pencils, targets, merge, *, compute_bins=True):
         omission = np.zeros((n, 2))
-        result = kernels.grouped_pencils_order1(
+        evaluator = kernels.grouped_pencils_order1
+        hierarchy = {}
+        if "hierarchy_parent" in pencils:
+            from ._prompt_screen import screen_order1
+            evaluator = screen_order1
+            hierarchy = {key: pencils[key] for key in ("hierarchy_parent", "next_node")}
+        result = evaluator(
             receivers, looks, areas, origins, np.ascontiguousarray(targets, np.int64),
             pencils["position"], pencils["direction"], pencils["w0"], pencils["w2"],
             pencils["time"], pencils["major"], pencils["var_major"],
@@ -1089,22 +1122,23 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             common["direct_bins"], int(config.max_path_nodes),
             float(config.smoothing_factor), float(merge[0]), float(merge[1]),
             float(merge[2]), float(merge[3]), float(np.max(tables["speed"])),
-            _grouped_blocks(len(targets), len(pencils["w0"])), compute_bins,
-            float(config.batch_charge_tolerance_pe), omission)
+            _grouped_blocks(len(targets), len(pencils["w0"]), config.grouped_scratch_bytes,
+                            bands=len(tables["mus"]), bins=len(edges)-1 if compute_bins else 0,
+                            max_nodes=config.max_path_nodes, monomials=len(coef),
+                            max_power=degree, gauss_nodes=len(kernels._GAUSS_TAU)), compute_bins,
+            float(config.batch_charge_tolerance_pe), omission, **hierarchy)
         return (*result, omission)
 
     if coarse_only:
         if mode != "grouped":
             raise ValueError("coarse_only requires the grouped prompt algorithm")
         stage = perf_counter()
-        coarse_config = replace(config, cell_m=config.screen_cell_m,
-                                pixel_face=config.screen_pixel_face,
-                                ring_nodes=config.screen_ring_nodes)
-        coarse = compress(elements, segments, coarse_config)
+        from ._prompt_screen import compress_screen
+        coarse = compress_screen(elements, segments, config)
         timings["order1_screen_compress_seconds"] = perf_counter() - stage
         stage = perf_counter()
         coarse_charge, _, _, _, omission = grouped(
-            coarse, work, (config.merge_theta_min, 0.3, 2.0, 0.1),
+            coarse, work, (config.merge_theta_min, 0.3, 2.0, config.merge_log_r),
             compute_bins=False)
         timings["order1_screen_eval_seconds"] = perf_counter() - stage
         return coarse_charge, np.zeros((n, len(edges) - 1)), {
@@ -1121,14 +1155,12 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
     fine_work = work
     if screen:
         stage = perf_counter()
-        coarse_config = replace(config, cell_m=config.screen_cell_m,
-                                pixel_face=config.screen_pixel_face,
-                                ring_nodes=config.screen_ring_nodes)
-        coarse = compress(elements, segments, coarse_config)
+        from ._prompt_screen import compress_screen
+        coarse = compress_screen(elements, segments, config)
         timings["order1_screen_compress_seconds"] = perf_counter() - stage
         stage = perf_counter()
         coarse_charge, _, _, _, coarse_omission = grouped(
-            coarse, work, (config.merge_theta_min, 0.3, 2.0, 0.1),
+            coarse, work, (config.merge_theta_min, 0.3, 2.0, config.merge_log_r),
             compute_bins=False)
         timings["order1_screen_eval_seconds"] = perf_counter() - stage
         charge[work] = coarse_charge[work]
@@ -1179,7 +1211,8 @@ def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             "coarse_settings": {"cell_m": config.screen_cell_m,
                                 "pixel_face": config.screen_pixel_face,
                                 "ring_nodes": config.screen_ring_nodes,
-                                "merge": [config.merge_theta_min, 0.3, 2.0, 0.1]},
+                                "refine_factor": config.screen_refine_factor,
+                                "merge": [config.merge_theta_min, 0.3, 2.0, config.merge_log_r]},
             "fine_modules": int((level == 2).sum()),
             "coarse_only_modules": int(len(coarse_only)),
             "widened_modules": int(len(extra)),
@@ -1221,26 +1254,54 @@ def _blocks(count):
     return int(max(1, min(count, 4 * threads)))
 
 
-def _grouped_blocks(count, pencils):
-    """Receiver blocks of the grouped kernel, limited by their private scratch.
+def _scratch_budget(requested, required):
+    """Use only needed memory, up to the explicit cap or OS headroom."""
+    from ._memory import available_bytes
+    return min(int(required), int(requested) if requested is not None else available_bytes())
 
-    Every running block holds about ``_GROUPED_BYTES_PER_PENCIL`` bytes per
-    pencil (geometry, keys, shape and look tables); with many pencils fewer
-    blocks run so that together they stay within ``_GROUPED_SCRATCH_BYTES``.
-    Each OM is still computed by one block.
+
+def _grouped_scratch_per_block(pencils, bands, bins, max_nodes, monomials, max_power,
+                               *, receivers=1, gauss_nodes=0):
+    """Array-size bound, including both hash tables during a growth step.
+
+    The grouped core owns 7 shape, 10 geometry, 3 look and 3 sorting scalars
+    per pencil; hash rows have two sets of moments plus six geometry sums.
+    Shared source preparation and output storage are conservatively counted
+    in each block too, including the angular lookup tables' allocation limits.
+    The minimum hash size and its doubling follow _prompt_numba's allocator.
     """
+    slots = max(1 << 12, 1 << (2 * max(1, int(pencils))).bit_length())
+    peak_slots = slots + (slots // 2 if slots > 1 << 12 else 0)
+    scalars = ((7 + 10 + 3 + 3 + 12) * pencils + slots
+               + peak_slots * (1 + 2 * monomials + 6)
+               + bands * (4 + 4 * bins) + 5 * max_nodes
+               + 2 * (max_power + 1) + 2 * monomials + 3
+               + receivers * (bins + 5) + 4 * (1 << 12) + 4 * gauss_nodes)
+    return int(scalars) * np.dtype(np.float64).itemsize
+
+
+def _grouped_blocks(count, pencils, scratch_bytes=None, *, bands=1, bins=0,
+                    max_nodes=4096, monomials=10, max_power=3, gauss_nodes=0):
+    """Schedule receiver blocks from their array sizes and available memory."""
+    if count == 0:
+        return 0
     blocks = _blocks(count)
     try:
         threads = _thread_count()
     except ImportError:  # pragma: no cover
         threads = 1
-    per_block = _GROUPED_BYTES_PER_PENCIL * max(1, int(pencils))
-    if min(blocks, threads) * per_block > _GROUPED_SCRATCH_BYTES:
-        blocks = max(1, _GROUPED_SCRATCH_BYTES // per_block)
+    per_block = _grouped_scratch_per_block(pencils, bands, bins, max_nodes, monomials, max_power,
+                                          receivers=count, gauss_nodes=gauss_nodes)
+    budget = _scratch_budget(scratch_bytes, min(blocks, threads) * per_block)
+    if budget < per_block:
+        raise MemoryError(f'grouped order 1 needs {per_block} scratch bytes for one block; '
+                          f'available budget is {budget}')
+    if min(blocks, threads) * per_block > budget:
+        blocks = int(budget) // per_block
     return int(blocks)
 
 
-def compress(elements, segments, config):
+def compress(elements, segments, config, *, _parent_pixel_face=None):
     """Stage A: rings of all elements -> (cell, pixel) pencils with moments."""
     from . import _prompt_numba as kernels
     start = np.ascontiguousarray(elements.start_m, float)
@@ -1295,18 +1356,30 @@ def compress(elements, segments, config):
             *arrays, cell_m, int(config.pixel_face), ring_nodes, a_step, origin, dims,
             element[chosen], sub[chosen],
             1 << int(min(16, max(10, np.ceil(np.log2(2 * nodes + 2))))))
-        return kernels.finish_pencils(keys, rows, np.argsort(keys))
+        fine = kernels.finish_pencils(keys, rows, np.argsort(keys))
+        if _parent_pixel_face is None:
+            return fine
+        from ._prompt_screen import parent_keys
+        coarse_keys = parent_keys(keys, int(config.pixel_face), int(_parent_pixel_face))
+        coarse = kernels.finish_pencils(coarse_keys, rows, np.lexsort((keys, coarse_keys)))
+        positive = rows[:, 0] > 0
+        return fine, coarse, np.sort(keys[positive]), np.unique(coarse_keys[positive])
 
     ranges = len(cuts) - 1
     if ranges == 0:
         parts = [kernels.finish_pencils(np.zeros(0, np.int64), np.zeros(
             (0, kernels.N_PENCIL_MOMENTS)), np.zeros(0, np.int64))]
+        if _parent_pixel_face is not None:
+            parts = [(parts[0], parts[0], np.zeros(0, np.int64), np.zeros(0, np.int64))]
     elif ranges == 1:
         parts = [run(0)]
     else:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=min(_thread_count(), ranges)) as pool:
             parts = list(pool.map(run, range(ranges)))
+    if _parent_pixel_face is not None:
+        from ._prompt_screen import pack_pencils
+        return pack_pencils(parts, int(config.pixel_face), int(_parent_pixel_face))
     (position, direction, w0, w2, time, major, var_major, var_minor,
      pos_cov) = (np.concatenate(column) for column in zip(*parts))
     n_a = np.maximum(1, np.ceil(np.asarray(elements.length_m) / (0.5 * config.cell_m)))

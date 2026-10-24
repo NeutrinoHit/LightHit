@@ -1,4 +1,4 @@
-"""Direct light on the finite OM sphere (``BallisticIntervalConfig.finite_receiver``).
+"""Direct light on the finite OM sphere (``BallisticIntervalConfig.receiver_mode``).
 
 A short step close to an OM lights a thin conical shell. A point receiver at
 the OM centre counts the whole shell when it passes through the centre and
@@ -15,7 +15,7 @@ pytest.importorskip('numba')
 import lighthit as lh
 from lighthit.ballistic_interval import ballistic_interval, BallisticIntervalConfig
 
-POINT = BallisticIntervalConfig(finite_receiver_m=0.)
+POINT = BallisticIntervalConfig(receiver_mode="point")
 
 
 def setup(position, area=.05, acceptance=lambda x: np.ones_like(x), degree=0):
@@ -25,7 +25,8 @@ def setup(position, area=.05, acceptance=lambda x: np.ones_like(x), degree=0):
     def efficiency(w):
         return np.interp(w, [350., 410., 415., 610.], [.1, .2, .35, .05])
     efficiency.wavelength_knots_nm = np.array([350., 410., 415., 610.])
-    detector = lh.DetectorArray(np.atleast_2d(position), [[0., 0., -1.]], area, acceptance, efficiency)
+    detector = lh.DetectorArray(np.atleast_2d(position), [[0., 0., -1.]], area, acceptance, efficiency,
+                                receiver_surface=lh.SphereSurface(np.sqrt(area / np.pi)))
     return lh.TransportKernel(medium, detector, lh.KernelConfig(
         omega_per_ns=np.array([0.]), wavelength_nodes=2, threshold_pe=0., acceptance_degree=degree))
 
@@ -124,7 +125,36 @@ def test_finite_receiver_bins_sum_to_charge_and_metadata():
     result = ballistic_interval(kernel, source, time_origin_ns=[0.], relative_edges_ns=edges)
     assert result.charge_pe[0] > 0
     np.testing.assert_allclose(result.bins_pe.sum(), result.charge_pe[0], rtol=1e-12)
-    assert result.metadata['finite_receiver_m'] == 20.
+    assert result.metadata['receiver_mode'] == 'auto'
+    assert result.metadata['receiver_surface'] == 'sphere'
+
+
+def test_far_thin_shell_in_large_source_still_uses_supplied_surface():
+    # The centre misses every allowed cone, while the actual sphere intersects
+    # the 350 nm edge. Repeating the source must not switch its geometry.
+    rho = 80.
+    kernel = setup([rho, 0., rho/np.sqrt(1.38**2-1.)-.05])
+    count = 9001
+    source = element(np.zeros((count, 3)), np.full(count, .01), c0=1e8/count)
+    auto = ballistic_interval(kernel, source)
+    surface = ballistic_interval(kernel, source, config=BallisticIntervalConfig(receiver_mode='surface'))
+    point = ballistic_interval(kernel, source, config=POINT)
+    assert point.charge_pe[0] == 0.
+    assert auto.charge_pe[0] > 0.
+    np.testing.assert_array_equal(auto.charge_pe, surface.charge_pe)
+
+
+def test_no_surface_is_an_explicit_point_model_without_area_derived_radius():
+    kernel = setup([2., 0., 2./np.sqrt(1.35**2-1.)-.15])
+    source = element([[0., 0., 0.]], .05)
+    point_detector = replace(kernel.detector, receiver_surface=None)
+    point_kernel = lh.TransportKernel(kernel.medium, point_detector, kernel.config)
+    auto = ballistic_interval(point_kernel, source)
+    point = ballistic_interval(point_kernel, source, config=POINT)
+    np.testing.assert_array_equal(auto.charge_pe, point.charge_pe)
+    with pytest.raises(ValueError, match='receiver_surface geometry'):
+        ballistic_interval(point_kernel, source, config=BallisticIntervalConfig(receiver_mode='surface'))
+
 
 
 def test_window_reaching_the_cone_axis_near_threshold_bins_equal_charge():

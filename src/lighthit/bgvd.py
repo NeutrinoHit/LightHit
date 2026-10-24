@@ -15,8 +15,9 @@ import numpy as np
 
 from ._version import VERSION
 from .model import DetectorArray, SpectralMedium
+from .receiver import SphereSurface
 
-MODEL_SCHEMA = "lighthit/bgvd-model/1"
+MODEL_SCHEMA = "lighthit/bgvd-model/2"
 
 
 def _package_directory(package_path=None):
@@ -133,6 +134,7 @@ class OMResponse:
             return np.interp(wavelength_nm, ew, ev) * np.exp(np.interp(wavelength_nm, tw, log_t))
 
         spectral_efficiency.wavelength_knots_nm = self.wavelength_knots_nm
+        spectral_efficiency.linear_exponential_tables = (ew, ev, tw, log_t)
         return angular_acceptance, spectral_efficiency
 
     def check(self, detector):
@@ -170,7 +172,7 @@ class BGVDModel:
         """Write the model to one ``.npz`` file; read it with :func:`load_model`.
 
         The file holds the medium arrays, ``g``, positions, orientations,
-        effective areas, identifiers, provenance strings and the OM response as
+        effective areas, receiver surfaces, identifiers, provenance strings and the OM response as
         tables, and no code. A model without ``om_response`` cannot be saved,
         because its response functions are opaque callables.
         """
@@ -200,6 +202,9 @@ class BGVDModel:
                 medium_provenance=np.str_(medium.provenance),
                 positions_m=detector.positions_m, orientations=detector.orientations,
                 effective_area_m2=detector.effective_area_m2,
+                receiver_surface=np.str_('point' if detector.receiver_surface is None else 'sphere'),
+                receiver_radius_m=(np.array([], float) if detector.receiver_surface is None else
+                                   detector.receiver_surface.radii(len(detector))),
                 identifier_names=np.array([str(name) for name in detector.identifiers], str),
                 detector_provenance=np.str_(detector.provenance),
                 angular_parameters=response.angular_parameters,
@@ -222,7 +227,7 @@ _MODEL_ARRAYS = {
     "phase_index", "group_index", "g", "medium_provenance", "positions_m", "orientations",
     "effective_area_m2", "identifier_names", "detector_provenance", "angular_parameters",
     "efficiency_wavelength_nm", "efficiency", "transmission_wavelength_nm", "transmission",
-    "wavelength_knots_nm", "dataset", "fingerprint"}
+    "wavelength_knots_nm", "dataset", "fingerprint", "receiver_surface", "receiver_radius_m"}
 
 
 def load_model(path):
@@ -234,7 +239,7 @@ def load_model(path):
     """
     with np.load(Path(path).expanduser(), allow_pickle=False) as f:
         schema = str(f["schema"]) if "schema" in f.files else None
-        if schema not in (None, MODEL_SCHEMA):
+        if schema not in (None, 'lighthit/bgvd-model/1', MODEL_SCHEMA):
             raise ValueError(f"unsupported LightHit model file schema {schema!r}")
         medium = SpectralMedium(
             f["wavelength_nm"], f["absorption_per_m"], f["scattering_per_m"],
@@ -252,10 +257,20 @@ def load_model(path):
             identifiers = {str(name): f[_IDENTIFIER_PREFIX + str(name)]
                            for name in f["identifier_names"]}
         angular, spectral = response.functions()
+        surface = None
+        if schema == MODEL_SCHEMA and ('receiver_surface' not in f.files
+                                       or 'receiver_radius_m' not in f.files):
+            raise ValueError('model schema 2 needs explicit receiver-surface fields')
+        if 'receiver_surface' in f.files:
+            kind = str(f['receiver_surface'])
+            if kind == 'sphere':
+                surface = SphereSurface(f['receiver_radius_m'])
+            elif kind != 'point':
+                raise ValueError(f'unsupported receiver surface {kind!r}')
         detector = DetectorArray(
             f["positions_m"], f["orientations"], f["effective_area_m2"],
             angular, spectral, identifiers=identifiers,
-            provenance=str(f["detector_provenance"]))
+            provenance=str(f["detector_provenance"]), receiver_surface=surface)
         return BGVDModel(medium, detector, str(f["dataset"]), str(f["fingerprint"]),
                          response)
 
@@ -313,6 +328,7 @@ def load_bgvd_model(package_path=None, *, dataset="2021", clusters="all", g=0.9)
     detector = DetectorArray(
         positions, directions, np.pi * float(om.radius) ** 2,
         angular_acceptance, spectral_efficiency,
+        receiver_surface=SphereSurface(float(om.radius)),
         identifiers={"cluster": table["cluster"].astype(int),
                      "string": table["subcluster"].astype(int),
                      "channel": table["channel"].astype(int)},

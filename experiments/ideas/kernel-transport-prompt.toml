@@ -32,16 +32,17 @@ tests = ["tests/test_prompt.py"]
 
 [result.electron-100GeV]
 status = "ok"
-date = "2026-10-17T20:51:17Z"
-commit = "48a44bb91cf2"
+date = "2026-10-20T13:26:53Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.19678, 4.05322, 3.9043], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "geant4-electron-100GeV.h5" = "f496788e96093951" }
-timing = { wall_s = 108.325, cpu_s = 108.318, peak_rss_mib = 1054.61 }
-summary = { active = 24, charge_pe_by_order = [2.41145, 1.87668, 0.0] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [6.89648, 6.03662, 5.57617], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "geant4-electron-100GeV.h5" = "f496788e96093951" }
+timing = { wall_s = 407.204, cpu_s = 404.034, peak_rss_mib = 2136.25 }
+summary = { active = 25, charge_pe_by_order = [2.9193, 2.04739, 0.0] }
 reference = "reference-shower/electron-100GeV"
-order_0 = { charge_bias = -0.088662, bin_l1 = 0.345195, worst_om = 1.20918 }
-order_1 = { charge_bias = -0.017247, bin_l1 = 0.019306, worst_om = 0.02992 }
-order_total = { charge_bias = -0.058762, bin_l1 = 0.201961, worst_om = 0.691359 }
+order_0 = { charge_bias = 0.074161, bin_l1 = 0.183655, worst_om = 0.536762 }
+order_1 = { charge_bias = -0.017149, bin_l1 = 0.018323, worst_om = 0.030331 }
+order_total = { charge_bias = 0.034692, bin_l1 = 0.104958, worst_om = 0.3046 }
 active_agreement = "none"
-wall_vs_baseline = 8.912
+wall_vs_baseline = 22.1907

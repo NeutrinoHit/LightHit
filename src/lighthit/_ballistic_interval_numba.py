@@ -29,8 +29,11 @@ def _acceptance(alpha, x):
         value = ((2 * ell - 1) * x * current - (ell - 1) * previous) / ell
         result += (2 * ell + 1) * alpha[ell] * value / (4 * np.pi)
         previous, current = current, value
-    if result < -1e-12 * max(1., np.sum(np.abs(alpha))):
-        raise ValueError('negative ballistic angular response')
+    if result < 0.:
+        # The normal positive response needs no temporary array or norm.
+        # Preserve the same roundoff check for a negative projection.
+        if result < -1e-12 * max(1., np.sum(np.abs(alpha))):
+            raise ValueError('negative ballistic angular response')
     return max(0., result)
 
 
@@ -211,10 +214,41 @@ def _integral(a, b, left, width, n0, dn, e0, de, efficiency,
         photons = coefficient0 + coefficient2 / (n * n)
         if response < -1e-12 or photons < -1e-12 * max(1., coefficient0):
             raise ValueError('negative ballistic spectral weight')
+        exponent = -extinction*distance
+        if len(efficiency) > 4:
+            exponent += efficiency[4]+efficiency[5]*q
         total += (gw[j] * max(0., response) * max(0., photons) / (lam * lam)
-                  * np.exp(-extinction * distance) * _acceptance(alpha, angle)
+                  * np.exp(exponent) * _acceptance(alpha, angle)
                   / (2 * np.pi * rho * sine) * window)
     return total * half * area / length
+
+
+@njit(cache=True)
+def _cone_can_reach_sphere(z, rho, length, beta, radius, phase_min, phase_max):
+    """Conservative rejection using distances to the two limiting cone lines.
+
+    In a meridian plane q = rho*cos(theta) - (z-s)*sin(theta) is the
+    signed perpendicular distance to the photon line. A sphere can be reached
+    only if some q lies in [-R,R]. Over s in [0,L], q increases with s;
+    over the permitted theta interval its extrema below are bounds even when
+    the line's forward ray misses the sphere. False positives are allowed.
+    """
+    if z <= -radius or beta*phase_max <= 1.:
+        return False
+    c_hi = 1./(beta*phase_max)
+    s_hi = np.sqrt(max(0., (1.-c_hi)*(1.+c_hi)))
+    c_lo = min(1., 1./(beta*phase_min))
+    s_lo = np.sqrt(max(0., (1.-c_lo)*(1.+c_lo)))
+    q_hi = rho*c_hi-z*s_hi
+    minimum = q_hi if z >= 0. else min(q_hi, rho*c_lo-z*s_lo)
+    # A few ulps cover the dot products, square roots and endpoint comparison.
+    rounding = 16*np.finfo(np.float64).eps*(abs(z)+rho+length+radius)
+    if minimum > radius+rounding:
+        return False
+    end_z = z-length
+    if end_z >= 0. and rho*c_lo-end_z*s_lo < -radius-rounding:
+        return False
+    return True
 
 
 @njit(cache=True)
@@ -233,7 +267,7 @@ def _precheck(om, i, receivers, radii, reach, start, direction, length, coeffici
     ux, uy, uz = direction[i, 0], direction[i, 1], direction[i, 2]
     z = dx * ux + dy * uy + dz * uz
     # Behind the element only a sphere within reach can be lit.
-    if z <= 0. and (radii[om] == 0. or z <= -reach):
+    if z <= 0. and (radii[om] == 0. or z <= -reach or z <= -radii[om]):
         return False, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.
     cx, cy, cz = dy * uz - dz * uy, dz * ux - dx * uz, dx * uy - dy * ux
     rho = np.sqrt(cx * cx + cy * cy + cz * cz)
@@ -247,6 +281,9 @@ def _precheck(om, i, receivers, radii, reach, start, direction, length, coeffici
     if rho == 0.:
         if 0. < z < length[i]:
             raise ValueError('point receiver lies on emitting track: singular ballistic fluence')
+        return False, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.
+    if radius > 0. and not _cone_can_reach_sphere(z, rho, length[i], beta[i], radius,
+                                               global_min, global_max):
         return False, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.
     ok, nmin, nmax, cut0, cut1 = _support(z, rho, length[i], beta[i], radius)
     if not ok or nmin > global_max or nmax <= global_min:
@@ -363,6 +400,17 @@ def _phase_order(phase_nodes):
             nondecreasing, increasing_phase)
 
 
+@njit(cache=True, inline='always')
+def _supported_panels(nmin, nmax, monotonic, increasing, ordered):
+    """A conservative panel range containing the geometric phase support."""
+    first, last = 0, len(ordered)-1
+    if monotonic:
+        low, high = (nmin, nmax) if increasing else (-nmax, -nmin)
+        first = max(0, np.searchsorted(ordered, low, side='left')-1)
+        last = min(last, np.searchsorted(ordered, high, side='right')+1)
+    return first, last
+
+
 @njit(cache=True)
 def interval_kernel(receivers, looks, areas, start, direction, length,
                     coefficient0, coefficient2, beta, start_ns, end_ns,
@@ -399,7 +447,8 @@ def interval_kernel(receivers, looks, areas, start, direction, length,
 
 
 @njit(cache=True)
-def interval_candidates(receivers, radii, reach, start, direction, length, coefficient0, beta, phase_nodes):
+def interval_candidates(receivers, radii, reach, start, direction, length, coefficient0, beta, phase_nodes,
+                        include_surface_axis=False):
     """Receiver/element pairs passing the order-independent geometry precheck.
 
     Pairs are listed receiver-major in element order, the loop order of
@@ -421,7 +470,7 @@ def interval_candidates(receivers, radii, reach, start, direction, length, coeff
             dz = receivers[om, 2] - start[i, 2]
             ux, uy, uz = direction[i, 0], direction[i, 1], direction[i, 2]
             z = dx * ux + dy * uy + dz * uz
-            if z <= 0. and (not sphere or z <= -reach):
+            if z <= 0. and (not sphere or z <= -reach or z <= -radii[om]):
                 continue
             cx, cy, cz = dy * uz - dz * uy, dz * ux - dx * uz, dx * uy - dy * ux
             rho = np.sqrt(cx * cx + cy * cy + cz * cz)
@@ -433,8 +482,18 @@ def interval_candidates(receivers, radii, reach, start, direction, length, coeff
             if z <= 0. and radius == 0.:
                 continue
             if rho == 0.:
-                if 0. < z < length[i]:
-                    raise ValueError('point receiver lies on emitting track: singular ballistic fluence')
+                if radius == 0. or not include_surface_axis:
+                    if 0. < z < length[i]:
+                        raise ValueError('point receiver lies on emitting track: singular ballistic fluence')
+                    continue
+                # The finite surface is regular on the axis. Its direct ray
+                # backend handles these pairs without dividing by rho.
+                if count == capacity:
+                    capacity *= 2
+                    grown = np.empty(capacity, np.int64); grown[:count] = oms[:count]; oms = grown
+                    grown = np.empty(capacity, np.int64); grown[:count] = elements[:count]; elements = grown
+                oms[count], elements[count] = om, i
+                count += 1
                 continue
             if radius == 0.:
                 nmin = np.hypot(z, rho) / (beta[i] * z)
@@ -444,6 +503,9 @@ def interval_candidates(receivers, radii, reach, start, direction, length, coeff
                     nmax = np.hypot(residual_z, rho) / (beta[i] * residual_z)
                 ok = True
             else:
+                if not _cone_can_reach_sphere(z, rho, length[i], beta[i], radius,
+                                             global_min, global_max):
+                    continue
                 ok, nmin, nmax, cut0, cut1 = _support(z, rho, length[i], beta[i], radius)
             if not ok or nmin > global_max or nmax <= global_min:
                 continue

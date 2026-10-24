@@ -67,8 +67,11 @@ A route finds its tables from the kernel's `cache_directory` through a manifest
 next to it (or in its parent directory):
 
 * `shower-data.json`: `rte_cache`, `ge2_pack`, optional `ge2_band_fold`;
-* `muon-data.json`: the seven keys of `muon-route.md` (a superset; the shower
-  route also accepts it).
+* `muon-data.json`: the seven required keys of `muon-route.md` and the
+  optional `ge2_band_fold` (a superset; the shower route also accepts it).
+  The data bundle's manifest names the fold; the shower route loads it as its
+  band fold and the muon route (`MuonData.ge2_band_fold`) for the direct >=2
+  fallback of the primary.
 
 Tables follow the physics, not labels (`transport-kernel.md`, cache keys), so
 one table set serves `load_model`, `load_bgvd_model` and NTSim's model alike.
@@ -82,6 +85,7 @@ Not distributed publicly. Layout:
 model/bgvd-model.npz        clusters 1-5 (1440 OMs), the model NTSim builds
 tables/rte-cache/           RTE tables, 65 frequencies, 32 wavelengths
 tables/ge2-pack/            order >=2 pack
+tables/ge2-band-fold/       the pack folded onto 3 node bands (folded.json, folded.npy)
 tables/muon/                the five muon atlases
 tables/laser-cache/         532 nm laser table (5 ns bins)
 tables/muon-data.json       manifest (relative paths)

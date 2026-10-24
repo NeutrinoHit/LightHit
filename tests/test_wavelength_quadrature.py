@@ -74,6 +74,17 @@ def test_muon_tables_of_another_quadrature_are_refused_by_name():
         check_atlas_optics(atlas, kernel())
 
 
+def test_muon_preview_refuses_other_scattering_anisotropy():
+    from types import SimpleNamespace
+    from lighthit.muon.preview import check_atlas_optics
+    k = kernel()
+    atlas = SimpleNamespace(metadata={'tables': _spectral_tables(k), 'g': k.medium.g})
+    check_atlas_optics(atlas, k)
+    atlas.metadata['g'] = k.medium.g + .01
+    with pytest.raises(ValueError, match=r'kernel \(g\)'):
+        check_atlas_optics(atlas, k)
+
+
 def test_far_tail_screening_uses_the_spectral_mean_absorption():
     from lighthit.shower_basis import spectral_attenuation
     k = kernel()

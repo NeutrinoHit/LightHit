@@ -23,7 +23,7 @@ ELECTRON_POSE = dict(position_m=[5.0, -269.5, 330.0], direction=[0.35, -0.20, 0.
 ELECTRON_EVENT = 5
 #: The regenerated events (name -> NTSim primaries); see regenerate_inputs.py.
 REGENERATED = ("electron-100GeV", "electron-1TeV", "pion-100GeV", "nue-cc", "numu-cc", "muon-100GeV", "muon-near-om", "muon-stopping",
-               "muon-300GeV", "muon-3000GeV", "muon-1TeV-check", "muon-1TeV-seed43")
+               "muon-300GeV", "muon-3000GeV", "muon-1TeV-check", "muon-1TeV-seed43", "muon-100GeV-cluster1")
 
 
 def data_dir() -> Path:
@@ -84,11 +84,7 @@ def subset_kernel(kernel, indices, **overrides):
     import lighthit as lh
     detector = kernel.detector
     indices = np.asarray(indices, int)
-    sub = replace(detector, positions_m=detector.positions_m[indices],
-                  orientations=detector.orientations[indices],
-                  effective_area_m2=np.asarray(detector.effective_area_m2)[indices]
-                  if np.ndim(detector.effective_area_m2) else detector.effective_area_m2,
-                  identifiers={k: np.asarray(v)[indices] for k, v in detector.identifiers.items()})
+    sub = detector.subset(indices)
     config = replace(kernel.config, **overrides) if overrides else kernel.config
     return lh.TransportKernel(kernel.medium, sub, config)
 

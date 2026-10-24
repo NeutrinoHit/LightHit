@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
+from .receiver import SphereSurface
 from numpy.polynomial.legendre import leggauss
 
 from .medium import Medium
@@ -92,7 +93,7 @@ class SpectralMedium:
 
 @dataclass(frozen=True)
 class DetectorArray:
-    """Point OMs with a common angular shape and spectral response.
+    """OMs with a common angular shape and spectral response.
 
     ``orientation`` points towards the accepted/head-on hemisphere.
     ``angular_acceptance(+1)`` is therefore the head-on response.
@@ -106,6 +107,7 @@ class DetectorArray:
     spectral_efficiency: Callable[[np.ndarray], np.ndarray]
     identifiers: dict = field(default_factory=dict)
     provenance: str = "user-specified detector"
+    receiver_surface: SphereSurface | None = None
 
     def __post_init__(self):
         positions = np.asarray(self.positions_m, float)
@@ -121,6 +123,10 @@ class DetectorArray:
         area = np.broadcast_to(np.asarray(self.effective_area_m2, float), (len(positions),)).copy()
         if not np.isfinite(area).all() or np.any(area <= 0):
             raise ValueError("effective_area_m2 must be finite and positive")
+        if self.receiver_surface is not None:
+            if not isinstance(self.receiver_surface, SphereSurface):
+                raise ValueError('unsupported receiver_surface geometry')
+            self.receiver_surface.radii(len(positions))
         for name, value in self.identifiers.items():
             if np.asarray(value).shape != (len(positions),):
                 raise ValueError(f"identifier {name!r} must contain one value per OM")
@@ -137,6 +143,17 @@ class DetectorArray:
 
     def __len__(self):
         return len(self.positions_m)
+
+    def subset(self, indices):
+        """Select OMs together with their geometry and response arrays."""
+        from dataclasses import replace
+        indices = np.asarray(indices)
+        return replace(self, positions_m=self.positions_m[indices],
+                       orientations=self.orientations[indices],
+                       effective_area_m2=self.effective_area_m2[indices],
+                       identifiers={k: np.asarray(v)[indices] for k, v in self.identifiers.items()},
+                       receiver_surface=(None if self.receiver_surface is None else
+                                         self.receiver_surface.subset(indices)))
 
     def head_on_cosine(self, source_position_m):
         """Cosine +1 when an OM orientation points from OM towards source."""

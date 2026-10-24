@@ -301,6 +301,14 @@ def track_ge2_optics_metadata(kernel):
     return data
 
 
+def track_ge2_optics_match(kernel,metadata):
+    """True when ``kernel`` has the optics recorded in an atlas ``metadata`` (see optics_contract)."""
+    from .optics_contract import contract_matches
+    actual=track_ge2_optics_metadata(kernel)
+    actual.pop('optics_fingerprint')
+    return contract_matches(actual,metadata,metadata.get('optics_fingerprint'))
+
+
 def track_ge2_axial_edges(impact_m,radial_high_m=300.,*,max_panel_m=4.,asinh_step=.15):
     """Resolve near-cone angular structure while bounding far flight oscillations."""
     rho=float(impact_m);reach=np.sqrt(max(0.,radial_high_m**2-rho**2))
@@ -412,8 +420,7 @@ class DiskTrackGe2Atlas:
 
     def validate_kernel(self,kernel):
         """Refuse a kernel with other optics."""
-        actual=track_ge2_optics_metadata(kernel)['optics_fingerprint']
-        if actual!=self.metadata.get('optics_fingerprint'):raise ValueError('atlas/kernel optics mismatch')
+        if not track_ge2_optics_match(kernel,self.metadata):raise ValueError('atlas/kernel optics mismatch')
         return True
 
     def is_validated(self,impact_m,*,charge_only=False):

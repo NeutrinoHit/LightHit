@@ -53,6 +53,11 @@ class KernelConfig:
     acceptance_tolerance: float = 1e-10
     receiver_block: int = 8
     threshold_pe: float = 0.01
+    # OMs whose estimated charge reaches ``detail_threshold_pe`` are computed in
+    # detail by the event routes (ShowerTransport, MuonTransport,
+    # EventTransport); ``active`` still means at least ``threshold_pe``. None:
+    # the same as ``threshold_pe``. See ``detail_threshold``.
+    detail_threshold_pe: float | None = None
     cache_directory: str | Path | None = None
     cache_policy: str = "build"
     spectral_folded_cache: bool | str = "auto"
@@ -79,6 +84,9 @@ class KernelConfig:
             raise ValueError("relative_time_edges_ns must strictly increase")
         if not 0 <= self.threshold_pe or not np.isfinite(self.threshold_pe):
             raise ValueError("threshold_pe must be finite and nonnegative")
+        if self.detail_threshold_pe is not None and not (
+                np.isfinite(self.detail_threshold_pe) and 0 <= self.detail_threshold_pe):
+            raise ValueError("detail_threshold_pe must be finite and nonnegative")
         if self.angular_backend not in ("auto", "numpy", "numba"):
             raise ValueError("angular_backend must be 'auto', 'numpy' or 'numba'")
         if self.cache_policy not in ("build", "require"):
@@ -188,6 +196,52 @@ class TransportComponent:
     @property
     def rate_pe_per_ns(self):
         return self.bins_pe / np.diff(self.relative_time_edges_ns)[None, :]
+
+
+class detail_threshold:
+    """Run an event route with ``threshold_pe`` lowered to ``detail_threshold_pe``.
+
+    Inside the ``with`` block the kernel's ``threshold_pe`` is the detail
+    threshold, so every selection decision of the route (screens, predictors,
+    adaptive candidates) computes in detail each OM whose estimate reaches it.
+    ``report(response, extra)`` then sets ``active`` to the OMs whose charge
+    (plus ``extra``, the light of other sources) reaches the original
+    ``threshold_pe`` and records both thresholds. Each source route
+    (ShowerTransport, MuonTransport) enters the block on its own kernel;
+    EventTransport only calls ``report`` on the event response and uses the
+    detail threshold in its completion rounds. A block entered while the
+    kernel is already lowered does nothing.
+    """
+
+    def __init__(self, kernel):
+        self.kernel = kernel
+        self.config = None if kernel is None else kernel.config
+        detail = None if kernel is None else kernel.config.detail_threshold_pe
+        self.lowered = detail is not None and detail < self.config.threshold_pe
+
+    def __enter__(self):
+        if self.lowered:
+            self.kernel.config = replace(self.config, threshold_pe=self.config.detail_threshold_pe,
+                                         detail_threshold_pe=None)
+        return self
+
+    def __exit__(self, *exc):
+        if self.lowered:
+            self.kernel.config = self.config
+        return False
+
+    def report(self, response, extra=None):
+        """``active`` at the original threshold; both thresholds in the metadata."""
+        if not self.lowered:
+            return response
+        charge = np.asarray(response.charge_pe, float)
+        if extra is not None:
+            charge = charge + np.asarray(extra, float)
+        response.active = np.asarray(response.active, bool) & (charge >= self.config.threshold_pe)
+        response.metadata["threshold_pe"] = float(self.config.threshold_pe)
+        response.metadata["detail_threshold_pe"] = float(self.config.detail_threshold_pe)
+        response.metadata["active_modules"] = int(np.count_nonzero(response.active))
+        return response
 
 
 @dataclass
@@ -487,9 +541,12 @@ class TransportKernel:
         return self._table_index[kind]
 
     def _table_matches(self, kind, wavelength_nm, metadata, radii, omega):
+        from ._portable import same_values
         band = dict(metadata.get("medium") or {})
         band.pop("provenance", None)
-        if (band != self._band_key(wavelength_nm)
+        # the band coefficients are interpolated, so another platform
+        # reproduces them only to the last bits: compare within a tolerance
+        if (not same_values(band, self._band_key(wavelength_nm))
                 or metadata.get("settings") != asdict(self._solver_settings())
                 or metadata.get("radial_phase") != "flight"):
             return False
@@ -509,9 +566,12 @@ class TransportKernel:
 
         The physics-only key is tried first, then the legacy key (which also
         hashed the medium's provenance), then any table in the directory whose
-        stored band coefficients, solver settings and grid equal this kernel's.
-        The last step lets tables prepared with one model object serve another
-        with the same water and settings but a different provenance label.
+        stored band coefficients agree with this kernel's within a relative
+        1e-9 and whose solver settings and grid equal this kernel's. The last
+        step lets tables prepared with one model object serve another with the
+        same water and settings but a different provenance label, and tables
+        built on another platform, whose interpolated coefficients (and so
+        names) differ in the last bits.
         """
         wavelength_nm = float(wavelength_nm)
         memo = (kind, wavelength_nm)

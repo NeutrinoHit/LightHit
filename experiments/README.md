@@ -78,6 +78,16 @@ directional tables (`$LIGHTHIT_RTE_CACHE_321`) for the full-table checks, and
   `wavelength-quadrature`. The references above use the kernel's own
   wavelength quadrature, so its error shows only against the photon Monte
   Carlo and against finer quadratures (`wavelength-quadrature`).
+  For a deterministic LightHit charge `L` and weighted MC charge `M`, the
+  first-order error of `R = L/M` is `abs(R) * sqrt(sum(hit_weight**2))/M`.
+  In `wavelength-quadrature`, `total_sigma`, `ratio_sigma` and the headline
+  `order*_sigma` report this ratio error; `mc_relative_sigma` and
+  `order*_mc_relative_sigma` retain the fractional MC error. Results measured
+  before 2026-10-20 used the fractional MC error in `total_sigma` and
+  `order*_sigma`; their charge ratios are unaffected.
+  Default routes retain coarse order-1 charges on inactive OMs. The control
+  `wavelength-quadrature/point-order1-screening` recomputes 100-250 m OMs
+  without that screen before comparing a small tail with photon MC.
 * Script ideas report the scripts' own metrics (the script's JSON, and its log in
   `results/<idea>/<case>.log`).
 * Metrics against a reference (`harness/metrics.py`), per order and total:

@@ -44,10 +44,7 @@ def om_subset(default_case: str, *, margin: float = 0.5, threshold: float = 0.01
 def subset_kernel(kernel, indices, **config):
     import lighthit as lh
     d = kernel.detector
-    area = np.asarray(d.effective_area_m2)
-    sub = replace(d, positions_m=d.positions_m[indices], orientations=d.orientations[indices],
-                  effective_area_m2=area[indices] if area.ndim else area,
-                  identifiers={k: np.asarray(v)[indices] for k, v in d.identifiers.items()})
+    sub = d.subset(indices)
     return lh.TransportKernel(kernel.medium, sub, replace(kernel.config, **config))
 
 

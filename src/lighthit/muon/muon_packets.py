@@ -148,10 +148,7 @@ def order1_packets(kernel, elements, packets, *, time_origin_ns, radius_m=400., 
                                 elements=len(part), receivers=0, seconds=0.))
             continue
         local = copy(kernel)
-        local.detector = replace(detector, positions_m=positions[work],
-                                 orientations=detector.orientations[work],
-                                 effective_area_m2=detector.effective_area_m2[work],
-                                 identifiers={k: np.asarray(v)[work] for k, v in detector.identifiers.items()})
+        local.detector = detector.subset(work)
         begin = perf_counter()
         # A single output sum has one omission budget, not one per packet.
         settings = replace(config, batch_charge_tolerance_pe=config.batch_charge_tolerance_pe/max(len(packets),1))

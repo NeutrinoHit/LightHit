@@ -34,6 +34,7 @@ def model(provenance="first label"):
     detector = lh.DetectorArray(
         [[10., 0., 0.], [0., 20., 0.], [0., 0., 15.]], [[1., 0., 0.], [0., 1., 0.], [0., 0., -1.]],
         np.pi * .216 ** 2, angular, spectral,
+        receiver_surface=lh.SphereSurface([.216, .20, .25]),
         identifiers={"uid": [11101, 11102, 11103], "cluster_id": [0, 0, 1]},
         provenance="test detector")
     return lh.BGVDModel(medium(provenance), detector, "test", "0" * 64, om)
@@ -89,6 +90,21 @@ def test_load_bgvd_model_and_relabelled_copy_share_keys(tmp_path):
     for wavelength in a.wavelength.wavelength_nm:
         assert a._cache_key(wavelength) == b._cache_key(wavelength)
         assert a._directional_cache_key(wavelength) == b._directional_cache_key(wavelength)
+
+
+def test_tables_of_another_platform_are_found_by_their_band_coefficients(tmp_path):
+    builder = model().kernel(config(tmp_path)).build(source=FLASH)
+    expected = builder.transport(FLASH)
+    # the same water reproduced only to the last bits (another CPU or maths library)
+    close = replace(medium(), absorption_per_m=np.array([.04, .05]) * (1 + 1e-13))
+    other = lh.TransportKernel(close, builder.detector, config(tmp_path, cache_policy="require"))
+    assert other._cache_key(450.) != builder._cache_key(450.)
+    assert other._stored_table("multipole", 450.) is not None
+    np.testing.assert_allclose(other.transport(FLASH).spectrum_pe, expected.spectrum_pe, rtol=1e-9)
+    # another water is not taken for it
+    murkier = replace(medium(), absorption_per_m=np.array([.04, .05]) * (1 + 1e-6))
+    far = lh.TransportKernel(murkier, builder.detector, config(tmp_path, cache_policy="require"))
+    assert far._stored_table("multipole", 450.) is None
 
 
 def test_legacy_multipole_tables_are_read_and_new_ones_use_physics_keys(tmp_path):

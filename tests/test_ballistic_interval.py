@@ -17,7 +17,8 @@ def setup():
         return np.interp(w, [350.,410.,415.,610.], [.1,.2,.35,.05])
     efficiency.wavelength_knots_nm = np.array([350.,410.,415.,610.])
     detector = lh.DetectorArray([[10.,0.,25.]], [[0.,0.,-1.]], .05,
-                               lambda x: np.ones_like(x), efficiency)
+                               lambda x: np.ones_like(x), efficiency,
+                               receiver_surface=lh.SphereSurface(np.sqrt(.05 / np.pi)))
     kernel = lh.TransportKernel(medium, detector, lh.KernelConfig(
         omega_per_ns=np.array([0.]), wavelength_nodes=2, threshold_pe=0., acceptance_degree=0))
     source = lh.SpectralLightElements(np.array([[0.,0.,0.]]), np.array([[0.,0.,1.]]),

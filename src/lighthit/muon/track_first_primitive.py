@@ -162,6 +162,7 @@ def build_track_first_rows(kernel, *, rho_m, orientations, beta, speed_m_per_ns,
     d = kernel.detector
     local.detector = replace(d,positions_m=np.tile([rho,0.,0.],(count,1)),
         orientations=directions,effective_area_m2=np.repeat(d.effective_area_m2[:1],count),
+        receiver_surface=None,
         identifiers={k:np.repeat(val[:1],count,axis=0) for k,val in d.identifiers.items()})
     local.config = replace(kernel.config,relative_time_edges_ns=t)
     local.wavelength = primary_spectral_quadrature(kernel.medium,d,order=spectral_order,
@@ -578,8 +579,9 @@ class TrackFirstAtlasStore:
 
     def validate_kernel(self,kernel):
         """Refuse a kernel with other optics, QE, acceptance or OM area."""
-        _,digest=track_first_optical_contract(kernel,spectral_order=self.metadata['spectral_order'])
-        if digest!=self.metadata.get('optical_fingerprint'):
+        from .optics_contract import contract_matches
+        values,_=track_first_optical_contract(kernel,spectral_order=self.metadata['spectral_order'])
+        if not contract_matches(values,self.metadata,self.metadata.get('optical_fingerprint'),allow_nan=False):
             raise ValueError('optical/QE/acceptance contract does not match atlas')
         if not np.all(np.asarray(kernel.detector.effective_area_m2)==self.metadata['effective_area_m2']):
             raise ValueError('atlas requires matching area for every supplied OM')

@@ -58,6 +58,8 @@ EVENTS = {
                                         (211, 150.0, [0.50, -0.30, 0.81]),
                                         (2212, 50.0, [0.10, 0.20, 0.97])]),
     "muon-100GeV": ([-100.0, -950.0, 350.0], [(13, 100.0, [0.0, 1.0, 0.0])]),
+    # the muon of ntsim run/check_lighthit.sh (pdg 13): the electron's vertex and direction
+    "muon-100GeV-cluster1": (ELECTRON_VERTEX, [(13, 100.0, ELECTRON_DIRECTION)]),
     # 6 GeV muon (about 25-30 m of track) aimed 1.5 m past OM 267:
     # muon-near-om starts 20 m before the OM and passes it at 1.5 m;
     # muon-stopping starts 40 m before it and stops short of it.
@@ -71,6 +73,16 @@ EVENTS = {
     "muon-1TeV-check": (MUON_START, [(13, 1000.0, [0.0, 1.0, 0.0])]),
     # independent holdout of the primary atlases (generate_primary_holdout.py defaults)
     "muon-1TeV-seed43": ([-120.0, -900.0, 330.0], [(13, 1000.0, [0.02, 1.0, 0.01])], 43),
+    # photon-mc-matrix: energies, particles and geometries against the photon Monte Carlo
+    "electron-10GeV": (ELECTRON_VERTEX, [(11, 10.0, ELECTRON_DIRECTION)]),
+    "electron-10TeV": (ELECTRON_VERTEX, [(11, 10000.0, ELECTRON_DIRECTION)]),
+    "pion-10GeV": (ELECTRON_VERTEX, [(211, 10.0, ELECTRON_DIRECTION)]),
+    "pion-1TeV": (ELECTRON_VERTEX, [(211, 1000.0, ELECTRON_DIRECTION)]),
+    "muon-10TeV": (MUON_START, [(13, 10000.0, [0.0, 1.0, 0.0])]),
+    # 80 m east of cluster 1 (x from -80 to 45 m), pointing into it
+    "electron-100GeV-outside": ([125.0, -269.7, 330.0], [(11, 100.0, [-0.95, 0.0, 0.3])]),
+    # the bundle electron's vertex, going down
+    "electron-100GeV-down": (ELECTRON_VERTEX, [(11, 100.0, [-0.35, 0.20, -0.915])]),
 }
 SEED = 42
 CLUSTERS = (1, 2, 3, 4, 5)

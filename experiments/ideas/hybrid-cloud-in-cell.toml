@@ -49,11 +49,11 @@ inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742
 timing = { wall_s = 149.861, cpu_s = 674.131, peak_rss_mib = 5842.5 }
 summary = { active = 28, charge_pe_by_order = [2.41145, 1.87167, 1.05287] }
 reference = "reference-shower/electron-100GeV"
-order_0 = { charge_bias = -0.088662, bin_l1 = 0.347845, worst_om = 1.20918 }
-order_1 = { charge_bias = -0.017819, bin_l1 = 0.019346, worst_om = 0.02992 }
-order_ge2 = { charge_bias = 0.0, bin_l1 = 0.0, worst_om = 0.0 }
-order_total = { charge_bias = -0.04812, bin_l1 = 0.166116, worst_om = 0.719913 }
-active_agreement = { both = 27, only_response = 1, only_reference = 1, missed_reference_charge_pe = 0.0102395 }
+order_0 = { charge_bias = -0.115413, worst_om = 1.17477 }
+order_1 = { charge_bias = -0.098009, worst_om = 0.208465 }
+order_ge2 = { charge_bias = -0.069014, worst_om = 0.175162 }
+order_total = { charge_bias = -0.100592, worst_om = 0.568708 }
+active_agreement = { both = 27, only_response = 1, only_reference = 4, missed_reference_charge_pe = 0.0437848 }
 
 [result."pion-100GeV@threads-default"]
 status = "error"

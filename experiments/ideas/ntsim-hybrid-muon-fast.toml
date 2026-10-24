@@ -50,7 +50,7 @@ modules = [
 functions = []
 options = [
   """
-PromptConfig(screen_cell_m=5, screen_pixel_face=4, screen_ring_nodes=12, screen_margin=6, batch_charge_tolerance_pe=1e-6) (NTSim --hybrid-prompt-profile muon-fast)
+PromptConfig(screen_margin=6, batch_charge_tolerance_pe=1e-6); charge-only screening now uses the detailed source resolution (NTSim --hybrid-prompt-profile muon-fast)
 """,
   "ShowerBasis(track_uid=0, spectral_fusion=True, apply_tolerance_pe=1e-6)",
   "frequency_nodes=33",
@@ -70,185 +70,191 @@ tests = []
 
 [result.long-muon-300GeV]
 status = "ok"
-date = "2026-10-18T03:14:39Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T03:58:08Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.11768, 3.34229, 3.53174], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "geant4-electron-100GeV.h5" = "f496788e96093951", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992", "electron-100GeV-steps.npz" = "676e7d5dd98747e4", "electron-1TeV-steps.npz" = "d19de019b584640d", "muon-100GeV-steps.npz" = "1a5f9f31d5093b3d", "muon-1TeV-check-steps.npz" = "7a0530203fdf3f70", "muon-1TeV-seed43-steps.npz" = "f53161f9474e9c7a", "muon-3000GeV-steps.npz" = "b4c056397603146c", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-near-om-steps.npz" = "5ec16636db4ae0af", "muon-stopping-steps.npz" = "555586528d720600", "nue-cc-steps.npz" = "6173603aa0f562f6", "numu-cc-steps.npz" = "4e4adc78db4c51a3", "pion-100GeV-steps.npz" = "3c9fa7540b378e19" }
-timing = { wall_s = 561.251, cpu_s = 560.461, peak_rss_mib = 5345.89, note = "child process: includes imports and Numba compilation" }
-metrics = { elapsed_seconds = 558.385, rte_elapsed_seconds = 428.72, ge2_prepare_seconds = 0.00233767, compile_zero_seconds = 2.88018, zero_apply_seconds = 200.549, compile_full_seconds = 23.0251, full_apply_seconds = 198.1, prompt_elapsed_seconds = 129.664 }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.04883, 4.34619, 4.59082], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "geant4-electron-100GeV.h5" = "f496788e96093951", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992", "electron-100GeV-steps.npz" = "676e7d5dd98747e4", "electron-1TeV-steps.npz" = "d19de019b584640d", "muon-100GeV-steps.npz" = "1a5f9f31d5093b3d", "muon-1TeV-check-steps.npz" = "7a0530203fdf3f70", "muon-1TeV-seed43-steps.npz" = "f53161f9474e9c7a", "muon-3000GeV-steps.npz" = "b4c056397603146c", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-near-om-steps.npz" = "5ec16636db4ae0af", "muon-stopping-steps.npz" = "555586528d720600", "nue-cc-steps.npz" = "6173603aa0f562f6", "numu-cc-steps.npz" = "4e4adc78db4c51a3", "pion-100GeV-steps.npz" = "3c9fa7540b378e19" }
+timing = { wall_s = 1982.98, cpu_s = 1981.36, peak_rss_mib = 8233.0, note = "child process: includes imports and Numba compilation" }
+metrics = { elapsed_seconds = 1979.92, rte_elapsed_seconds = 1496.17, ge2_prepare_seconds = 0.00594275, compile_zero_seconds = 10.2148, zero_apply_seconds = 683.664, compile_full_seconds = 82.1559, full_apply_seconds = 705.748, prompt_elapsed_seconds = 483.749 }
 
 [result.muon-1TeV-all]
 status = "ok"
-date = "2026-10-17T23:47:38Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T07:16:30Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.9043, 4.42822, 4.57275], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
-timing = { wall_s = 449.046, cpu_s = 449.362, peak_rss_mib = 4759.48 }
-summary = { active = 29, charge_pe_by_order = [2.16952, 1.41124, 0.70541] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.56934, 5.08252, 5.05029], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
+timing = { wall_s = 1643.07, cpu_s = 1639.02, peak_rss_mib = 6647.78 }
+summary = { active = 30, charge_pe_by_order = [2.22118, 1.50798, 0.75958] }
 reference = "reference-muon/muon-1TeV"
-order_0 = { charge_bias = -0.007311, bin_l1 = 0.354078, worst_om = 2.08253 }
-order_1 = { charge_bias = 0.00095, bin_l1 = 0.007181, worst_om = 0.0104 }
-order_total = { charge_bias = -0.004088, bin_l1 = 0.217263, worst_om = 1.08683 }
+order_0 = { charge_bias = -0.010503, bin_l1 = 0.177738, worst_om = 0.221836 }
+order_1 = { charge_bias = 0.001377, bin_l1 = 0.006262, worst_om = 0.011457 }
+order_total = { charge_bias = -0.005761, bin_l1 = 0.107068, worst_om = 0.248758 }
 active_agreement = "none"
-wall_vs_baseline = 10.0149
+wall_vs_baseline = 14.1143
 
 [result.muon-1TeV-all-centroid]
 status = "ok"
-date = "2026-10-18T00:00:40Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T04:43:49Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.40527, 4.18359, 4.2749], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
-timing = { wall_s = 387.023, cpu_s = 387.35, peak_rss_mib = 4146.45 }
-summary = { active = 29, charge_pe_by_order = [2.16952, 1.41124, 0.70541] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.85352, 4.71289, 4.63525], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
+timing = { wall_s = 1367.73, cpu_s = 1368.53, peak_rss_mib = 7993.34 }
+summary = { active = 30, charge_pe_by_order = [2.22118, 1.50798, 0.75958] }
 reference = "reference-muon/muon-1TeV"
-order_0 = { charge_bias = -0.007311, bin_l1 = 0.354078, worst_om = 2.08253 }
-order_1 = { charge_bias = 0.00095, bin_l1 = 0.007181, worst_om = 0.0104 }
-order_total = { charge_bias = -0.004088, bin_l1 = 0.217263, worst_om = 1.08683 }
+order_0 = { charge_bias = -0.010503, bin_l1 = 0.177738, worst_om = 0.221836 }
+order_1 = { charge_bias = 0.001377, bin_l1 = 0.006262, worst_om = 0.011457 }
+order_total = { charge_bias = -0.005761, bin_l1 = 0.107068, worst_om = 0.248758 }
 active_agreement = "none"
-wall_vs_baseline = 8.6316
+wall_vs_baseline = 11.7491
 
 [result.muon-1TeV-all-polyline]
 status = "ok"
-date = "2026-10-18T00:15:35Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T06:22:04Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.77148, 3.9624, 3.98975], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
-timing = { wall_s = 448.186, cpu_s = 448.497, peak_rss_mib = 4614.95 }
-summary = { active = 29, charge_pe_by_order = [2.16952, 1.41134, 0.70541] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.44873, 4.0, 3.92236], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
+timing = { wall_s = 1548.69, cpu_s = 1549.24, peak_rss_mib = 8517.81 }
+summary = { active = 30, charge_pe_by_order = [2.22118, 1.50809, 0.75958] }
 reference = "reference-muon/muon-1TeV"
-order_0 = { charge_bias = -0.007311, bin_l1 = 0.354078, worst_om = 2.08253 }
-order_1 = { charge_bias = 0.001025, bin_l1 = 0.007414, worst_om = 0.010843 }
-order_total = { charge_bias = -0.004059, bin_l1 = 0.217294, worst_om = 1.08679 }
+order_0 = { charge_bias = -0.010503, bin_l1 = 0.177738, worst_om = 0.221836 }
+order_1 = { charge_bias = 0.00145, bin_l1 = 0.006395, worst_om = 0.012421 }
+order_total = { charge_bias = -0.005732, bin_l1 = 0.107031, worst_om = 0.248769 }
 active_agreement = "none"
-wall_vs_baseline = 9.9957
+wall_vs_baseline = 13.3036
 
 [result.muon-1TeV-off]
-status = "ok"
-date = "2026-10-18T03:31:32Z"
-commit = "48a44bb91cf2"
+status = "error"
+date = "2026-10-21T09:21:53Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.03613, 4.2041, 3.98584], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
-timing = { wall_s = 503.318, cpu_s = 502.815, peak_rss_mib = 7650.05 }
-summary = { active = 29, charge_pe_by_order = [2.16952, 1.40971, 0.70534] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [8.21631, 7.71826, 6.65527], numba_threads = 1 }
 reference = "reference-muon/muon-1TeV"
-order_0 = { charge_bias = -0.007311, bin_l1 = 0.354078, worst_om = 2.08253 }
-order_1 = { charge_bias = -0.000152, bin_l1 = 0.0, worst_om = 0.0 }
-order_total = { charge_bias = -0.004518, bin_l1 = 0.216979, worst_om = 1.08739 }
-active_agreement = "none"
-wall_vs_baseline = 11.2253
+error = "ZeroDivisionError: division by zero"
 
 [result.muon-1TeV-prompt]
 status = "ok"
-date = "2026-10-17T23:32:40Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T05:30:26Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.35986, 4.89209, 4.76855], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
-timing = { wall_s = 427.172, cpu_s = 427.005, peak_rss_mib = 7493.06 }
-summary = { active = 29, charge_pe_by_order = [2.16952, 1.41124, 0.70534] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.2334, 4.44434, 4.34766], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992" }
+timing = { wall_s = 1393.21, cpu_s = 1390.81, peak_rss_mib = 10401.9 }
+summary = { active = 30, charge_pe_by_order = [2.22118, 1.50798, 0.75951] }
 reference = "reference-muon/muon-1TeV"
-order_0 = { charge_bias = -0.007311, bin_l1 = 0.354078, worst_om = 2.08253 }
-order_1 = { charge_bias = 0.00095, bin_l1 = 0.007181, worst_om = 0.0104 }
-order_total = { charge_bias = -0.004088, bin_l1 = 0.217263, worst_om = 1.08683 }
+order_0 = { charge_bias = -0.010503, bin_l1 = 0.177738, worst_om = 0.221836 }
+order_1 = { charge_bias = 0.001377, bin_l1 = 0.006262, worst_om = 0.011457 }
+order_total = { charge_bias = -0.005761, bin_l1 = 0.107068, worst_om = 0.248758 }
 active_agreement = "none"
-wall_vs_baseline = 9.527
+wall_vs_baseline = 11.968
 
 [result.muon-300GeV-all]
 status = "ok"
-date = "2026-10-18T00:31:00Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T02:30:58Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [6.98486, 5.72363, 4.88477], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
-timing = { wall_s = 219.081, cpu_s = 219.145, peak_rss_mib = 3654.34 }
-summary = { active = 22, charge_pe_by_order = [1.18996, 0.7043, 0.33159] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.84814, 4.40332, 4.95605], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
+timing = { wall_s = 748.482, cpu_s = 748.976, peak_rss_mib = 7424.02 }
+summary = { active = 22, charge_pe_by_order = [1.19632, 0.75067, 0.35815] }
 reference = "reference-muon/muon-300GeV"
-order_0 = { charge_bias = -0.020604, bin_l1 = 0.282396, worst_om = 0.689399 }
-order_1 = { charge_bias = 0.002813, bin_l1 = 0.011998, worst_om = 0.022051 }
-order_ge2 = { charge_bias = 0.002814, bin_l1 = 0.030615, worst_om = 0.025948 }
-order_total = { charge_bias = -0.010131, bin_l1 = 0.161, worst_om = 0.348625 }
-active_agreement = { both = 21, only_response = 1, only_reference = 1, missed_reference_charge_pe = 0.0107781 }
-wall_vs_baseline = 3.8167
+order_0 = { charge_bias = -0.039181, bin_l1 = 0.153459, worst_om = 0.296554 }
+order_1 = { charge_bias = 0.004762, bin_l1 = 0.011334, worst_om = 0.022522 }
+order_ge2 = { charge_bias = 0.002577, bin_l1 = 0.031053, worst_om = 0.024907 }
+order_total = { charge_bias = -0.01946, bin_l1 = 0.087002, worst_om = 0.184908 }
+active_agreement = { both = 22, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
+wall_vs_baseline = 5.0049
 
 [result.muon-300GeV-all-centroid]
 status = "ok"
-date = "2026-10-18T00:36:47Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T01:17:37Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.49756, 4.63525, 4.6748], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
-timing = { wall_s = 172.28, cpu_s = 172.405, peak_rss_mib = 3366.67 }
-summary = { active = 22, charge_pe_by_order = [1.18996, 0.7043, 0.33159] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [2.39307, 2.85156, 3.10596], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
+timing = { wall_s = 609.437, cpu_s = 609.92, peak_rss_mib = 7006.66 }
+summary = { active = 22, charge_pe_by_order = [1.19632, 0.75067, 0.35815] }
 reference = "reference-muon/muon-300GeV"
-order_0 = { charge_bias = -0.020604, bin_l1 = 0.282396, worst_om = 0.689399 }
-order_1 = { charge_bias = 0.002813, bin_l1 = 0.011998, worst_om = 0.022051 }
-order_ge2 = { charge_bias = 0.002816, bin_l1 = 0.03001, worst_om = 0.025968 }
-order_total = { charge_bias = -0.01013, bin_l1 = 0.160971, worst_om = 0.348625 }
-active_agreement = { both = 21, only_response = 1, only_reference = 1, missed_reference_charge_pe = 0.0107781 }
-wall_vs_baseline = 3.0013
+order_0 = { charge_bias = -0.039181, bin_l1 = 0.153459, worst_om = 0.296554 }
+order_1 = { charge_bias = 0.004762, bin_l1 = 0.011334, worst_om = 0.022522 }
+order_ge2 = { charge_bias = 0.002576, bin_l1 = 0.030434, worst_om = 0.024925 }
+order_total = { charge_bias = -0.01946, bin_l1 = 0.0869, worst_om = 0.184908 }
+active_agreement = { both = 22, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
+wall_vs_baseline = 4.0752
 
 [result.muon-300GeV-all-polyline]
 status = "ok"
-date = "2026-10-18T00:43:57Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T01:42:22Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.24951, 4.11963, 4.3584], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
-timing = { wall_s = 214.694, cpu_s = 214.817, peak_rss_mib = 3660.44 }
-summary = { active = 22, charge_pe_by_order = [1.18996, 0.70482, 0.33159] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.87842, 4.73438, 4.25977], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
+timing = { wall_s = 739.037, cpu_s = 739.436, peak_rss_mib = 7075.92 }
+summary = { active = 22, charge_pe_by_order = [1.19632, 0.75122, 0.35815] }
 reference = "reference-muon/muon-300GeV"
-order_0 = { charge_bias = -0.020604, bin_l1 = 0.282396, worst_om = 0.689399 }
-order_1 = { charge_bias = 0.003577, bin_l1 = 0.012093, worst_om = 0.022233 }
-order_ge2 = { charge_bias = 0.002814, bin_l1 = 0.030615, worst_om = 0.025948 }
-order_total = { charge_bias = -0.009891, bin_l1 = 0.160735, worst_om = 0.348842 }
-active_agreement = { both = 21, only_response = 1, only_reference = 1, missed_reference_charge_pe = 0.0107781 }
-wall_vs_baseline = 3.7402
+order_0 = { charge_bias = -0.039181, bin_l1 = 0.153459, worst_om = 0.296554 }
+order_1 = { charge_bias = 0.005515, bin_l1 = 0.011871, worst_om = 0.022701 }
+order_ge2 = { charge_bias = 0.002577, bin_l1 = 0.031053, worst_om = 0.024907 }
+order_total = { charge_bias = -0.019219, bin_l1 = 0.087179, worst_om = 0.185631 }
+active_agreement = { both = 22, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
+wall_vs_baseline = 4.9418
 
 [result.muon-300GeV-off]
 status = "ok"
-date = "2026-10-18T03:39:48Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T03:25:03Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.33496, 3.4668, 3.67725], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
-timing = { wall_s = 247.905, cpu_s = 247.844, peak_rss_mib = 6499.78 }
-summary = { active = 22, charge_pe_by_order = [1.18996, 0.70132, 0.33153] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.09375, 4.59668, 4.65625], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
+timing = { wall_s = 816.696, cpu_s = 816.448, peak_rss_mib = 9231.58 }
+summary = { active = 22, charge_pe_by_order = [1.19632, 0.74724, 0.35809] }
 reference = "reference-muon/muon-300GeV"
-order_0 = { charge_bias = -0.020604, bin_l1 = 0.282396, worst_om = 0.689399 }
-order_1 = { charge_bias = -0.001546, bin_l1 = 0.0, worst_om = 0.0 }
-order_ge2 = { charge_bias = 0.002601, bin_l1 = 0.031783, worst_om = 0.025611 }
-order_total = { charge_bias = -0.011527, bin_l1 = 0.1602, worst_om = 0.348844 }
-active_agreement = { both = 21, only_response = 1, only_reference = 1, missed_reference_charge_pe = 0.0107781 }
-wall_vs_baseline = 4.3188
+order_0 = { charge_bias = -0.039181, bin_l1 = 0.153459, worst_om = 0.296554 }
+order_1 = { charge_bias = -0.0, bin_l1 = 0.0, worst_om = 0.0 }
+order_ge2 = { charge_bias = 0.002374, bin_l1 = 0.03223, worst_om = 0.024585 }
+order_total = { charge_bias = -0.021012, bin_l1 = 0.087327, worst_om = 0.183152 }
+active_agreement = { both = 22, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
+wall_vs_baseline = 5.4611
 
 [result.muon-300GeV-prompt]
 status = "ok"
-date = "2026-10-18T00:23:40Z"
-commit = "48a44bb91cf2"
+date = "2026-10-21T02:57:45Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [5.95068, 4.6748, 4.28369], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
-timing = { wall_s = 241.748, cpu_s = 241.718, peak_rss_mib = 5769.88 }
-summary = { active = 22, charge_pe_by_order = [1.18996, 0.7043, 0.33153] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.07715, 4.19873, 4.51709], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-300GeV-parts.npz" = "4bf395dd12e73071" }
+timing = { wall_s = 797.781, cpu_s = 797.696, peak_rss_mib = 9260.41 }
+summary = { active = 22, charge_pe_by_order = [1.19632, 0.75067, 0.35809] }
 reference = "reference-muon/muon-300GeV"
-order_0 = { charge_bias = -0.020604, bin_l1 = 0.282396, worst_om = 0.689399 }
-order_1 = { charge_bias = 0.002813, bin_l1 = 0.011998, worst_om = 0.022051 }
-order_ge2 = { charge_bias = 0.002601, bin_l1 = 0.031783, worst_om = 0.025611 }
-order_total = { charge_bias = -0.010159, bin_l1 = 0.161205, worst_om = 0.34851 }
-active_agreement = { both = 21, only_response = 1, only_reference = 1, missed_reference_charge_pe = 0.0107781 }
-wall_vs_baseline = 4.2115
+order_0 = { charge_bias = -0.039181, bin_l1 = 0.153459, worst_om = 0.296554 }
+order_1 = { charge_bias = 0.004762, bin_l1 = 0.011334, worst_om = 0.022522 }
+order_ge2 = { charge_bias = 0.002374, bin_l1 = 0.03223, worst_om = 0.024585 }
+order_total = { charge_bias = -0.019488, bin_l1 = 0.087202, worst_om = 0.184896 }
+active_agreement = { both = 22, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
+wall_vs_baseline = 5.3346
 
 [result.prompt-screen-300GeV]
-status = "ok"
-date = "2026-10-18T07:53:33Z"
-commit = "48a44bb91cf2"
+status = "error"
+date = "2026-10-20T22:33:49Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.58496, 3.9585, 4.2749], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "geant4-electron-100GeV.h5" = "f496788e96093951", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992", "electron-100GeV-steps.npz" = "676e7d5dd98747e4", "electron-1TeV-steps.npz" = "d19de019b584640d", "muon-100GeV-steps.npz" = "1a5f9f31d5093b3d", "muon-1TeV-check-steps.npz" = "7a0530203fdf3f70", "muon-1TeV-seed43-steps.npz" = "f53161f9474e9c7a", "muon-3000GeV-steps.npz" = "b4c056397603146c", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-near-om-steps.npz" = "5ec16636db4ae0af", "muon-stopping-steps.npz" = "555586528d720600", "nue-cc-steps.npz" = "6173603aa0f562f6", "numu-cc-steps.npz" = "4e4adc78db4c51a3", "pion-100GeV-steps.npz" = "3c9fa7540b378e19" }
-timing = { wall_s = 60.601, cpu_s = 60.578, peak_rss_mib = 2314.53, note = "child process: includes imports and Numba compilation" }
-metrics = { output_tail = "\"modules\": 1440, | \"scope\": \"Empirical coarse-screen control on this event; no certified bound. Fine settings unchanged; inactive coarse q1 charges may differ.\" | }" }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.46924, 4.3833, 4.25586], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "geant4-electron-100GeV.h5" = "f496788e96093951", "muon-1TeV-steps.npz" = "e472ed6b78be9cf5", "muon-1TeV-ancestry.npz" = "87754a5d8be3e992", "electron-100GeV-steps.npz" = "676e7d5dd98747e4", "electron-1TeV-steps.npz" = "d19de019b584640d", "muon-100GeV-steps.npz" = "1a5f9f31d5093b3d", "muon-1TeV-check-steps.npz" = "7a0530203fdf3f70", "muon-1TeV-seed43-steps.npz" = "f53161f9474e9c7a", "muon-3000GeV-steps.npz" = "b4c056397603146c", "muon-300GeV-steps.npz" = "f440d38b3ca8c49e", "muon-near-om-steps.npz" = "5ec16636db4ae0af", "muon-stopping-steps.npz" = "555586528d720600", "nue-cc-steps.npz" = "6173603aa0f562f6", "numu-cc-steps.npz" = "4e4adc78db4c51a3", "pion-100GeV-steps.npz" = "3c9fa7540b378e19" }
+timing = { wall_s = 0.056, cpu_s = 0.053, peak_rss_mib = 27.438, note = "child process: includes imports and Numba compilation" }
+log = "ntsim-hybrid-muon-fast/prompt-screen-300GeV.log"
+error = "RuntimeError: script exited with 2: probe_prompt_screen.py: error: output already contains a response; preserve it and choose another output"

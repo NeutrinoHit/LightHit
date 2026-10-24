@@ -33,6 +33,7 @@ class Preview:
     unsafe_mask: np.ndarray
     sigma_pe: np.ndarray
     metadata: dict
+    angular_scattered_pe: np.ndarray | None = None
 
 
 def group_elements(source, *, primary_uid=0, cell_m=4., direction_step=.5,
@@ -153,6 +154,8 @@ def check_atlas_optics(atlas, kernel, rtol=1e-9):
     for key in ('wavelength_nm', 'mus', 'mut', 'phase_index', 's0w', 's2w'):
         if not np.allclose(np.asarray(stored[key], float), tables[key], rtol=rtol, atol=0):
             raise ValueError(f'preview atlas optics differ from the kernel ({key})')
+    if not np.isclose(float(atlas.metadata.get('g', np.nan)), kernel.medium.g, rtol=rtol, atol=0):
+        raise ValueError('preview atlas optics differ from the kernel (g)')
 
 
 def independent_preview(kernel, source, atlas, *, primary_uid=0):
@@ -176,6 +179,11 @@ def independent_preview(kernel, source, atlas, *, primary_uid=0):
     forced = (estimate['nearest_source_m'] < 3) | (
         (sigma.sum(1) > .25*scattered.sum(1))
         & (direct+scattered.sum(1)+4*sigma.sum(1) >= threshold/8))
+    angular = None
+    if atlas.angular_moments is not None and threshold > 0:
+        from .angular_preview import query_angular_groups
+        angular = query_angular_groups(atlas, groups, kernel.detector, kernel.acceptance()['alpha'])
     return Preview(coarse, coarse.sum(1), forced, sigma,
                    dict(independent=True, inactivity_certified=False,
-                        fine_event_data_loaded=False, groups=len(groups.points)))
+                        fine_event_data_loaded=False, groups=len(groups.points),
+                        angular_moments=atlas.angular_moments is not None), angular)

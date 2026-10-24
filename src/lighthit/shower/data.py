@@ -9,8 +9,9 @@ names them, optionally with a prepared band-folded pack::
      "ge2_band_fold": "ge2-band-fold"}
 
 Without that file the ``rte_cache`` and ``ge2_pack`` entries of the muon
-manifest ``muon-data.json`` are used (same tables). A missing folded pack is
-built in memory from the >=2 pack on first use (a few seconds).
+manifest ``muon-data.json`` are used (same tables). A missing folded pack, or
+one of another rank, subdivision or frequency set, is built in memory from the
+>=2 pack on first use.
 """
 from dataclasses import dataclass
 import json

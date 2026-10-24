@@ -21,6 +21,10 @@ class JointMuonConfig:
     (``ge2_*``). ``first_backend='atlas'``, ``ge2_backend='basis'`` and
     ``ge2_operator='scalar'`` select alternative implementations, not used
     by :class:`lighthit.muon.MuonTransport`.
+
+    ``ballistic_method='first-entry'`` integrates direct light to the supplied
+    glass boundary and defers bins until receiver selection. ``'interval'``
+    retains the leading finite-cone comparison with a centre-ray clock.
     """
     z_step_m: float = .5
     photon_mu_step: float = .03
@@ -46,9 +50,12 @@ class JointMuonConfig:
     ge2_skip_epsilon: float = 1e-3
     ge2_skip_safety: float = 3.
     ge2_skip_near_factor: float = 3.
+    ballistic_method: str = 'first-entry'
 
     def __post_init__(self):
         """Reject grids, budgets and combinations that the route does not support."""
+        if self.ballistic_method not in ('first-entry', 'interval'):
+            raise ValueError('ballistic_method must be first-entry or interval')
         numeric=[self.z_step_m,self.photon_mu_step,self.photon_phi_step_rad,
             self.tau_step_ns,self.transverse_step_m,self.ge2_z_step_m,
             self.ge2_tau_step_ns,self.ge2_transverse_step_m,self.prompt_radius_m]
@@ -361,6 +368,8 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
     from .adaptive_screen import adaptive_candidates
     from .._shower_basis import earliest_element_arrival
     from ..ballistic_interval import ballistic_interval
+    from ..ballistic_interval import _prepare_ballistic_interval
+    from ..receiver import SphereSurface
     from ..transport import HybridTransportResponse
     from functools import partial
     config=config or JointMuonConfig()
@@ -368,6 +377,10 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
     n=len(kernel.detector.positions_m);omega=kernel.config.omega_per_ns
     if not np.array_equal(np.asarray(primary_ge2_store.omega_per_ns),omega):
         raise ValueError('primary atlas and joint RTE frequency grids differ')
+    if (kernel.config.threshold_pe>0 and not getattr(screen_config,'audit_all_rejected',False)
+            and getattr(preview,'angular_scattered_pe',None) is None):
+        raise ValueError('muon preview atlas lacks arrival-direction moments; '
+                         'rebuild it with tools/tables/build_positive_fluence.py')
     sample=kernel.medium.sample(kernel.wavelength.wavelength_nm)
     if time_origin_ns is None:
         origins=earliest_element_arrival(np.ascontiguousarray(kernel.detector.positions_m),
@@ -381,15 +394,24 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
     if extra.shape!=(n,) or not np.isfinite(extra).all():
         raise ValueError('selection_extra_charge must hold one finite value per OM')
     began,cpu=perf_counter(),process_time();stage=perf_counter()
-    ballistic=ballistic_interval(kernel,elements,time_origin_ns=origins,
-        relative_edges_ns=kernel.config.relative_time_edges_ns)
+    prepared=None
+    if config.ballistic_method=='first-entry' and isinstance(kernel.detector.receiver_surface,SphereSurface):
+        prepared=_prepare_ballistic_interval(kernel,elements)
+        ballistic=prepared.charge()
+    else:
+        ballistic=ballistic_interval(kernel,elements,time_origin_ns=origins,
+            relative_edges_ns=kernel.config.relative_time_edges_ns)
     q0_seconds=perf_counter()-stage
+    ballistic_metadata=dict(getattr(ballistic,'metadata',{}))
+    if prepared is not None:
+        ballistic_metadata['bins']=[]
     # The exact direct charge participates in global selection.
     coarse=copy(preview);coarse.charge_components_pe=np.asarray(preview.charge_components_pe).copy()
     coarse.charge_components_pe[:,0]=ballistic.charge_pe
     coarse.charge_pe=coarse.charge_components_pe.sum(1)
     components=np.zeros((n,len(kernel.config.relative_time_edges_ns)-1,3))
-    components[:,:,0]=ballistic.bins_pe
+    if ballistic.bins_pe is not None:
+        components[:,:,0]=ballistic.bins_pe
     spectrum=np.zeros((len(omega),n),complex);batches=[]
     options={} if primary_options is None else dict(primary_options)
     first_operator=None
@@ -398,6 +420,14 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
         first_operator=partial(evaluate_photon_histogram_atlas,joint_first_atlas)
     def fine(ids):
         """Primary and secondary transport on one batch of selected OMs."""
+        nonlocal q0_seconds
+        if prepared is not None:
+            stage=perf_counter()
+            direct=prepared.bins(ids,origins[ids],kernel.config.relative_time_edges_ns)
+            components[ids,:,0]=direct.bins_pe
+            ballistic_metadata['bins'].append(dict(receivers=len(ids),
+                **getattr(direct,'metadata',{})))
+            q0_seconds+=perf_counter()-stage
         if progress:progress('fine batch started',dict(receivers=len(ids)))
         local=subset_kernel(kernel,ids);local.config=replace(kernel.config,threshold_pe=0.)
         primary=transport_universal_primary(local,elements,primary_first_store,primary_ge2_store,
@@ -418,13 +448,29 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
     charge,evaluated,audit=adaptive_candidates(coarse,kernel.detector,kernel.config.threshold_pe,
                                              fine,screen_config,
                                              extra_charge=None if selection_extra_charge is None else extra)
+    # Selection keeps its maximum-acceptance score. Unselected output charges
+    # use the same source groups with the actual arrival-direction response.
+    charge=np.asarray(charge,float).copy()
+    if np.any(~evaluated):
+        angular=getattr(preview,'angular_scattered_pe',None)
+        if angular is None:
+            raise ValueError('muon preview atlas lacks arrival-direction moments; '
+                             'rebuild it with tools/tables/build_positive_fluence.py')
+        angular=np.asarray(angular,float)
+        if angular.shape!=(n,2) or not np.isfinite(angular).all() or np.any(angular<0):
+            raise ValueError('invalid angular scattered-charge preview')
+        charge[~evaluated,1:]=angular[~evaluated]
     active=evaluated&(charge.sum(1)+extra>=kernel.config.threshold_pe)
     spectrum[0,~evaluated]=charge[~evaluated,2]
     metadata=dict(elapsed_seconds=perf_counter()-began,cpu_seconds=process_time()-cpu,
         ballistic_seconds=q0_seconds,config=asdict(config),batches=batches,smart_screen=audit,
+        ballistic=ballistic_metadata,
+        receiver_reference_by_order={'0': ('first-entry' if prepared is not None else 'centre-ray'),
+                                     '1': 'centre', '>=2': 'centre'},
         fine_charge_mask=evaluated.tolist(),active_modules=int(active.sum()),
         inactive_order1_charge_may_be_coarse=bool((~evaluated).any()),
         inactive_ge2_charge_may_be_coarse=bool((~evaluated).any()),
+        inactive_scattered_estimate='spectral cone fluence with arrival-direction moments',
         prompt_order1_level=np.where(evaluated,2,1).tolist(),
         computed_orders=[0,1,'>=2'],first_backend=config.first_backend,ge2_backend=config.ge2_backend,
         source_representation=('original grouped secondary Q1; joint harmonic bins for >=2'

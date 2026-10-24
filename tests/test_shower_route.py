@@ -44,6 +44,48 @@ def test_band_fold_interpolation_keeps_node_bands_exact(kernel4):
     assert full.residual.max() < 1e-8
 
 
+def test_band_fold_grows_bands_greedily_beyond_the_exhaustive_limit(kernel4, monkeypatch):
+    import lighthit.band_fold as band_fold
+    best = BandFold.of(kernel4, rank=1)
+    monkeypatch.setattr(band_fold, "EXHAUSTIVE_SUBSETS", 1)
+    assert BandFold.of(kernel4, rank=1).bands == best.bands   # the first step is exhaustive
+    greedy = BandFold.of(kernel4, rank=3)
+    assert list(greedy.bands) == sorted(set(greedy.bands)) and len(greedy.bands) == 3
+    assert set(best.bands) <= set(greedy.bands)
+    assert BandFold.of(kernel4, rank=4).bands == (0, 1, 2, 3)
+
+
+def test_prepared_fold_is_reused_only_for_its_own_settings(kernel4, tmp_path):
+    import json
+    from lighthit.shower import ShowerTransport
+    from lighthit.shower.data import ShowerData
+    every = np.arange(len(kernel4.config.omega_per_ns))
+    store = kernel4.ge2_kernel_store()
+    bundle = store.bundle(kernel4, every)
+    store.save(tmp_path / "pack")
+    optimal = BandFold.of(kernel4, rank=2).bands
+    bands = (0, 3) if optimal != (0, 3) else (1, 2)
+    save_folded(fold_bundle(bundle, BandFold.of(kernel4, rank=2, bands=bands)), tmp_path / "fold")
+    data = ShowerData.of(kernel4.config.cache_directory, tmp_path / "pack", tmp_path / "fold")
+
+    def tables(rank, frequencies=len(every)):
+        route = object.__new__(ShowerTransport)
+        route.data, route.kernel, route.threads, route._tables, route._compiled = (
+            data, kernel4, None, None, {})
+        route.config = ShowerConfig(frequency_nodes=frequencies, band_rank=rank)
+        return route.tables()
+
+    assert tables(2)["fold"].bands == bands                         # prepared: its bands
+    assert tables(3)["fold"].bands == BandFold.of(kernel4, rank=3).bands   # other rank: in memory
+    fewer = tables(2, frequencies=5)                                 # other frequencies: in memory
+    assert fewer["fold"].bands == optimal and len(fewer["folded"]["omega"]) == 5
+    meta = json.loads((tmp_path / "fold" / "folded.json").read_text())
+    meta["band_fold"]["worst_residual_design"] *= 1.5
+    (tmp_path / "fold" / "folded.json").write_text(json.dumps(meta))
+    with pytest.raises(ValueError, match="another medium or detector"):
+        tables(2)
+
+
 def _per_band(kernel, elements, sources_by_band, positions, looks, area):
     from lighthit._shower_basis import apply_multi
     bundle = kernel.ge2_kernel_store().bundle(kernel, np.arange(len(kernel.config.omega_per_ns)))
@@ -209,3 +251,34 @@ def test_build_prepares_a_saveable_ge2_pack(tmp_path):
     np.testing.assert_allclose(again.bins_pe, first.bins_pe, rtol=1e-12, atol=1e-15)
     flash = lh.IsotropicFlash.monochromatic([12., 3., 0.], 1e6, 450.)
     assert len(kernel().build(source=flash).ge2_kernel_store()) == 0   # one line: no pack
+
+
+def test_shower_transport_object_and_detail_threshold(tmp_path):
+    """ShowerTransport on prepared tables; detail_threshold_pe keeps active at threshold_pe."""
+    from lighthit.shower import ShowerData, ShowerTransport
+    from lighthit.shower.api import FREQUENCIES_PER_NS, READOUT_PER_NS
+
+    def kernel(**changes):
+        return lh.TransportKernel(
+            spectral_medium(), detector(count=5),
+            config(tmp_path / "cache", wavelength_nodes=4, omega_per_ns=FREQUENCIES_PER_NS,
+                   readout_omega_per_ns=READOUT_PER_NS, scattering_degree=4, source_degree=4,
+                   azimuthal_degree=2, radial_nodes=16, **changes))
+
+    source = shower()
+    built = kernel(threshold_pe=0.0).build(source=source)
+    built.ge2_kernel_store().save(tmp_path / "pack")
+    data = ShowerData.of(tmp_path / "cache", tmp_path / "pack")
+    settings = ShowerConfig(band_rank=2)
+    direct = transport_shower(built, source, config=settings)
+    route = ShowerTransport(kernel(threshold_pe=0.0), data, config=settings)
+    np.testing.assert_allclose(route(source).bins_pe, direct.bins_pe, rtol=1e-12, atol=1e-15)
+    charge = np.asarray(direct.charge_pe)
+    threshold = float(np.quantile(charge[charge > 0], 0.6))
+    plain = ShowerTransport(kernel(threshold_pe=threshold), data, config=settings)(source)
+    lowered = ShowerTransport(kernel(threshold_pe=threshold, detail_threshold_pe=0.0),
+                              data, config=settings)(source)
+    np.testing.assert_array_equal(lowered.active, np.asarray(lowered.charge_pe) >= threshold)
+    assert lowered.metadata["detail_threshold_pe"] == 0.0
+    levels = lambda r: np.asarray(r.metadata["ge2_charge_level"])
+    assert np.count_nonzero(levels(lowered) == 2) >= np.count_nonzero(levels(plain) == 2)

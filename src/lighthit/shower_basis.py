@@ -43,7 +43,9 @@ class ShowerBasis:
     of the kernel configuration (``source_degree``, ``azimuthal_degree``).
     ``radial_high_m`` optionally narrows the per-OM source window inside the
     cache; the omitted zero-frequency light is screened against
-    ``radial_tail_tolerance_pe``.  ``track_uid`` explicitly selects a nearly
+    ``radial_tail_tolerance_pe``: with ``radial_tail_policy="warn"`` (default)
+    OMs above it get a ``RuntimeWarning`` and are listed in the metadata
+    (``radial_tail``), with ``"raise"`` the route stops.  ``track_uid`` explicitly selects a nearly
     straight primary track for an approximate axial ``m=0`` component;
     remaining charged elements retain the full shower angular basis.  The
     component cell sizes default to 0.5 m and can be refined separately.
@@ -64,6 +66,7 @@ class ShowerBasis:
     time_step_ns: float = 0.02
     radial_high_m: float | None = None
     radial_tail_tolerance_pe: float = 1e-4
+    radial_tail_policy: str = "warn"
     track_uid: int | None = None
     track_cell_m: float = 0.5
     track_transverse: str = "stencil"
@@ -88,6 +91,8 @@ class ShowerBasis:
         if (not np.isfinite(self.radial_tail_tolerance_pe)
                 or self.radial_tail_tolerance_pe < 0):
             raise ValueError("radial_tail_tolerance_pe must be finite and nonnegative")
+        if self.radial_tail_policy not in ("warn", "raise"):
+            raise ValueError("radial_tail_policy must be 'warn' or 'raise'")
         if (self.track_uid is not None
                 and (not isinstance(self.track_uid, (int, np.integer))
                      or isinstance(self.track_uid, (bool, np.bool_)))):
@@ -102,6 +107,32 @@ class ShowerBasis:
             raise ValueError("spectral_fusion must be a boolean")
         if not np.isfinite(self.apply_tolerance_pe) or self.apply_tolerance_pe < 0:
             raise ValueError("apply_tolerance_pe must be finite and nonnegative")
+
+
+def screen_radial_tail(tail_pe, basis, high_m):
+    """Screen the estimated light beyond the cache's radial reach ``high_m``.
+
+    Returns the metadata entry: the OMs above ``basis.radial_tail_tolerance_pe``
+    with their estimates. That light is not computed; ``radial_tail_policy``
+    decides whether it warns (default) or raises.
+    """
+    import warnings
+    tail_pe = np.asarray(tail_pe, float)
+    over = np.flatnonzero(tail_pe > basis.radial_tail_tolerance_pe)
+    entry = {"policy": basis.radial_tail_policy, "radial_high_m": float(high_m),
+             "tolerance_pe": float(basis.radial_tail_tolerance_pe),
+             "max_estimate_pe": float(tail_pe.max(initial=0.0)),
+             "oms_above_tolerance": over.tolist(),
+             "estimate_pe": tail_pe[over].tolist()}
+    if len(over):
+        message = (f"{len(over)} OMs have estimated light beyond {high_m:g} m above "
+                   f"{basis.radial_tail_tolerance_pe:g} pe; largest estimate "
+                   f"{entry['max_estimate_pe']:g} pe")
+        if basis.radial_tail_policy == "raise":
+            raise ValueError(message)
+        warnings.warn(message + " (not computed; listed in metadata['radial_tail'])",
+                      RuntimeWarning, stacklevel=3)
+    return entry
 
 
 class Ge2KernelStore:
@@ -522,12 +553,7 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
         raise ValueError(
             f"{int(np.count_nonzero(near))} OMs have source points closer than "
             f"the validated radial minimum {low:g} m")
-    if np.any(tail > basis.radial_tail_tolerance_pe):
-        raise ValueError(
-            f"{int(np.count_nonzero(tail > basis.radial_tail_tolerance_pe))} OMs "
-            f"have estimated light beyond {high:g} m above "
-            f"{basis.radial_tail_tolerance_pe:g} pe; largest estimate "
-            f"{float(np.max(tail)):g} pe")
+    radial_tail = screen_radial_tail(tail, basis, high)
     first = int(np.argmin(elements.start_ns))
     fastest = float(np.min(sample["group_index"]))
     time_width = float(np.ptp(kernel.config.relative_time_edges_ns))
@@ -639,6 +665,7 @@ def transport_hybrid_basis(kernel, source, basis, *, frequency_nodes=65,
         "radial_source_points_used_max": int(used.max()),
         "radial_tail_estimate_max_pe": float(tail.max()),
         "radial_tail_tolerance_pe": basis.radial_tail_tolerance_pe,
+        "radial_tail": radial_tail,
         "time_origin": ("earliest local segment and fastest group flight"
                         if local_origin else "earliest element start and fastest group flight"),
         "source_extent_m": source_extent,
@@ -978,12 +1005,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
         raise ValueError(
             f"{int(np.count_nonzero(near))} OMs have source points closer than "
             f"the validated radial minimum {low:g} m")
-    if np.any(tail > basis.radial_tail_tolerance_pe):
-        raise ValueError(
-            f"{int(np.count_nonzero(tail > basis.radial_tail_tolerance_pe))} OMs "
-            f"have estimated light beyond {high:g} m above "
-            f"{basis.radial_tail_tolerance_pe:g} pe; largest estimate "
-            f"{float(np.max(tail)):g} pe")
+    radial_tail = screen_radial_tail(tail, basis, high)
 
     fastest = float(np.min(sample["group_index"]))
     time_width = float(np.ptp(kernel.config.relative_time_edges_ns))
@@ -1172,6 +1194,7 @@ def _transport_hybrid_spectral_basis(kernel, source, basis, *, frequency_nodes,
         "radial_source_points_skipped": int(far.sum()),
         "radial_tail_estimate_max_pe": float(tail.max()),
         "radial_tail_tolerance_pe": basis.radial_tail_tolerance_pe,
+        "radial_tail": radial_tail,
         "time_origin": ("earliest local segment and fastest group flight"
                         if local_origin else "earliest element start and fastest group flight"),
         "source_extent_m": source_extent, "source_time_span_ns": source_time_span,

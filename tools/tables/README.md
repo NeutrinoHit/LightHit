@@ -21,6 +21,13 @@ package installed (`pip install -e $LIGHTHIT_DATA/bgvd-model`).
 | 7 | `build_ge2_beta_charge.py --base GE2_ATLAS --pack PACK --cache RTE --output OUT` | `OUT/beta-charge.npz`, copied to `tables/muon/ge2-beta-charge.npz` (OUT is a directory with rows and `report.json`) | steps 1, 4 |
 | 8 | `build_positive_fluence.py --output FILE ...` | `tables/muon/preview-atlas.npz` | the BGVD model (bundle `model/bgvd-model.npz`) |
 | 9 | `lighthit.muon.write_manifest(...)` | `tables/muon-data.json` | all of the above |
+| 10 | `ShowerTransport(kernel).tables()["folded"]` saved by `lighthit.band_fold.save_folded(folded, OUT)`; the manifest gains `"ge2_band_fold": "ge2-band-fold"` | `tables/ge2-band-fold` (the shower route's default fold: rank 3, no subdivision, 65 frequencies) | steps 1, 2, 9 |
+
+The model file `model/bgvd-model.npz` is NTSim's `bgvd_model_from_ntsim`
+(clusters 1-5) with the OM response tables attached (`BGVDModel.save`). Every
+table depends on the water: after a change of `bgvd_model` the whole bundle is
+rebuilt (the bundle of 2026-10-19 follows the water grid 350-600 nm in 10 nm
+steps; the earlier bundles used 350-610 nm in 10.4 nm steps).
 
 The laser table (`tables/laser-cache`) is built by
 `lighthit.event.laser_kernel(..., cache_policy="build")` followed by
@@ -38,10 +45,11 @@ What each bundle file records about its own build (read from its metadata):
 * **q1-atlas**: `manifest.json` holds the whole contract: 96 cells, 0.1 ns
   near-front step, 900 ns at the smallest radius, reference radius 30 m and the
   19 radii 3 5 8 12 15 18 21.5 25 30 35 42.5 50 60 70 85 100 150 220 300 m.
-  Thirteen rows record `reused_from` an earlier 13-radius store; 15, 21.5, 30,
-  42.5, 60 and 85 m were built later (`--reuse-rows-from`). The held-out radii
-  of `--validate-midpoints` are in `midpoint-checks.json`. Recorded build CPU
-  per row: 10-48 s.
+  The bundle of 2026-10-19 built all 19 rows in one store with `--check-rows`
+  except 300 m: its third check interval reaches no time bin of the 806 ns
+  window, so the relative bin error is 0/0 and the row was finished without
+  the check. The held-out radii of `--validate-midpoints 13.5 19.75 27.5 32.5
+  38.75 55 77.5 92.5` are in `midpoint-checks.json`. Build CPU per row: 10-35 s.
 * **ge2-atlas**: `manifest.json` and `report.json` hold the optics (cache keys,
   source degree 32, acceptance degree 3, radius window 3-300 m), order 10 per
   row and the validation settings (tolerance 0.01, bright charge 1e-5 pe,
@@ -50,13 +58,18 @@ What each bundle file records about its own build (read from its metadata):
   are not recorded; the 32-node bundle was built with the script defaults (3,
   65 and the 13 nodes 3.01 ... 299 m) and `NUMBA_NUM_THREADS=1`.
 * **first-beta-charge.npz**: anchor beta 0.999, `base_manifest_sha256` of the
-  q1-atlas, `cubature_sha256` 49cefe0b... of `basis-rank16.npz`, 17 spectral
+  q1-atlas, `cubature_sha256` 441c53f7... of `basis-rank16.npz` (49cefe0b... before the water grid fix), 17 spectral
   nodes. A rebuilt cubature can be checked against that hash before step 6.
 * **ge2-beta-charge.npz**: `beta_min` 0.99, Taylor order 2,
   `base_manifest_sha256` of the ge2-atlas.
 * **preview-atlas.npz**: 6,000,000 samples per order, seed 81, HG g 0.9; the
   bins follow from its edges: `--count 6000000 --seed 81 --rho-bins 96
-  --z-bins 384 --extent-m 500` (the script defaults differ).
+  --z-bins 384 --extent-m 500` (the script defaults differ). It also stores
+  ten arrival-direction moments for the cubic OM acceptance; the scalar
+  density and sampling spread retain the same paths and random stream.
+  To extend an existing scalar atlas without changing its optical tables or
+  axes, use `--template OLD.npz --count 6000000 --seed 81 --output NEW.npz`.
+  The old file is never overwritten. Primary track atlases need no rebuild.
 
 ## Checks
 

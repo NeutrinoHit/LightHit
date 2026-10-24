@@ -2,6 +2,7 @@
 from ._version import VERSION as __version__
 from .medium import Medium, synthetic_medium
 from .model import DetectorArray, SpectralMedium, WavelengthQuadrature
+from .receiver import SphereSurface
 from .geometry import (GeometryRegion, DetectorGeometrySummary,
                        describe_geometry, point_source_radial_range)
 from .green import PointGreenSolver, SolverSettings, GreenResult
@@ -19,7 +20,7 @@ from .api import build
 from .viewer import viewer_payload, merge_event_viewers, write_event_viewer
 
 __all__ = [
-    "Medium", "synthetic_medium", "DetectorArray", "SpectralMedium",
+    "Medium", "synthetic_medium", "DetectorArray", "SpectralMedium", "SphereSurface",
     "GeometryRegion", "DetectorGeometrySummary", "describe_geometry",
     "point_source_radial_range",
     "WavelengthQuadrature", "PointGreenSolver", "SolverSettings", "GreenResult",

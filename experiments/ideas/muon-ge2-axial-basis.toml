@@ -45,11 +45,11 @@ inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742
 timing = { wall_s = 1868.31, cpu_s = 1868.16, peak_rss_mib = 2221.92 }
 summary = { active = 31, charge_pe_by_order = [2.19294, 1.49484, 0.77402] }
 reference = "reference-muon/muon-1TeV"
-order_0 = { charge_bias = 0.0, bin_l1 = 0.0, worst_om = 0.0 }
-order_1 = { charge_bias = 0.023161, bin_l1 = 0.024953, worst_om = 0.069156 }
-order_total = { charge_bias = 0.009035, bin_l1 = 0.009662, worst_om = 0.054258 }
+order_0 = { charge_bias = -0.02408, worst_om = 0.079236 }
+order_1 = { charge_bias = -0.038249, worst_om = 0.10938 }
+order_total = { charge_bias = -0.029736, worst_om = 0.101164 }
 active_agreement = "none"
-wall_vs_baseline = 41.6681
+wall_vs_baseline = 16.0492
 
 [result.muon-300GeV-basis]
 status = "ok"
@@ -61,9 +61,9 @@ inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742
 timing = { wall_s = 1076.38, cpu_s = 1076.26, peak_rss_mib = 2273.28 }
 summary = { active = 22, charge_pe_by_order = [1.22162, 0.76739, 0.38418] }
 reference = "reference-muon/muon-300GeV"
-order_0 = { charge_bias = 0.0, bin_l1 = 0.0, worst_om = 0.0 }
-order_1 = { charge_bias = 0.032352, bin_l1 = 0.029701, worst_om = 0.066465 }
-order_ge2 = { charge_bias = 0.007079, bin_l1 = 0.004041, worst_om = 0.002042 }
-order_total = { charge_bias = 0.011095, bin_l1 = 0.009446, worst_om = 0.041652 }
+order_0 = { charge_bias = -0.020724, worst_om = 0.073903 }
+order_1 = { charge_bias = -0.023922, worst_om = 0.038599 }
+order_ge2 = { charge_bias = -0.044965, worst_om = 0.069776 }
+order_total = { charge_bias = -0.025031, worst_om = 0.076551 }
 active_agreement = { both = 22, only_response = 0, only_reference = 0, missed_reference_charge_pe = 0.0 }
-wall_vs_baseline = 18.7518
+wall_vs_baseline = 7.1975

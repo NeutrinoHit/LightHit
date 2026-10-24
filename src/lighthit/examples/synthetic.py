@@ -45,6 +45,7 @@ def baikal_like_detector(*, clusters=1, strings=8, modules=6,
     return lh.DetectorArray(
         positions, orientations, np.pi * .20 ** 2,
         angular_acceptance, spectral_efficiency,
+        receiver_surface=lh.SphereSurface(.20),
         identifiers={
             "cluster_id": np.repeat(np.arange(clusters), strings * modules),
             "string_id": np.tile(np.repeat(np.arange(strings), modules), clusters),

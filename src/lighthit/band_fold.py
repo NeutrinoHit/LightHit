@@ -37,6 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import combinations
 import json
+from math import comb
 from pathlib import Path
 
 import numpy as np
@@ -44,6 +45,8 @@ import numpy as np
 __all__ = ["BandFold", "fold_bundle", "save_folded", "load_folded"]
 
 FORMAT = "lighthit/ge2-band-fold/1"
+#: Largest number of band subsets searched exhaustively (3 of 32 nodes: 4960).
+EXHAUSTIVE_SUBSETS = 10_000
 
 
 def _legendre_table(degree, x):
@@ -82,7 +85,8 @@ class BandFold:
         The beta grid is dense in ``1/beta - 1`` from 0 to the threshold of
         the largest phase index. Bands are chosen to minimise the worst
         relative residual over all degrees for ``beta > beta_design_min``
-        (exhaustive over band subsets), unless given explicitly.
+        (exhaustive over band subsets up to ``EXHAUSTIVE_SUBSETS`` of them,
+        otherwise adding the best band one at a time), unless given explicitly.
         """
         degree = int(kernel.config.source_degree if degree is None else degree)
         wavelength = np.asarray(kernel.wavelength.wavelength_nm, float)
@@ -108,13 +112,18 @@ class BandFold:
             remainder = columns - mixing @ nodes
             return mixing, np.linalg.norm(remainder, axis=1) / norm[None, :]
 
-        if bands is None:
-            best = None
-            for subset in combinations(range(nband), rank):
-                worst = float(residuals(subset)[1][:, design].max())
-                if best is None or worst < best[0]:
-                    best = (worst, subset)
-            bands = best[1]
+        def worst(subset):
+            return float(residuals(subset)[1][:, design].max())
+
+        if bands is None and comb(nband, rank) <= EXHAUSTIVE_SUBSETS:
+            bands = min(combinations(range(nband), rank), key=worst)
+        elif bands is None:
+            # Exhaustive search is out of reach (rank 9 of 32 nodes: 2.8e7
+            # subsets); grow the subset greedily instead.
+            bands = ()
+            for _ in range(rank):
+                bands = min((tuple(sorted(bands + (band,))) for band in range(nband)
+                             if band not in bands), key=worst)
         bands = tuple(int(b) for b in bands)
         mixing, residual = residuals(bands)
         return cls(bands, np.ascontiguousarray(mixing), scale, phase, beta,

@@ -36,10 +36,7 @@ def transport_smart_muon(kernel, source, ancestry, *, first_pack_directory,
     detector = kernel.detector
     def fine(indices):
         local = copy(kernel)
-        local.detector = replace(detector,
-            positions_m=detector.positions_m[indices], orientations=detector.orientations[indices],
-            effective_area_m2=detector.effective_area_m2[indices],
-            identifiers={k:np.asarray(v)[indices] for k,v in detector.identifiers.items()})
+        local.detector = detector.subset(indices)
         response = transport_muon_components(local, source, ancestry,
             primary_uid=primary_uid,
             frequency_nodes=frequency_nodes, partition_ge2=True, track_stencil_center='centroid',

@@ -23,8 +23,7 @@ def subset_kernel(kernel, ids):
     ids = np.asarray(ids, int)
     local = copy(kernel)
     d = kernel.detector
-    local.detector = replace(d, positions_m=d.positions_m[ids], orientations=d.orientations[ids],
-        effective_area_m2=d.effective_area_m2[ids], identifiers={k:np.asarray(v)[ids] for k,v in d.identifiers.items()})
+    local.detector = d.subset(ids)
     return local
 
 
@@ -55,10 +54,20 @@ def _direct_ge2_order(span_m):
 
 
 class DirectGe2:
-    """Lazy existing-RTE fallback. Does not participate in atlas construction."""
-    def __init__(self, kernel, directory, *, backend='fused-looks', quadrature='fixed12'):
+    """Lazy existing-RTE fallback. Does not participate in atlas construction.
+
+    With ``folded`` (a prepared band fold of the pack, ``band_fold.save_folded``)
+    the Filon batch applies the folded kernels in the fold's node bands to the
+    pieces whose band-interpolation residual at their beta is at most
+    ``fold_tolerance`` (relative, worst over degrees: ``BandFold.residual``);
+    the other pieces use every wavelength node.
+    """
+    def __init__(self, kernel, directory, *, backend='fused-looks', quadrature='fixed12',
+                 folded=None, fold_tolerance=1e-3):
         """Direct >=2 evaluator on the RTE pack in ``directory``; the pack is loaded lazily."""
         self.kernel = kernel; self.directory = directory; self.bundle = None
+        self.folded_directory = folded; self.folded = None; self.fold = None
+        self.fold_tolerance = float(fold_tolerance)
         if backend not in ('generic','fused-looks'):raise ValueError('unknown direct RTE backend')
         self.backend=backend
         if quadrature not in ('fixed12','fixed24','adaptive','filon'):raise ValueError('unknown direct quadrature')
@@ -82,11 +91,66 @@ class DirectGe2:
             self.timings['load_wall_seconds']+=perf_counter()-wall
             self.timings['load_cpu_seconds']+=process_time()-cpu
 
+    def _load_fold(self):
+        """Load the prepared fold once. A fold made for other frequencies, degree,
+        wavelength nodes or optics is not used (every node is then applied) and
+        the reason is recorded in ``timings['fold_unused']``."""
+        from ..band_fold import BandFold, load_folded
+        if self.folded is not None or self.folded_directory is None or 'fold_unused' in self.timings:
+            return
+        prepared = load_folded(self.folded_directory)
+        bands = [int(b) for b in prepared['band_fold']['bands']]
+        reason = None
+        if (prepared['omega'].shape != self.bundle['omega'].shape
+                or not np.allclose(prepared['omega'], self.bundle['omega'], rtol=0, atol=1e-12)
+                or int(prepared['degree']) != int(self.bundle['degree'])
+                or int(prepared.get('subdivide', 1)) != 1):
+            reason = 'folded for other frequencies, degree or subdivision'
+        elif max(bands) >= len(self.kernel.wavelength.wavelength_nm):
+            reason = 'folded for other wavelength nodes'
+        else:
+            fold = BandFold.of(self.kernel, rank=len(bands), bands=bands)
+            if not np.isclose(fold.metadata()['worst_residual_design'],
+                              prepared['band_fold']['worst_residual_design'], rtol=1e-9, atol=0):
+                reason = 'folded for another medium or detector'
+        if reason is not None:
+            self.timings['fold_unused'] = f'{self.folded_directory}: {reason}'
+            return
+        self.folded, self.fold = prepared, fold
+
+    def foldable(self, beta):
+        """True when the fold represents a beta cone within ``fold_tolerance``."""
+        if self.fold is None:
+            return False
+        order = np.argsort(self.fold.residual_beta)
+        residual = np.interp(float(beta), self.fold.residual_beta[order], self.fold.residual[order])
+        return bool(residual <= self.fold_tolerance)
+
     def many(self,queries):
         """Apply full-frequency fallback in bounded spectral-plane batches."""
         from .filon_ge2 import backward_ge2_filon_many
-        self._load_bundle();wall,cpu=perf_counter(),process_time()
-        values,meta=backward_ge2_filon_many(self.kernel,self.bundle,queries,order=6,allow_gauss=True)
+        self._load_bundle();self._load_fold();wall,cpu=perf_counter(),process_time()
+        folded=[i for i,q in enumerate(queries) if self.foldable(q[2])]
+        if folded:
+            wave=self.kernel.wavelength;bands=list(self.fold.bands)
+            sample=self.kernel.medium.sample(wave.wavelength_nm)
+            spectral=dict(wavelength_nm=np.asarray(wave.wavelength_nm)[bands],
+                weight_nm=np.asarray(wave.weight_nm)[bands],
+                phase_index=np.asarray(sample['phase_index'])[bands],
+                efficiency=np.broadcast_to(np.asarray(self.kernel.detector.spectral_weight(
+                    wave.wavelength_nm)),wave.wavelength_nm.shape)[bands])
+            values=np.zeros((len(queries),len(self.bundle['omega'])),complex)
+            part,meta_folded=backward_ge2_filon_many(self.kernel,self.folded,[queries[i] for i in folded],
+                order=6,allow_gauss=True,spectral=spectral)
+            values[folded]=part
+            rest=[i for i in range(len(queries)) if i not in set(folded)]
+            meta=dict(folded_queries=len(folded),folded=meta_folded)
+            if rest:
+                part,meta_full=backward_ge2_filon_many(self.kernel,self.bundle,[queries[i] for i in rest],
+                    order=6,allow_gauss=True)
+                values[rest]=part;meta['full']=meta_full
+        else:
+            values,meta=backward_ge2_filon_many(self.kernel,self.bundle,queries,order=6,allow_gauss=True)
         self.timings['full_batch_wall_seconds']=self.timings.get('full_batch_wall_seconds',0.)+perf_counter()-wall
         self.timings['full_batch_cpu_seconds']=self.timings.get('full_batch_cpu_seconds',0.)+process_time()-cpu
         self.timings['full_calls']+=len(queries);self.timings['full_batch_work']=meta
@@ -104,7 +168,8 @@ class DirectGe2:
                 omega=bundle['omega'][:1], coefficients=bundle['coefficients'][...,:1])
         wave = self.kernel.wavelength
         sample = self.kernel.medium.sample(wave.wavelength_nm)
-        if not np.allclose(sample['absorption_per_m'], bundle['absorption'], rtol=1e-12, atol=0):
+        from .._portable import RTOL
+        if not np.allclose(sample['absorption_per_m'], bundle['absorption'], rtol=RTOL, atol=0):
             raise ValueError('fallback RTE optics differ')
         evaluator = cone_point_evaluator(bundle, impact_m=rho, look=look, beta=beta,
             alpha=self.kernel.acceptance()['alpha'], wavelength_nm=wave.wavelength_nm,
@@ -140,7 +205,7 @@ class UniversalPrimaryResult:
 
 
 def transport_universal_primary(kernel, source, first_store, ge2_store, *, primary_uid=0,
-        tail_budget_pe=1e-6, fallback_pack=None,
+        tail_budget_pe=1e-6, fallback_pack=None, fallback_fold=None,
         selection_margin=1.05, time_origin_ns=None, progress=None,
         batch_beta_charge=True, beta_cell_m=.25, first_cubature=None, ge2_beta_atlas=None, first_beta_atlas=None,
         direct_ge2_quadrature='fixed12',q1_charge_gauss_order=0,q1_charge_panel_width=1.5,
@@ -154,7 +219,7 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     from .._shower_basis import earliest_element_arrival
     from ..readout import inverse_bins
     from scipy.interpolate import CubicSpline
-    from .track_ge2_primitive import track_ge2_optics_metadata
+    from .track_ge2_primitive import track_ge2_optics_match
     if not np.isfinite(tail_budget_pe) or tail_budget_pe < 0 or selection_margin < 1:
         raise ValueError('invalid omission budget or selection margin')
     begin,cpu = perf_counter(),process_time(); timings = {}
@@ -164,7 +229,7 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     first_beta_requested=first_beta_atlas is not None
     first_beta_payload_bytes=0 if first_beta_atlas is None else first_beta_atlas.resident_bytes
     if first_beta_atlas is not None:first_beta_atlas.validate_kernel(kernel)
-    if track_ge2_optics_metadata(kernel)['optics_fingerprint'] != ge2_store.metadata['optics_fingerprint']:
+    if not track_ge2_optics_match(kernel, ge2_store.metadata):
         raise ValueError('>=2 optical contract differs')
     beta_charge_requested=ge2_beta_atlas is not None
     beta_charge_payload_bytes=0 if ge2_beta_atlas is None else ge2_beta_atlas.resident_bytes
@@ -206,7 +271,7 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     if first_cubature is not None:
         first_cubature.validate_optics(kernel)
         reduced=copy(local);reduced.wavelength=first_cubature.quadrature
-    direct_ge2=DirectGe2(kernel,fallback_pack,quadrature=direct_ge2_quadrature)
+    direct_ge2=DirectGe2(kernel,fallback_pack,quadrature=direct_ge2_quadrature,folded=fallback_fold)
     prompt=PromptConfig(element_method='segment',screen=False)
     charge_options=(dict(gauss_order=q1_charge_gauss_order,panel_width=q1_charge_panel_width)
         if q1_charge_gauss_order else {})

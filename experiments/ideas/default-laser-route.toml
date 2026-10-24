@@ -28,20 +28,22 @@ tests = ["tests/test_event.py", "tests/test_geometry_and_pose.py"]
 
 [result.laser-532nm]
 status = "ok"
-date = "2026-10-17T20:47:39Z"
-commit = "48a44bb91cf2"
+date = "2026-10-20T13:13:25Z"
+commit = "2c858cbc6047"
 threads = "1"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.76074, 4.05322, 3.87109], numba_threads = 1 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "laser-cache/files" = "transport-43e8a1" }
-timing = { wall_s = 0.1, cpu_s = 0.1, peak_rss_mib = 552.656 }
-summary = { active = 1002, charge_pe_by_order = [6367120.0, 7008040.0, 6557280.0] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [5.4248, 5.31348, 5.18506], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "8c2901a228facb76", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "laser-cache/files" = "transport-ee9a99" }
+timing = { wall_s = 0.11, cpu_s = 0.109, peak_rss_mib = 572.016 }
+summary = { active = 935, charge_pe_by_order = [4849220.0, 5265680.0, 4792120.0] }
 
 [result."laser-532nm@threads-default"]
 status = "ok"
-date = "2026-10-17T21:11:05Z"
-commit = "48a44bb91cf2"
+date = "2026-10-20T21:46:24Z"
+commit = "2c858cbc6047"
 threads = "default"
-machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [6.17432, 5.79639, 5.16943], numba_threads = 14 }
-inputs_sha256 = { "bgvd-model.npz" = "7bf150b5bc22fa0f", "muon-data.json" = "742d60e4b951ba8e", "rte-cache/files" = "directional-041d", "pack.json" = "918dbd6a225fc0e6", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "771ec74565d0ad33", "report.json" = "16ff2aa73c293b60", "midpoint-checks.json" = "1d9b97db2f897ffb", "summary.json" = "e810f4cb297b563c", "muon/files" = "first-beta-charg", "laser-cache/files" = "transport-43e8a1" }
-timing = { wall_s = 0.102, cpu_s = 0.102, peak_rss_mib = 566.391 }
-summary = { active = 1002, charge_pe_by_order = [6367120.0, 7008040.0, 6557280.0] }
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.09668, 4.71484, 5.23975], numba_threads = 14 }
+inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "8c2901a228facb76", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "laser-cache/files" = "transport-ee9a99" }
+timing = { wall_s = 0.106, cpu_s = 0.106, peak_rss_mib = 548.562 }
+summary = { active = 935, charge_pe_by_order = [4849220.0, 5265680.0, 4792120.0] }

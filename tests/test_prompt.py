@@ -308,7 +308,7 @@ def test_spectral_prompt_global_screen_preserves_active_oms(tmp_path):
 
 def test_frozen_screen_widening_includes_other_scattering_orders(tmp_path, monkeypatch):
     """A >=2 contribution must participate in both screening decisions."""
-    from lighthit import prompt
+    from lighthit import prompt, _prompt_screen
 
     kernel = lh.TransportKernel(spectral_medium(), detector(count=2),
                                 config(tmp_path, threshold_pe=1.0))
@@ -320,6 +320,8 @@ def test_frozen_screen_widening_includes_other_scattering_orders(tmp_path, monke
     pencils["pos_cov"] = np.zeros((1, 6))
     pencils["ring_nodes_deposited"] = np.array(1)
     monkeypatch.setattr(prompt, "compress", lambda *args: pencils)
+    screen_pencils = dict(pencils, hierarchy_parent=np.array([-1]), next_node=np.array([1]))
+    monkeypatch.setattr(_prompt_screen, "compress_screen", lambda *args: screen_pencils)
     monkeypatch.setattr(prompt, "_min_distance_to_segments",
                         lambda positions, segments: np.ones(len(positions)))
 
@@ -330,7 +332,7 @@ def test_frozen_screen_widening_includes_other_scattering_orders(tmp_path, monke
     monkeypatch.setattr(prompt, "_ballistic_backend", lambda: ballistic)
     calls = []
 
-    def grouped(*args):
+    def grouped(*args, **kwargs):
         targets = args[4]
         compute_bins = args[-3]
         calls.append((targets.tolist(), compute_bins))
@@ -342,6 +344,7 @@ def test_frozen_screen_widening_includes_other_scattering_orders(tmp_path, monke
         return q, bins, np.ones(2, dtype=int), np.ones(2, dtype=int)
 
     monkeypatch.setattr(kernels, "grouped_pencils_order1", grouped)
+    monkeypatch.setattr(_prompt_screen, "screen_order1", grouped)
     response = kernel.transport_prompt(
         source, PromptConfig(element_method="grouped"),
         selection_extra_charge=np.array([1.0, 0.8]))
@@ -726,6 +729,8 @@ def test_gaussian_inverse_mean_against_closed_forms():
 @pytest.mark.parametrize("field,value", [
     ("max_a_breaks", 2), ("max_a_breaks", 3.5),
     ("max_path_nodes", 2), ("max_path_nodes", 3.5),
+    ("screen_refine_factor", 0), ("screen_refine_factor", 1.5),
+    ("screen_refine_factor", True),
     ("screen_pixel_face", 0), ("screen_pixel_face", 1.5),
     ("screen_ring_nodes", 0), ("screen_ring_nodes", 1.5),
     ("screen_cell_m", 0), ("screen_cell_m", np.inf),
@@ -936,14 +941,17 @@ def test_compression_does_not_depend_on_its_cell_ranges(monkeypatch):
 
 
 def test_grouped_blocks_keep_their_scratch_within_the_budget(monkeypatch):
-    from lighthit import prompt
+    from lighthit import prompt, _memory
     monkeypatch.setattr(prompt, "_thread_count", lambda: 8)
-    assert prompt._grouped_blocks(100, 1000) == prompt._blocks(100)
     pencils = 3_000_000
-    blocks = prompt._grouped_blocks(100, pencils)
-    assert 1 <= blocks < 8
-    assert blocks * prompt._GROUPED_BYTES_PER_PENCIL * pencils <= prompt._GROUPED_SCRATCH_BYTES
-    assert prompt._grouped_blocks(100, 10 ** 9) == 1
+    per_block = prompt._grouped_scratch_per_block(pencils, 1, 0, 4096, 10, 3, receivers=100)
+    monkeypatch.setattr(_memory, "available_bytes", lambda: 3 * per_block)
+    assert prompt._grouped_blocks(100, pencils) == 3
+    assert prompt._grouped_blocks(100, pencils, 2 * per_block) == 2
+    assert prompt._grouped_blocks(100, 1000) == prompt._blocks(100)
+    with pytest.raises(MemoryError, match='one block'):
+        prompt._grouped_blocks(100, pencils, per_block - 1)
+    assert prompt._grouped_blocks(0, pencils, 1) == 0
 
 
 def graded_nodes(low, high, count, power=3):
@@ -1017,3 +1025,18 @@ def test_backward_monte_carlo_agrees(tmp_path, make_source):
     window = prompt.bins_orders_pe[top, :, 1].sum(axis=1)
     assert np.all(np.abs(mc["bins"].sum(axis=1) - window)
                   < 5 * mc["charge_se"] + 2e-3 * q[top])
+
+
+def test_grouped_scratch_budget_uses_needed_and_available_memory(monkeypatch):
+    from lighthit import prompt, _memory
+    monkeypatch.setattr(_memory, "available_bytes", lambda: 123456)
+    assert prompt._scratch_budget(None, 100000) == 100000
+    assert prompt._scratch_budget(None, 200000) == 123456
+    assert prompt._scratch_budget(300000, 400000) == 300000
+    assert prompt._scratch_budget(300000, 200000) == 200000
+
+
+@pytest.mark.parametrize('budget', [0, -1, 1.5, True, np.inf])
+def test_grouped_scratch_budget_rejects_invalid_explicit_values(budget):
+    with pytest.raises(ValueError, match='grouped_scratch_bytes'):
+        PromptConfig(grouped_scratch_bytes=budget)

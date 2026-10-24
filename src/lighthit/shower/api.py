@@ -3,8 +3,8 @@
 This is the route used by default for electromagnetic and hadronic showers
 (any compact G4 source without a dominant muon):
 
-* direct light (order 0): exact on the original steps over the continuous
-  spectrum (:func:`lighthit.ballistic_interval.ballistic_interval`);
+* direct light (order 0): first glass entry on the original steps over the
+  continuous spectrum (:func:`lighthit.ballistic_interval.first_entry_ballistic`);
 * first scattering (order 1): the grouped physical-time prompt solver with
   the spectral bands fused into one pencil set (``PromptConfig.fuse_bands``);
 * multiple scattering (order >=2): the axial shower basis compiled in three
@@ -26,7 +26,7 @@ from time import perf_counter, process_time
 import numpy as np
 
 from ..prompt import PromptConfig
-from ..shower_basis import ShowerBasis
+from ..shower_basis import ShowerBasis, screen_radial_tail
 from .data import ShowerData
 
 #: RTE frequency grid of the prepared tables and the readout grid.
@@ -41,7 +41,7 @@ def _default_prompt():
     steps on all three controls (worst bin L1 3.3/2.2/3.1% and bias <= 0.6%)
     at about 1.4 times its order-1 cost.
     """
-    return PromptConfig(ballistic_method="interval", fuse_bands=True,
+    return PromptConfig(ballistic_method="first-entry", fuse_bands=True,
                         fused_pixel_face=96, fused_ring_nodes=192)
 
 
@@ -138,18 +138,34 @@ class ShowerTransport:
             from ..band_fold import BandFold, fold_bundle, load_folded
             from ..shower_basis import _frequency_indices
             store = self.kernel.ge2_kernel_store(str(self.data.ge2_pack))
-            fold = BandFold.of(self.kernel, rank=int(self.config.band_rank))
+            rank, subdivide = int(self.config.band_rank), int(self.config.fold_subdivide)
+            indices = _frequency_indices(self.kernel, self.config.frequency_nodes)
             folded = None
             path = self.data.ge2_band_fold
             if path is not None and Path(path).exists():
-                folded = load_folded(path)
-                if folded["band_fold"]["bands"] != list(fold.bands):
-                    raise ValueError(f"{path} was folded on other node bands")
+                # A prepared fold of another rank, subdivision or frequency set
+                # is not this route's; it is then folded in memory.
+                prepared = load_folded(path)
+                omega = self.kernel.config.omega_per_ns[indices]
+                if (prepared["band_fold"]["rank"] == rank
+                        and int(prepared.get("subdivide", 1)) == subdivide
+                        and prepared["omega"].shape == omega.shape
+                        and np.allclose(prepared["omega"], omega, rtol=0, atol=1e-12)):
+                    folded = prepared
+            if folded is None:
+                fold = BandFold.of(self.kernel, rank=rank)
+            else:
+                bands = folded["band_fold"]["bands"]
+                if max(bands) >= len(self.kernel.wavelength.wavelength_nm):
+                    raise ValueError(f"{path} was folded for other wavelength nodes")
+                fold = BandFold.of(self.kernel, rank=rank, bands=bands)
+                stored = folded["band_fold"]["worst_residual_design"]
+                if not np.isclose(fold.metadata()["worst_residual_design"], stored,
+                                  rtol=1e-9, atol=0):
+                    raise ValueError(f"{path} was folded for another medium or detector")
             began = perf_counter()
             if folded is None:
-                indices = _frequency_indices(self.kernel, self.config.frequency_nodes)
-                folded = fold_bundle(store.bundle(self.kernel, indices), fold,
-                                     subdivide=int(self.config.fold_subdivide))
+                folded = fold_bundle(store.bundle(self.kernel, indices), fold, subdivide=subdivide)
             self._tables = dict(store=store, fold=fold, folded=folded,
                                 fold_seconds=perf_counter() - began)
         return self._tables
@@ -164,8 +180,14 @@ class ShowerTransport:
         ``receivers`` restricts the calculation to those OMs (all computed in
         full, threshold zero); the response then covers only ``receivers``.
         """
+        from ..transport import detail_threshold
         options = dict(time_origin_ns=time_origin_ns,
                        selection_extra_charge=selection_extra_charge, receivers=receivers)
+        with detail_threshold(self.kernel) as detail:
+            return detail.report(self._threaded(source, options), selection_extra_charge)
+
+    def _threaded(self, source, options):
+        """``_event`` with this route's thread setting."""
         if self.threads is not None:
             import numba
             previous = numba.get_num_threads()
@@ -311,10 +333,7 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
             used = np.maximum(used, part_used)
             far = np.maximum(far, part_far)
             tail += weight_ratio * part_tail
-    if np.any(tail > basis.radial_tail_tolerance_pe):
-        raise ValueError(f"{int(np.count_nonzero(tail > basis.radial_tail_tolerance_pe))} OMs "
-                         f"have estimated light beyond {high:g} m above "
-                         f"{basis.radial_tail_tolerance_pe:g} pe; largest {float(tail.max()):g} pe")
+    radial_tail = screen_radial_tail(tail, basis, high)
     reach = np.flatnonzero(used > 0)
 
     # ---- predicted zero-frequency >=2 charge of every reachable OM
@@ -462,7 +481,7 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
         "elapsed_seconds": elapsed, "prompt_elapsed_seconds": timings["prompt_seconds"],
         "rte_elapsed_seconds": elapsed - timings["prompt_seconds"],
         "ge2_source": "axial-slice shower basis compiled in the band-fold node bands (axis stencils)",
-        "ge2_basis": asdict(basis), "band_fold": fold.metadata(),
+        "ge2_basis": asdict(basis), "band_fold": fold.metadata(), "radial_tail": radial_tail,
         "band_fold_subdivide": int(folded.get("subdivide", 1)),
         "band_fold_source_residual": fold.source_residual(
             elements.beta, elements.coefficient0 * np.clip(1 - 1 / (elements.beta * max_phase) ** 2, 0, None)),
@@ -501,6 +520,10 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
         "prompt_algorithm": prompt.metadata.get("prompt_algorithm"),
         "prompt_order1_level": prompt.metadata.get("order1_level"),
         "prompt_ballistic": prompt.metadata.get("ballistic"),
+        "receiver_reference_by_order": {
+            "0": ("first-entry" if config.prompt.ballistic_method == "first-entry"
+                  and kernel.detector.receiver_surface is not None else "centre-ray"),
+            "1": "centre", ">=2": "centre"},
         "inactive_order1_charge_may_be_coarse": bool(np.any(
             np.asarray(prompt.metadata.get("order1_level", [])) == 1)),
     }

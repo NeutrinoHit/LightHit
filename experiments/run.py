@@ -140,7 +140,7 @@ def cmd_one(args):
         payload["traceback"] = traceback.format_exc()[-4000:]
     path = write_result(case.idea, case.name + suffix, payload)
     timing = payload.get("timing", {})
-    print(f"   {payload['status']}: {path.relative_to(HERE)} wall={timing.get('wall_s', float('nan')):.2f}s "
+    print(f"   {payload['status']}: {os.path.relpath(path, HERE)} wall={timing.get('wall_s', float('nan')):.2f}s "
           f"cpu={timing.get('cpu_s', float('nan')):.2f}s rss={timing.get('peak_rss_mib', float('nan')):.0f}MiB"
           + (f" {payload.get('error')}" if payload["status"] != "ok" else ""), flush=True)
     if payload.get("accuracy"):

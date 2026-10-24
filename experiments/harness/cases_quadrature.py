@@ -16,6 +16,7 @@ the nodes-32 cases one built for 32; the >=2 pack refuses the other one.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from functools import lru_cache
 
 import numpy as np
@@ -91,6 +92,11 @@ def _distance(positions, steps, parts):
 
 
 def _by_order(kernel, response, hits, distance, edges):
+    """Charges and propagated LH/MC errors (LightHit treated as deterministic).
+
+    The ratio error is |LH/MC| times the fractional MC error. Keep the latter
+    separately: it is useful for judging the available photon statistics.
+    """
     uids = np.asarray(kernel.detector.identifiers["uid"]).astype(np.int64)
     row = {int(u): i for i, u in enumerate(uids)}
     n = len(uids)
@@ -109,18 +115,28 @@ def _by_order(kernel, response, hits, distance, edges):
         m, s, q = mc[sel].sum(0), np.sqrt(variance[sel].sum(0)), lighthit[sel].sum(0)
         if m.sum() <= 0:
             continue
+        ratio = float(q.sum() / m.sum())
+        relative_sigma = float(np.linalg.norm(s) / m.sum())
         rows.append(dict(distance_m=[float(low), float(high)], oms=int(sel.sum()),
                          lighthit_pe=q.tolist(), mc_pe=m.tolist(), mc_sigma_pe=s.tolist(),
                          ratio=[float(a / b) if b > 0 else None for a, b in zip(q, m)],
-                         total_ratio=float(q.sum() / m.sum()),
-                         total_sigma=float(np.sqrt((s ** 2).sum()) / m.sum())))
+                         ratio_sigma=[float(abs(a / b) * c / b) if b > 0 else None
+                                      for a, b, c in zip(q, m, s)],
+                         mc_relative_sigma=relative_sigma,
+                         total_ratio=ratio,
+                         total_sigma=abs(ratio) * relative_sigma))
     total_m, total_s, total_q = mc.sum(0), np.sqrt(variance.sum(0)), lighthit.sum(0)
     headline = dict(lighthit_pe=float(total_q.sum()), mc_pe=float(total_m.sum()),
                     mc_sigma_pe=float(np.sqrt((total_s ** 2).sum())),
-                    total_ratio=float(total_q.sum() / total_m.sum()))
+                    total_ratio=float(total_q.sum() / total_m.sum()) if total_m.sum() > 0 else None)
+    headline["total_ratio_sigma"] = (abs(headline["total_ratio"]) * headline["mc_sigma_pe"]
+                                     / headline["mc_pe"] if headline["mc_pe"] > 0 else None)
     for k, label in enumerate(("order0", "order1", "order2plus")):
-        headline[f"{label}_ratio"] = float(total_q[k] / total_m[k])
-        headline[f"{label}_sigma"] = float(total_s[k] / total_m[k])
+        ratio = float(total_q[k] / total_m[k]) if total_m[k] > 0 else None
+        relative_sigma = float(total_s[k] / total_m[k]) if total_m[k] > 0 else None
+        headline[f"{label}_ratio"] = ratio
+        headline[f"{label}_mc_relative_sigma"] = relative_sigma
+        headline[f"{label}_sigma"] = abs(ratio) * relative_sigma if ratio is not None else None
     return dict(headline=headline, lighthit_by_order_pe=total_q.tolist(),
                 mc_by_order_pe=total_m.tolist(), mc_sigma_by_order_pe=total_s.tolist(),
                 by_distance=rows)
@@ -201,6 +217,48 @@ def _point(ctx, nodes):
     return out
 
 
+def _point_order1_screening(ctx):
+    """Resolve the inactive-OM order-1 charge before attributing a tail deficit."""
+    from lighthit.shower import ShowerConfig
+    from .inputs import load_steps, subset_kernel
+    baseline = _point(ctx, 32)
+    kernel = ctx.kernel(wavelength_nodes=32)
+    base = inputs_dir() / "mc"
+    with np.load(base / f"point-seed{POINT_SEEDS[0]}-steps.npz") as data:
+        point = np.asarray(json.loads(str(data["metadata"]))["point_m"], float)
+    distance = np.linalg.norm(kernel.detector.positions_m - point, axis=1)
+    indices = np.flatnonzero((distance >= 100.) & (distance < 250.))
+    fine_kernel = subset_kernel(kernel, indices, threshold_pe=0.)
+    prompt = replace(ShowerConfig().prompt, screen=False)
+    charge = np.zeros(len(indices))
+    for seed in POINT_SEEDS:
+        steps, _ = load_steps(base / f"point-seed{seed}-steps.npz")
+        response = fine_kernel.transport_prompt(steps, prompt)
+        charge += response.charge_orders_pe[:, 1]
+    rows = []
+    for row in baseline["by_distance"]:
+        low, high = row["distance_m"]
+        if low < 100.:
+            continue
+        selected = (distance[indices] >= low) & (distance[indices] < high)
+        fine = float(charge[selected].sum())
+        mc, sigma = row["mc_pe"][1], row["mc_sigma_pe"][1]
+        rows.append(dict(distance_m=[low, high], oms=int(selected.sum()),
+                         default_order1_pe=row["lighthit_pe"][1], fine_order1_pe=fine,
+                         mc_order1_pe=mc, mc_sigma_pe=sigma,
+                         default_ratio=row["ratio"][1], fine_ratio=fine / mc,
+                         fine_ratio_sigma=abs(fine / mc) * sigma / mc,
+                         fine_pull=(fine - mc) / sigma))
+    fine = sum(r["fine_order1_pe"] for r in rows)
+    mc = sum(r["mc_order1_pe"] for r in rows)
+    sigma = float(np.sqrt(sum(r["mc_sigma_pe"] ** 2 for r in rows)))
+    return dict(headline=dict(fine_order1_pe=fine, mc_order1_pe=mc,
+                              fine_ratio=fine / mc, fine_ratio_sigma=abs(fine / mc) * sigma / mc),
+                by_distance=rows,
+                scope="100-250 m order 1; screen=False and threshold_pe=0 on the selected OMs; "
+                      "same grouped angular resolution as the shower route")
+
+
 class _Sum:
     def __init__(self, a, b):
         self.charge_components_pe = (np.asarray(a.charge_components_pe, float)
@@ -210,6 +268,9 @@ class _Sum:
 case("wavelength-quadrature", "spectral-integral", kind="metrics",
      notes="Gauss-Legendre wavelength rules against a fine trapezoid on the bundle model")(
     _spectral_integral)
+case("wavelength-quadrature", "point-order1-screening", kind="metrics", warmup=False,
+     notes="inactive-OM coarse order 1 against the unscreened grouped charge and photon MC")(
+    _point_order1_screening)
 for _name in SHOWERS:
     case("wavelength-quadrature", f"order1-{_name}", kind="metrics", warmup=False,
          notes="prompt order 1 with 9, 32 and 64 wavelength nodes")(

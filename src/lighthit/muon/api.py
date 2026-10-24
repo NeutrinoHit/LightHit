@@ -1,6 +1,6 @@
 """Muon events to expected photoelectrons, all scattering orders.
 
-This is the route used by default for G4 muon tracks: exact direct light from
+This is the route used by default for G4 muon tracks: continuous-spectrum direct light from
 the original steps, finite-track atlases for the primary, grouped physical-time
 first scattering of all secondaries with the spectral bands fused, and point
 RTE sources for multiple scattering, with weak packet–OM pairs omitted.
@@ -107,8 +107,15 @@ class MuonTransport:
         ``receivers`` and ``time_origin_ns``/``selection_extra_charge`` refer
         to them. All three default to the single-source behaviour.
         """
+        from ..transport import detail_threshold
         options = dict(time_origin_ns=time_origin_ns, selection_extra_charge=selection_extra_charge,
                        receivers=receivers)
+        with detail_threshold(self.kernel) as detail:
+            return detail.report(self._threaded(source, ancestry, primary_uid, progress, options),
+                                 selection_extra_charge)
+
+    def _threaded(self, source, ancestry, primary_uid, progress, options):
+        """``_event`` with this route's thread setting."""
         if self.threads is not None:
             import numba
             previous = numba.get_num_threads()
@@ -139,7 +146,8 @@ class MuonTransport:
             primary_options=dict(ge2_beta_atlas=tables['ge2_beta'],
                                  first_beta_atlas=tables['first_beta'],
                                  direct_ge2_quadrature='filon', q1_charge_gauss_order=6,
-                                 fallback_pack=self.data.ge2_pack))
+                                 fallback_pack=self.data.ge2_pack,
+                                 fallback_fold=self.data.ge2_band_fold))
         response.metadata['muon_data'] = str(self.data.manifest)
         response.metadata['route'] = 'lighthit.muon'
         # Source points closer than the radial minimum of the >=2 tables were

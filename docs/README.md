@@ -10,7 +10,10 @@ documentation is not part of the PyPI package.
 
 | Page | Content |
 |---|---|
+| `computation.md` | what each number of a response means and how it is computed: orders, inactive OMs, wavelengths, tables and their checks, radial range, OM selection, the photon Monte-Carlo comparison |
 | `transport-kernel.md` | `TransportKernel` and `KernelConfig`: tables, cache keys, `build()`, the order >=2 pack, `transport` / `transport_prompt` / `transport_hybrid`, responses, readout |
+| `receiver-first-entry.md` | geometry-only first-scattering profiles at the glass, for building finite-receiver tables; not yet used by default transport |
+| `direct-first-entry.md` | explicit direct-light integration to the first glass entry, its error budgets and measured event cost; default fast route retained |
 | `shower-route.md` | `lighthit.shower.ShowerTransport`, end to end |
 | `muon-route.md` | `lighthit.muon.MuonTransport`, end to end, and `muon-data.json` |
 | `event-and-laser.md` | `lighthit.event.EventTransport`: several sources on one clock, completion, fallbacks, the laser kernel |
