@@ -132,7 +132,8 @@ def test_charge_atlas_does_not_depend_on_clock(monkeypatch):
     np.testing.assert_allclose(result.charge_orders_pe,[[0.,.001,.002]])
 
 
-def test_reduced_charge_preserves_beta_and_keeps_full_spectrum_for_time(monkeypatch):
+@pytest.mark.parametrize('time_validated',[False,True])
+def test_reduced_charge_preserves_beta_and_requires_separate_time_validation(monkeypatch,time_validated):
     from lighthit.model import WavelengthQuadrature
     k,s=setup()
     s=lh.SpectralLightElements(np.array([[0.,0.,0.],[0.,0.,50.]]),np.tile([0.,0.,1.],(2,1)),
@@ -140,6 +141,7 @@ def test_reduced_charge_preserves_beta_and_keeps_full_spectrum_for_time(monkeypa
         np.array([.99,.9]),np.array([0.,50/.299792458]),np.array([50/.299792458,100/.299792458]),
         np.arange(2),np.zeros(2,int),cone_model='spectral')
     cube=SimpleNamespace(metadata={'beta_min':.95},quadrature=WavelengthQuadrature([480.],[260.]),validate_optics=lambda k:True)
+    if time_validated:cube.metadata['first_entry_waveform_validation']={'passed':True,'betas':[.95,1.]}
     calls=[];time_calls=[]
     def zero(k,s,**kw):return SimpleNamespace(charge_pe=np.zeros(1),bins_pe=np.zeros((1,len(k.config.relative_time_edges_ns)-1)))
     monkeypatch.setattr(transport,'ballistic_interval',zero)
@@ -158,8 +160,36 @@ def test_reduced_charge_preserves_beta_and_keeps_full_spectrum_for_time(monkeypa
     assert [c[0] for c in calls]==[1,2]
     np.testing.assert_array_equal(calls[0][1],[.99])
     np.testing.assert_array_equal(calls[1][1],[.9])
-    assert len(time_calls)==1 and time_calls[0][0]==2
-    np.testing.assert_array_equal(time_calls[0][1],[.99,.9])
+    if time_validated:
+        assert [c[0] for c in time_calls]==[1,2]
+        np.testing.assert_array_equal(time_calls[0][1],[.99])
+        np.testing.assert_array_equal(time_calls[1][1],[.9])
+    else:
+        assert len(time_calls)==1 and time_calls[0][0]==2
+        np.testing.assert_array_equal(time_calls[0][1],[.99,.9])
+
+
+def test_selected_batch_integrates_unsupported_q1_only_once(monkeypatch):
+    import lighthit.muon.first_time_beta as time_beta
+    k,s=setup();k.config=replace(k.config,threshold_pe=0.)
+    s=replace(s,beta=np.array([.99]),coefficient2=-s.coefficient0/.99**2)
+    monkeypatch.setattr(transport,'ballistic_interval',lambda *a,**kw:SimpleNamespace(
+        charge_pe=np.zeros(1),bins_pe=np.zeros((1,len(k.config.relative_time_edges_ns)-1))))
+    monkeypatch.setattr(transport,'combined_first_scattering_segment_bounds',lambda k,s,*a,**kw:(np.ones(len(s)),{}))
+    def forbidden(*a,**kw):pytest.fail('selected receivers must not duplicate the direct charge integral')
+    monkeypatch.setattr(transport,'first_scattering_charge_only',forbidden)
+    monkeypatch.setattr(transport.DirectGe2,'__call__',lambda *a,**kw:np.zeros(65,complex) if a[-1] else np.zeros(1,complex))
+    monkeypatch.setattr(time_beta,'supported_time_part',lambda kernel,part,pos,normal,origin,edges,atlas:
+        (0.,np.zeros(len(edges)-1),[(i,0.,part.length_m[i]) for i in range(len(part))],0))
+    calls=[]
+    def timed(local,part,**kw):
+        calls.append(len(part));return np.array([.02]),np.zeros((1,len(local.config.relative_time_edges_ns)-1)),{}
+    monkeypatch.setattr(transport,'order1_integrals',timed)
+    cache=SimpleNamespace(validate_kernel=lambda k:True)
+    result=transport.transport_universal_primary(k,s,First(0.),Ge2(k,0.),batch_beta_charge=False,first_time_beta_atlas=cache)
+    assert calls==[1]
+    np.testing.assert_allclose(result.charge_orders_pe,[[0.,.02,0.]])
+    assert result.metadata['q1_charge_deferred_to_time']
 
 
 @pytest.mark.parametrize('beta_charge',[.02,-2e-6])

@@ -7,12 +7,12 @@ The only geometry in the build is a generic straight source and test receivers.
 """
 import argparse,json,hashlib
 from pathlib import Path
-from time import perf_counter,process_time
+from time import perf_counter,process_time,thread_time
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 
 
-def load_optics(pack,cache):
+def load_optics(pack,cache,model_path=None,*,frequency_nodes=65):
     import lighthit as lh
     from bgvd_model.BaikalWater import BaikalWater
     from bgvd_model import OpticalModule
@@ -27,10 +27,29 @@ def load_optics(pack,cache):
     # A dummy one-point detector satisfies the optical interface; its position
     # and orientation are not used in or included in the cache signature.
     detector=lh.DetectorArray(np.zeros((1,3)),np.array([[0.,0.,1.]]),np.pi*OpticalModule.radius**2,angular,efficiency)
-    kernel=lh.TransportKernel(medium,detector,lh.KernelConfig(omega_per_ns=np.linspace(0,1.2,65),cache_policy='require'))
-    metadata=track_ge2_optics_metadata(kernel)
+    kernel=lh.TransportKernel(medium,detector,lh.KernelConfig(omega_per_ns=np.linspace(0,1.2,frequency_nodes),cache_policy='require'))
     store=Ge2KernelStore.load(pack)
-    key,bundle=next((key,b) for key,b in store._bundles.items() if len(b['omega'])==65)
+    key,bundle=next((key,b) for key,b in store._bundles.items() if len(b['omega'])==frequency_nodes)
+    if model_path is not None:kernel=lh.load_model(model_path).kernel(kernel.config)
+    if bundle.get('receiver_contract'):
+        from dataclasses import replace
+        from lighthit.receiver import SphereSurface
+        from lighthit.receiver_vertex import ReceiverVertexConfig
+        with np.load(cache/f'directional-{key[0][0]}.npz',allow_pickle=False) as z:
+            m=json.loads(str(z['metadata']));radii=z['radii_m'].copy()
+        boundary=m['receiver_contract'];settings=m['settings']
+        if model_path is not None:
+            surface=kernel.detector.receiver_surface
+            if not isinstance(surface,SphereSurface) or not np.allclose(surface.radii(len(kernel.detector)),boundary['radius_m'],rtol=1e-12,atol=0):
+                raise ValueError('model glass differs from prepared bank')
+        detector=replace(kernel.detector.subset(np.array([0])),receiver_surface=SphereSurface(boundary['radius_m']))
+        config=replace(kernel.config,cache_directory=cache,wavelength_nodes=len(key[0]),scattered_receiver='first-entry',
+            receiver_vertex=ReceiverVertexConfig(**boundary['numerics']),scattering_degree=settings['scattering_degree'],
+            source_degree=settings['spatial_degree'],k_max_per_m=settings['k_max_per_m'],k_panel_per_m=settings['k_panel_per_m'],
+            k_order=settings['k_order'],acceptance_degree=bundle['acceptance_degree'],radial_range_m=(float(radii[0]),float(radii[-1])),radial_nodes=len(radii))
+        kernel=lh.TransportKernel(kernel.medium,detector,config)
+        if not kernel._bundle_matches(bundle):raise ValueError('bank source/receiver contract differs')
+    metadata=track_ge2_optics_metadata(kernel)
     recorded=[]
     for name in key[0]:
         with np.load(cache/f'directional-{name}.npz',allow_pickle=False) as z:
@@ -59,6 +78,8 @@ def main():
     p.add_argument('--pack',type=Path,required=True)
     p.add_argument('--cache',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--model',type=Path,help='serialized model; its glass must match the bank')
+    p.add_argument('--workers',type=int,default=1,help='independent rows; the parent alone writes the manifest')
     p.add_argument('--nodes',type=float,nargs='+',default=[3.01,5,8,12,18,25,35,50,70,100,150,220,299])
     p.add_argument('--passes',type=int,default=3)
     p.add_argument('--max-nodes',type=int,default=65)
@@ -68,13 +89,14 @@ def main():
     p.add_argument('--build-only',action='store_true')
     p.add_argument('--backward-absolute-pe',type=float,default=1e-6)
     args=p.parse_args()
+    if args.workers<1:p.error('positive worker count required')
     import numba
     from lighthit.experimental.track_ge2_primitive import (DiskTrackGe2Atlas,SegmentPrimitive,
         cone_point_evaluator,orientation_basis_looks,build_track_ge2_orientation_row,track_ge2_axial_edges)
     from lighthit.readout import inverse_bins
     from scipy.interpolate import CubicSpline
     if numba.get_num_threads()!=1:p.error('requires NUMBA_NUM_THREADS=1')
-    kernel,bundle,metadata=load_optics(args.pack,args.cache)
+    kernel,bundle,metadata=load_optics(args.pack,args.cache,args.model)
     omega=bundle['omega'];clock=metadata['clock_ns_per_m'];high=metadata['radius_window_m'][1]
     front=float(np.sqrt((metadata['group_index'][len(metadata['group_index'])//2]/.299792458)**2-clock**2))
     output_omega=np.linspace(0,omega[-1],321);time_edges=np.arange(-60.,745.,5.)
@@ -99,31 +121,44 @@ def main():
         manifest['rows']=[rows[rho] for rho in sorted(rows)]
         temporary=manifest_path.with_suffix('.tmp')
         temporary.write_text(json.dumps(manifest,indent=2));temporary.replace(manifest_path)
-    def build(rho):
+    def compute(rho):
         rho=float(rho)
-        if rho in rows:return
         edges=track_ge2_axial_edges(rho,high,max_panel_m=4.,asinh_step=.15)
-        cpu=process_time();wall=perf_counter()
+        cpu=thread_time();wall=perf_counter()
         row=build_track_ge2_orientation_row(factory(rho,orientation_basis_looks()),edges,omega,order=args.order,clock_ns_per_m=clock)
         zero=row.prefix[-1].reshape(10,len(omega))[:,0].real
         norm=float(zero[0]+(zero[3]+zero[5])/3)
         if norm<=0:norm=float(np.linalg.norm(zero))
         if not np.isfinite(norm) or norm<=0:raise ValueError('invalid row normalization')
         row.integrated_coefficients/=norm;row.prefix/=norm
+        return row,norm,thread_time()-cpu,perf_counter()-wall
+    def save_row(rho,result):
+        row,norm,build_cpu,build_wall=result;edges=row.edges_m
+        cpu=thread_time();wall=perf_counter()
         stem=f'rows/rho-{rho:.9f}'
         np.savez_compressed(args.output/(stem+'.npz'),edges_m=row.edges_m,integrated_coefficients=row.integrated_coefficients,prefix=row.prefix)
         np.savez_compressed(args.output/(stem+'-charge.npz'),edges_m=row.edges_m,
             integrated_coefficients=row.integrated_coefficients.reshape(len(edges)-1,args.order+1,10,len(omega))[...,0].real.copy(),
             prefix=row.prefix.reshape(len(edges),10,len(omega))[...,0].real.copy())
         item=dict(impact_m=rho,file=stem+'.npz',charge_file=stem+'-charge.npz',normalization=norm,
-            cpu_seconds=process_time()-cpu,wall_seconds=perf_counter()-wall,panels=len(edges)-1,
+            cpu_seconds=build_cpu+thread_time()-cpu,wall_seconds=build_wall+perf_counter()-wall,panels=len(edges)-1,
             full_bytes=row.integrated_coefficients.nbytes+row.prefix.nbytes,
             charge_bytes=(row.integrated_coefficients.nbytes+row.prefix.nbytes)//(2*len(omega)),order=args.order,
             sha256=hashlib.sha256((args.output/(stem+'.npz')).read_bytes()).hexdigest(),
             charge_sha256=hashlib.sha256((args.output/(stem+'-charge.npz')).read_bytes()).hexdigest())
         rows[rho]=item;save_manifest();print(json.dumps(dict(event='row',**item)),flush=True)
+    def build(rho):
+        rho=float(rho)
+        if rho not in rows:save_row(rho,compute(rho))
     factory(10.,looks[:1])(np.array([0.,1.]))  # warmup separate from row cost
-    for rho in sorted(set(args.nodes)):build(rho)
+    pending=[float(r) for r in sorted(set(args.nodes)) if float(r) not in rows]
+    if args.workers==1:
+        for rho in pending:build(rho)
+    elif pending:
+        from concurrent.futures import ThreadPoolExecutor,as_completed
+        with ThreadPoolExecutor(max_workers=min(args.workers,len(pending))) as pool:
+            futures={pool.submit(compute,r):r for r in pending}
+            for future in as_completed(futures):save_row(futures[future],future.result())
     def reference(rho):
         path=args.output/f'references/rho-{rho:.9f}.npz'
         if path.exists():

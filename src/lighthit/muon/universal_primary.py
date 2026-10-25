@@ -86,7 +86,11 @@ class DirectGe2:
                                  '(MuonTransport passes the ge2_pack of muon-data.json)')
             wall,cpu=perf_counter(),process_time()
             store = Ge2KernelStore.load(self.directory)
-            self.bundle = next(b for b in store._bundles.values() if len(b['omega']) == 65)
+            self.bundle = (store.bundle(self.kernel,np.arange(len(self.kernel.config.omega_per_ns)))
+                           if self.kernel.config.scattered_receiver!='centre' else
+                           next(b for b in store._bundles.values() if len(b['omega']) == 65))
+            if not self.kernel._receiver_matches(self.bundle.get('receiver_contract') or {}):
+                raise ValueError('primary >=2 pack has another receiver boundary')
             self.charge_bundle=next((b for b in store._bundles.values() if len(b['omega'])==1 and b['omega'][0]==0),None)
             self.timings['load_wall_seconds']+=perf_counter()-wall
             self.timings['load_cpu_seconds']+=process_time()-cpu
@@ -101,7 +105,9 @@ class DirectGe2:
         prepared = load_folded(self.folded_directory)
         bands = [int(b) for b in prepared['band_fold']['bands']]
         reason = None
-        if (prepared['omega'].shape != self.bundle['omega'].shape
+        if not self.kernel._bundle_matches(prepared):
+            reason = 'folded for another receiver boundary'
+        elif (prepared['omega'].shape != self.bundle['omega'].shape
                 or not np.allclose(prepared['omega'], self.bundle['omega'], rtol=0, atol=1e-12)
                 or int(prepared['degree']) != int(self.bundle['degree'])
                 or int(prepared.get('subdivide', 1)) != 1):
@@ -208,7 +214,7 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
         tail_budget_pe=1e-6, fallback_pack=None, fallback_fold=None,
         selection_margin=1.05, time_origin_ns=None, progress=None,
         batch_beta_charge=True, beta_cell_m=.25, first_cubature=None, ge2_beta_atlas=None, first_beta_atlas=None,
-        direct_ge2_quadrature='fixed12',q1_charge_gauss_order=0,q1_charge_panel_width=1.5,
+        direct_ge2_quadrature='fixed12',q1_charge_gauss_order=0,q1_charge_panel_width=1.5,first_time_beta_atlas=None,
         skip_ballistic=False):
     """Compute all primary charges, then time bins for selected OMs only.
 
@@ -226,6 +232,7 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     if skip_ballistic and kernel.config.threshold_pe != 0:
         raise ValueError('skip_ballistic requires an externally selected receiver set and threshold_pe=0')
     first_store.validate_kernel(kernel)
+    if first_time_beta_atlas is not None:first_time_beta_atlas.validate_kernel(kernel)
     first_beta_requested=first_beta_atlas is not None
     first_beta_payload_bytes=0 if first_beta_atlas is None else first_beta_atlas.resident_bytes
     if first_beta_atlas is not None:first_beta_atlas.validate_kernel(kernel)
@@ -271,6 +278,19 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     if first_cubature is not None:
         first_cubature.validate_optics(kernel)
         reduced=copy(local);reduced.wavelength=first_cubature.quadrature
+    waveform_cubature=(None if first_cubature is None else first_cubature.metadata.get('first_entry_waveform_validation'))
+    def direct_first_time(om,part):
+        options=dict(time_origin_ns=origins[[om]],config=prompt)
+        if reduced is None or not waveform_cubature or not waveform_cubature.get('passed',False):
+            return order1_integrals(subset_kernel(local,[om]),part,**options)[:2]
+        eligible=(part.beta>=max(first_cubature.metadata['beta_min'],min(waveform_cubature['betas'])))
+        eligible &= np.isclose(-part.coefficient2*part.beta**2,part.coefficient0,rtol=1e-10,atol=0.)
+        q=np.zeros(1);b=np.zeros((1,nb))
+        for selected,spectral in ((eligible,reduced),(~eligible,local)):
+            if selected.any():
+                v,h,_=order1_integrals(subset_kernel(spectral,[om]),part.subset(selected),**options)
+                q+=v;b+=h
+        return q,b
     direct_ge2=DirectGe2(kernel,fallback_pack,quadrature=direct_ge2_quadrature,folded=fallback_fold)
     prompt=PromptConfig(element_method='segment',screen=False)
     charge_options=(dict(gauss_order=q1_charge_gauss_order,panel_width=q1_charge_panel_width)
@@ -425,7 +445,12 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     if progress:progress('charge atlas pass',dict(q1_pairs=len(q1_pairs),ge2_pairs=len(ge2_pairs),
         q1_fallback_oms=len(q1_fallback),ge2_fallback_pairs=len(ge2_fallback)))
     stage=perf_counter()
-    for k,(om,part) in enumerate(first_direct_charge):
+    # Joint-muon fine batches already contain only selected receivers and
+    # set threshold=0. Their time pass computes this same all-time charge;
+    # defer it rather than integrating each unsupported segment twice.
+    defer_first_direct_charge=first_time_beta_atlas is not None and kernel.config.threshold_pe==0
+    charge_work=[] if defer_first_direct_charge else first_direct_charge
+    for k,(om,part) in enumerate(charge_work):
         if reduced is None:
             q,_=first_scattering_charge_only(subset_kernel(local,[om]),part,config=prompt,**charge_options)
         else:
@@ -457,14 +482,23 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     stage=perf_counter()
     substage=perf_counter()
     q1_fallback_time_oms=0
+    q1_time_beta_pieces=0
     for om,part in q1_fallback:
         if compute[om]:
-            exact,b,_=order1_integrals(subset_kernel(local,[om]),part,time_origin_ns=origins[[om]],config=prompt)
-            if first_beta_atlas is not None:
-                first_beta_refinement[om]=exact[0]-first_fallback_charge[om]
+            total_q=0.;total_b=np.zeros(len(edges)-1);remaining=part;cached=0
+            if first_time_beta_atlas is not None:
+                from .first_time_beta import supported_time_part
+                total_q,total_b,leftovers,cached=supported_time_part(local,part,det.positions_m[om],
+                    det.orientations[om],float(origins[om]),edges,first_time_beta_atlas)
+                q1_time_beta_pieces+=cached
+                remaining=split_source(part,leftovers) if leftovers else None
+            if remaining is not None:
+                exact,b=direct_first_time(om,remaining)
+                total_q+=exact[0];total_b+=b[0];q1_fallback_time_oms+=1
+            if first_beta_atlas is not None or cached or defer_first_direct_charge:
+                first_beta_refinement[om]=total_q-first_fallback_charge[om]
                 charge[om,1]+=first_beta_refinement[om]
-            bins[om,:,1]+=b[0]
-            q1_fallback_time_oms+=1
+            bins[om,:,1]+=total_b
     timings['q1_direct_time_seconds']=perf_counter()-substage
     substage=perf_counter()
     # Sort by radial bracket to load each time row only when needed.
@@ -474,14 +508,21 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
     for om,i,rho,orientation,lo,hi,density,shift in selected:
         try:
             clock=(pieces.end_ns[i]-pieces.start_ns[i])/pieces.length_m[i]
-            if abs(clock-alpha0)*(hi-lo)/2>1e-3:
+            beta=float(pieces.beta[i]);ideal=1/(beta*.299792458)
+            reference_clock=ideal if first_time_beta_atlas is not None else alpha0
+            if abs(clock-reference_clock)*(hi-lo)/2>1e-3:
                 raise ValueError('time profile requires actual source clock')
-            _,b=first_store.query(rho,orientation,lo,hi,edges-shift,coefficient0_per_m=density)
+            if first_time_beta_atlas is not None:
+                beta_shift=shift+(ideal-alpha0)*(lo+hi)/2
+                q,b=first_time_beta_atlas.query(rho,orientation,lo,hi,edges-beta_shift,beta,coefficient0_per_m=density)
+                oldq=first_store.query_charge(rho,orientation,lo,hi,coefficient0_per_m=density)
+                charge[om,1]+=q-oldq;q1_time_beta_pieces+=1
+            else:_,b=first_store.query(rho,orientation,lo,hi,edges-shift,coefficient0_per_m=density)
             bins[om,:,1]+=b
         except ValueError:
             z=float((det.positions_m[om]-pieces.start_m[i])@pieces.direction[i])
             part=split_source(pieces,[(i,z-hi,z-lo)])
-            q,b,_=order1_integrals(subset_kernel(local,[om]),part,time_origin_ns=origins[[om]],config=prompt)
+            q,b=direct_first_time(om,part)
             oldq=first_store.query_charge(rho,orientation,lo,hi,coefficient0_per_m=density)
             charge[om,1]+=q[0]-oldq
             bins[om,:,1]+=b[0];time_fallbacks+=1
@@ -553,6 +594,8 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
         ge2_direct_timings=direct_ge2.timings,
         ge2_row_io_statistics=getattr(ge2_store,'io_statistics',{}),ge2_row_io_log=getattr(ge2_store,'row_io_log',[]),
         q1_fallback_time_oms=q1_fallback_time_oms,
+        q1_time_beta_cached_pieces=q1_time_beta_pieces,
+        q1_charge_deferred_to_time=defer_first_direct_charge,
         beta_charge_batch=beta_batch_metadata,
         q1_charge_response_cubature=(None if first_cubature is None else first_cubature.metadata),
         q1_charge_gauss_order=int(q1_charge_gauss_order),q1_charge_panel_width=float(q1_charge_panel_width),

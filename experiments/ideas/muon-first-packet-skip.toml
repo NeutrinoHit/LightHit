@@ -4,7 +4,7 @@ area = "muon"
 question = "What does the packet skip (first_skip_epsilon=1e-3) save and change?"
 kind = "alternative-option"
 status = "default"
-verdict = "Disabling the packet skip changes order 1 against reference-muon only in the fourth significant digit (1 TeV bias 2.3167% vs 2.3161%; 300 GeV 3.2353% vs 3.2352%), with the no-skip runs taking 1.15x and 0.99x the default wall time."
+verdict = "The per-unit 1e-3 omission budget and seed rule are retained. Bounds use the actual spectral source pool and the fused unit's fixed cone; bright fused elements no longer prevent valid remainder omissions. Addressed glass controls pass against unskipped Q1; the historical no-skip measurements below precede the glass receiver."
 baseline = "default-muon-route"
 cases = [
   "muon-first-packet-skip/muon-1TeV-no-skip",
@@ -18,7 +18,11 @@ inputs = [
 reference-muon/<input> (orders 0+1 of all original steps by the grouped per-band prompt without screen, order >=2 per band cloud-in-cell, on the OMs of the default route)
 """,
 ]
-notes = []
+notes = [
+  "Spectral thresholds and yields remain band-dependent even when cone geometry is frozen. Repeated fixed-cone geometry is evaluated once for its bounds.",
+  "Sphere bounds include a visible-cap infinite-line control: solid angle <= 2*pi*R^2/D^2 and last-path advance <= R. Its factor two tightens a certificate; it never scales the signal.",
+  "The addressed 2026-10-25 checks retain epsilon=0.001 per unit. Glass Q1 without omission is the accuracy control; the centre route is only a speed control. See docs/receiver-surface.md for full mu100 and bounded mu1TeV results.",
+]
 
 [code]
 modules = ["lighthit.muon.packet_skip", "lighthit.muon.secondary_first"]

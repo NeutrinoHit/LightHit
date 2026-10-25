@@ -44,6 +44,7 @@ def first_scattering_charge_only(kernel,elements,*,config=None,gauss_order=0,pan
     edges=np.array([0.,1.]);origins=np.zeros(len(positions))
     charge=np.zeros(len(positions));diagnostics=[]
     wall,cpu=perf_counter(),process_time()
+    finite_receiver=kernel.config.scattered_receiver=='first-entry'
     for lam,phase in enumerate(tables['phase_index']):
         if tables['mus'][lam]==0 or (tables['s0w'][lam]==0 and tables['s2w'][lam]==0):continue
         active=elements.beta*phase>1.
@@ -55,7 +56,7 @@ def first_scattering_charge_only(kernel,elements,*,config=None,gauss_order=0,pan
         values,bins,meta=prompt._order1('segment',kernel,source,source,segments,
             positions,looks,areas,origins,work,single,coef,ipow,jpow,degree,
             float(kernel.medium.g),edges,settings,np.zeros(len(positions)),compute_bins=False,
-            stationary_gauss_order=gauss_order,stationary_panel_width=panel_width)
+            stationary_gauss_order=0 if finite_receiver else gauss_order,stationary_panel_width=panel_width)
         if meta.get('order1_segments_too_close',0):
             raise ValueError('segment enters unsupported point-detector near field')
         if bins.shape!=(len(positions),0):
@@ -64,5 +65,7 @@ def first_scattering_charge_only(kernel,elements,*,config=None,gauss_order=0,pan
     return charge,dict(cpu_seconds=process_time()-cpu,wall_seconds=perf_counter()-wall,
         elements=len(elements),receivers=len(positions),wavelength_nodes=len(tables['wavelength_nm']),
         computed_order=1,computed_bins=False,source_grouping=False,
-        stationary_gauss_order=int(gauss_order),stationary_panel_width=float(panel_width),
+        stationary_gauss_order=0 if finite_receiver else int(gauss_order),stationary_panel_width=float(panel_width),
+        requested_stationary_gauss_order=int(gauss_order),
+        path_integration='prepared geometry with analytic extinction' if finite_receiver else 'point-receiver path quadrature',
         emission_clock_used=False,wavelengths=diagnostics)

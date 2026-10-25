@@ -14,8 +14,19 @@ import hashlib,json,os
 import numpy as np
 
 
-def optical_kernel():
+def optical_kernel(model_path=None,first_entry_tables=None):
     import lighthit as lh
+    if first_entry_tables is not None and model_path is None:
+        raise ValueError('first-entry preparation requires a model with actual glass geometry')
+    if model_path is not None:
+        from lighthit.receiver_vertex import ReceiverVertexConfig
+        options=(dict(scattered_receiver='first-entry',first_entry_tables=first_entry_tables,
+            scattering_degree=96,k_max_per_m=12.,receiver_vertex=ReceiverVertexConfig(angular_pairs=96,radial_nodes=400))
+            if first_entry_tables is not None else {})
+        kernel=lh.load_model(model_path).kernel(lh.KernelConfig(omega_per_ns=np.array([0.]),cache_policy='require',**options))
+        if first_entry_tables is not None:kernel._receiver_contract()
+        kernel.detector=kernel.detector.subset(np.array([0]))
+        return kernel
     from bgvd_model import OpticalModule
     from bgvd_model.BaikalWater import BaikalWater
     water=BaikalWater();parameters=np.asarray(OpticalModule.angular_parameters,float)
@@ -32,20 +43,25 @@ def optical_kernel():
     return lh.TransportKernel(medium,detector,lh.KernelConfig(omega_per_ns=np.array([0.]),cache_policy='require'))
 
 
-def contract(kernel,cells,time_step_ns,reference_rho,min_radius,max_time_ns):
+def contract(kernel,cells,time_step_ns,reference_rho,min_radius,max_time_ns,beta=1.):
     from lighthit.experimental.primary_polyline import primary_spectral_quadrature
     from lighthit.prompt import _spectral_tables
     local=copy(kernel);local.wavelength=primary_spectral_quadrature(kernel.medium,kernel.detector,order=2,
         wavelength_range_nm=kernel.config.wavelength_range_nm)
     tables=_spectral_tables(local)
-    speed=.299792458;beta=1.
+    photon_c=.299792458;speed=beta*photon_c
     roots=1/np.sqrt((beta*kernel.medium.phase_index)**2-1)
     root=float(np.mean(roots))
     scale=.1
     x=root+scale*np.sinh(np.linspace(np.arcsinh((-8.5-root)/scale),np.arcsinh((8.5-root)/scale),cells+1))
     x[0]=-8.5;x[-1]=8.5
-    fronts=np.sqrt((kernel.medium.group_index/speed)**2-1/speed**2)
+    fronts=np.sqrt((kernel.medium.group_index/photon_c)**2-1/speed**2)
     front=float(fronts.min());fine_end=float(fronts.max()+40/reference_rho)
+    if kernel.config.scattered_receiver!='centre':
+        # The scaled glass front depends on R/rho. Cover its earliest value
+        # over the actual radius axis rather than smearing it into the anchor.
+        radius=kernel._receiver_contract()['radius_m']
+        front-=float(np.max(kernel.medium.group_index))*radius/(photon_c*min_radius)
     dt=time_step_ns/reference_rho
     maximum=max_time_ns/min_radius
     early=np.arange(front-2/reference_rho,fine_end,dt)
@@ -59,6 +75,8 @@ def contract(kernel,cells,time_step_ns,reference_rho,min_radius,max_time_ns):
         spectral_tables={k:np.asarray(v).tolist() for k,v in tables.items()},
         source_model='unit C0 per metre; C2=-C0/beta²; homogeneous optical medium',
         event_input=False,geometry_input=False,accuracy_certified=False)
+    if kernel.config.scattered_receiver!='centre':
+        physics['receiver_contract']=kernel._receiver_contract();physics['geometry_input']='glass radius only'
     settings=dict(format_version=1,physics=physics,x_edges=x.tolist(),time_over_rho_edges=t.tolist(),
         interpolation='linear positive normalized CDF; log row amplitude; exact cubic acceptance',
         reference_rho_m=reference_rho,near_front_time_step_at_reference_ns=time_step_ns,
@@ -75,11 +93,11 @@ def atomic_json(path,data):
     temporary.write_text(json.dumps(data,indent=2,allow_nan=False));os.replace(temporary,path)
 
 
-def build_row(kernel,radius,x,t,physics):
+def build_row(kernel,radius,x,t,physics,progress=None,workers=1):
     from lighthit.experimental.track_first_primitive import build_track_first_rows,orientation_nodes
     nodes,powers,matrix=orientation_nodes();inverse=np.linalg.inv(matrix)
     rows=build_track_first_rows(kernel,rho_m=radius,orientations=nodes,beta=physics['beta'],
-        speed_m_per_ns=physics['speed_m_per_ns'],u_edges_m=radius*x,tau_edges_ns=radius*t)
+        speed_m_per_ns=physics['speed_m_per_ns'],u_edges_m=radius*x,tau_edges_ns=radius*t,progress=progress,workers=workers)
     result={}
     for key,attribute in [('charge_left','_q_left'),('charge_right','_q_right'),('cdf_left','_cdf_left'),('cdf_right','_cdf_right')]:
         positive=np.stack([getattr(row,attribute) for row in rows])
@@ -87,23 +105,23 @@ def build_row(kernel,radius,x,t,physics):
     return result,rows[0].metadata
 
 
-def row_query(row,radius,x,t,powers,look,lo,hi,edges):
+def row_query(row,radius,x,t,powers,look,lo,hi,edges,*,radial_time_origin_ns=0.):
     from lighthit.experimental.track_first_primitive import TrackFirstAtlas
     # Zero radial weight at this stored node isolates u/time/angular accuracy.
     view=SimpleNamespace(radii_m=np.array([radius,radius*(1+1e-9)]),x_edges=x,
         time_over_rho_edges=t,powers=powers,metadata={'causal_zero_before_tau0':True},
         **{key:[value,value] for key,value in row.items()})
-    return TrackFirstAtlas.query(view,radius,look,lo,hi,edges)
+    return TrackFirstAtlas.query(view,radius,look,lo,hi,edges,radial_time_origin_ns=radial_time_origin_ns)
 
 
-def check_geometry(kernel,query,radius,root,*,full=True):
+def check_geometry(kernel,query,radius,root,*,full=True,beta=1.):
     from lighthit.experimental.track_first_primitive import build_track_first_primitive
     look=np.array([.23,.61,np.sqrt(1-.23**2-.61**2)])
     intervals=[(-1.,4.),(root-.25,root+.2),(root+.6,root+3.)]
     result=[]
     for j,(a,b) in enumerate(intervals if full else intervals[:1]):
         lo,hi=a*radius,b*radius;edges=np.arange(-5.,806.,5.)+.37*j
-        direct=build_track_first_primitive(kernel,rho_m=radius,orientation=look,beta=1.,speed_m_per_ns=.299792458,
+        direct=build_track_first_primitive(kernel,rho_m=radius,orientation=look,beta=beta,speed_m_per_ns=beta*.299792458,
             u_edges_m=[lo,hi],tau_edges_ns=edges)
         q,bins=query(radius,look,lo,hi,edges)
         qr,br=direct.charge_cells[0],direct.bins_cells[0]
@@ -116,6 +134,10 @@ def check_geometry(kernel,query,radius,root,*,full=True):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--model',type=Path,help='serialized optics and actual glass radius; positions are not used')
+    p.add_argument('--first-entry-tables',type=Path,help='geometry CDF for first glass entry')
+    p.add_argument('--workers',type=int,default=1,help='independent source cells; each keeps its complete wavelength sum')
+    p.add_argument('--beta',type=float,default=1.,help='actual source cone and emission-clock speed')
     p.add_argument('--radii',type=float,nargs='+',default=[3,5,8,12,18,25,35,50,70,100,150,220,300])
     p.add_argument('--build-radii',type=float,nargs='+',help='Build only this subset, leaving a resumable incomplete store')
     p.add_argument('--cells',type=int,default=96)
@@ -125,6 +147,7 @@ def main():
     p.add_argument('--reuse-rows-from',type=Path)
     p.add_argument('--validate-midpoints',type=float,nargs='*')
     args=p.parse_args()
+    if args.workers<1:p.error('positive worker count required')
     import numba
     from lighthit.experimental.track_first_primitive import orientation_nodes,TrackFirstAtlasStore
     if numba.get_num_threads()!=1:p.error('NUMBA_NUM_THREADS=1 required')
@@ -134,7 +157,10 @@ def main():
     if args.cells<16 or args.time_step<=0:p.error('positive time step and at least16 source cells required')
     selected=radii if args.build_radii is None else np.asarray(args.build_radii,float)
     if any(not np.any(radii==r) for r in selected):p.error('build radii must occur in full radius axis')
-    kernel=optical_kernel();settings,digest=contract(kernel,args.cells,args.time_step,30.,radii[0],args.max_time_ns)
+    try:kernel=optical_kernel(args.model,args.first_entry_tables)
+    except ValueError as error:p.error(str(error))
+    if not 0<args.beta<=1 or np.any(args.beta*kernel.medium.phase_index<=1):p.error('beta must emit throughout the atlas spectrum')
+    settings,digest=contract(kernel,args.cells,args.time_step,30.,radii[0],args.max_time_ns,args.beta)
     x=np.asarray(settings['x_edges']);t=np.asarray(settings['time_over_rho_edges'])
     _,powers,matrix=orientation_nodes()
     settings.update(radii_m=radii.tolist(),powers=powers.tolist(),optics_grid_hash=digest,
@@ -158,22 +184,37 @@ def main():
                 source=args.reuse_rows_from/record['file']
                 if hashlib.sha256(source.read_bytes()).hexdigest()!=record['sha256']:
                     raise ValueError('reused row checksum mismatch')
-                shutil.copyfile(source,args.output/record['file'])
+                target=args.output/record['file']
+                if target.exists():
+                    if hashlib.sha256(target.read_bytes()).hexdigest()!=record['sha256']:
+                        raise FileExistsError('different row already exists at reuse target')
+                else:
+                    try:os.link(source,target)
+                    except OSError:shutil.copyfile(source,target)
                 records[radius]={**record,'reused_from':str(args.reuse_rows_from)}
                 if str(radius) in old.get('row_checks',{}):manifest['row_checks'][str(radius)]=old['row_checks'][str(radius)]
         manifest['rows']=[records[r] for r in sorted(records)];atomic_json(manifest_path,manifest)
     print(json.dumps(dict(contract_hash=digest,source_cells=len(x)-1,time_edges=len(t),radii=radii.tolist(),
-                         event_inputs=False,geometry_inputs=False)),flush=True)
-    root=float(np.mean(1/np.sqrt(kernel.medium.phase_index**2-1)))
+                         event_inputs=False,geometry_inputs=settings['physics']['geometry_input'])),flush=True)
+    root=float(np.mean(1/np.sqrt((args.beta*kernel.medium.phase_index)**2-1)))
     for radius in selected:
         radius=float(radius)
         if radius in records:
             path=args.output/records[radius]['file']
             if hashlib.sha256(path.read_bytes()).hexdigest()!=records[radius]['sha256']:
                 raise ValueError('existing row checksum mismatch')
+            if args.check_rows and str(radius) not in manifest['row_checks']:
+                with np.load(path,allow_pickle=False) as data:row={k:data[k].copy() for k in data.files}
+                query=lambda r,look,lo,hi,edges:row_query(row,r,x,t,powers,look,lo,hi,edges)
+                manifest['row_checks'][str(radius)]=check_geometry(kernel,query,radius,root,beta=args.beta)
+                atomic_json(manifest_path,manifest)
             print(json.dumps(dict(reused_radius_m=radius)),flush=True);continue
         start,cpu=perf_counter(),process_time()
-        row,info=build_row(kernel,radius,x,t,settings['physics'])
+        def progress(completed,total):
+            if completed%8==0 or completed==total:
+                print(json.dumps(dict(rho_m=radius,source_cells_completed=completed,source_cells_total=total,
+                    elapsed_seconds=perf_counter()-start)),flush=True)
+        row,info=build_row(kernel,radius,x,t,settings['physics'],progress=progress,workers=args.workers)
         filename=f'rho-{radius:010.6f}.npz';path=args.output/filename
         with path.with_suffix('.tmp').open('wb') as stream:np.savez_compressed(stream,**row)
         os.replace(path.with_suffix('.tmp'),path)
@@ -183,7 +224,7 @@ def main():
         records[radius]=record;manifest['rows']=[records[r] for r in sorted(records)]
         if args.check_rows:
             query=lambda r,look,lo,hi,edges:row_query(row,r,x,t,powers,look,lo,hi,edges)
-            manifest['row_checks'][str(radius)]=check_geometry(kernel,query,radius,root)
+            manifest['row_checks'][str(radius)]=check_geometry(kernel,query,radius,root,beta=args.beta)
         atomic_json(manifest_path,manifest)
         print(json.dumps(dict(radius_completed=record,checks=manifest['row_checks'].get(str(radius)))),flush=True)
         del row
@@ -209,7 +250,7 @@ def main():
             store=TrackFirstAtlasStore(args.output)
             checks=[]
             for radius in midpoints:
-                found=check_geometry(kernel,store.query,float(radius),root)
+                found=check_geometry(kernel,store.query,float(radius),root,beta=args.beta)
                 checks.extend(found);print(json.dumps(dict(held_out_rho_m=radius,checks=found)),flush=True)
             atomic_json(args.output/'midpoint-checks.json',dict(checks=checks,time_rows_loaded=store.time_row_loads,
                 max_resident_rows=store.max_resident_rows,resident_bytes=store.resident_bytes))

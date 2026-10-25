@@ -93,7 +93,8 @@ def _density(r, cosine, path, g, gx, gw):
         entry, exit_path = z-root, z+root
         numerator = (path-entry)*(path-exit_path)
     else:
-        numerator = shift*shift+(rho-1)*(rho+1)
+        numerator = (path*(path-2*z)+(r-1)*(r+1) if z<=0
+                     else shift*shift+(rho-1)*(rho+1))
     # Integrate the outgoing length directly. Subtracting the first-flight
     # upper limit from path loses its positive remainder near direct entry.
     last_lo = max(0., numerator/(2*(path-(z-1))))

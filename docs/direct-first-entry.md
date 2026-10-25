@@ -14,6 +14,9 @@ the centre. This does not complete the surface-reference change for all
 orders. The standalone `ballistic_interval` retains its leading cone model;
 `PromptConfig(ballistic_method="interval")` and
 `JointMuonConfig(ballistic_method="interval")` select that comparison.
+Separately prepared [scattered surface kernels](receiver-surface.md) extend
+the same receiver convention to Q1 and >=2 through a route manifest; they
+must not be mixed with the centre-reference scattered tables.
 
 ## Integration
 

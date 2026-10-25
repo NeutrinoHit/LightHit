@@ -26,6 +26,11 @@ def test_fused_matches_generic_for_spectral_cones_and_signed_modes(flight):
         b=cone_point_evaluator(bundle,**kwargs,source_harmonics=harmonics,backend='fused-looks')(points)
         np.testing.assert_allclose(a,b,rtol=3e-13,atol=2e-15)
         np.testing.assert_array_equal(b[:,-1],0.)
+        from concurrent.futures import ThreadPoolExecutor
+        evaluate=cone_point_evaluator(bundle,**kwargs,source_harmonics=harmonics,backend='fused-looks')
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            parts=list(pool.map(evaluate,np.array_split(points,2)))
+        np.testing.assert_array_equal(np.concatenate(parts,axis=1),b)
 
 
 @pytest.mark.parametrize('quadrature',['fixed12','fixed24','adaptive'])

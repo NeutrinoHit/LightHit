@@ -297,6 +297,12 @@ def track_ge2_optics_metadata(kernel):
               g=float(kernel.medium.g),alpha=np.asarray(kernel.acceptance()['alpha']).tolist(),
               efficiency=np.asarray(kernel.detector.spectral_weight(wavelength.wavelength_nm)).tolist(),
               effective_area_m2=float(areas[0]),beta=1.,clock_ns_per_m=1/C_VACUUM_M_PER_NS)
+    if kernel.config.scattered_receiver!='centre':
+        from dataclasses import asdict
+        data['receiver_contract']=kernel._receiver_contract()
+        data['transport_settings']=asdict(kernel._solver_settings())
+        data['cache_omega_per_ns']=kernel.config.omega_per_ns.tolist()
+        data['radial_grid']=dict(range_m=list(kernel.config.radial_range_m),nodes=kernel.config.radial_nodes)
     data['optics_fingerprint']=hashlib.sha256(json.dumps(data,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     return data
 
@@ -602,7 +608,7 @@ def _charge_pairs(rho,looks,a,b,density,nodes,edge_offsets,panel_offsets,edges,c
 from .._directional_numba import _wigner_into as _ge2_wigner, _harmonics_into as _ge2_detector_harmonics
 
 
-@_ge2_njit(cache=True)
+@_ge2_njit(cache=True,nogil=True)
 def _cone_many_looks(impact,u,looks,harmonics,weights,alpha,pair_lambda,pair_mu,log_r,coefficients,
                      absorption,velocity,omega,flight,start_norm,max_out,radial_low,radial_high,
                      clamp_low):

@@ -129,6 +129,11 @@ def infinite_track_first_scattering_bounds(kernel,elements,receiver_m,*,
     delta=receiver-elements.start_m
     z=np.sum(delta*elements.direction,axis=1)
     rho=np.linalg.norm(delta-z[:,None]*elements.direction,axis=1)
+    surface_radius=0.
+    if getattr(getattr(kernel,'config',None),'scattered_receiver','centre')=='first-entry':
+        surface_radius=kernel._receiver_contract()['radius_m']
+        rho=np.maximum(0.,rho-surface_radius)
+        area*=4.
     phase=tables['phase_index'][None,:]
     active=(elements.beta[:,None]*phase>1)&(tables['mus'][None,:]>0)
     c0=elements.coefficient0[:,None]/elements.length_m[:,None]
@@ -150,6 +155,7 @@ def infinite_track_first_scattering_bounds(kernel,elements,receiver_m,*,
     positive=bounds>0
     bounds[positive]=np.nextafter(bounds[positive]*(1+64*np.finfo(float).eps),np.inf)
     return bounds,dict(bound_scope='all-time q1 for supplied positive spectral quadrature',
+        receiver_radius_m=surface_radius,receiver_surface_factor=4. if surface_radius else 1.,
         continuum_spectral_error_included=False,infinite_uniform_track_extension=True,
         convolution_method=convolution_method,
         convolution_left_rectangles=int(quadrature_nodes) if convolution_method=='left-rectangle' else None,K0_bound='exp(-x)*sqrt(pi/(2*x))',

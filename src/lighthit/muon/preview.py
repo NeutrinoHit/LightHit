@@ -139,7 +139,7 @@ def acceptance_maximum(kernel):
     return float(np.max(polynomial(candidates)))
 
 
-def check_atlas_optics(atlas, kernel, rtol=1e-9):
+def check_atlas_optics(atlas, kernel, rtol=1e-9,*,selection_only=False):
     """Refuse an atlas built for other water optics or OM spectral response."""
     from ..prompt import _spectral_tables
     stored = atlas.metadata.get('tables')
@@ -156,9 +156,15 @@ def check_atlas_optics(atlas, kernel, rtol=1e-9):
             raise ValueError(f'preview atlas optics differ from the kernel ({key})')
     if not np.isclose(float(atlas.metadata.get('g', np.nan)), kernel.medium.g, rtol=rtol, atol=0):
         raise ValueError('preview atlas optics differ from the kernel (g)')
+    if selection_only:return
+    boundary=atlas.metadata.get('angular_receiver_contract')
+    if kernel.config.scattered_receiver=='first-entry':
+        if boundary is None or not kernel._receiver_matches(boundary):
+            raise ValueError('preview arrival moments belong to another receiver boundary')
+    elif boundary is not None:raise ValueError('surface arrival moments cannot be used as centre-reference output')
 
 
-def independent_preview(kernel, source, atlas, *, primary_uid=0):
+def independent_preview(kernel, source, atlas, *, primary_uid=0,proposal=None):
     """Preview for ``transport_joint_muon``; no event response is loaded.
 
     The Q0 column stays zero: the transport replaces it by the exact direct
@@ -168,11 +174,17 @@ def independent_preview(kernel, source, atlas, *, primary_uid=0):
     """
     if not isinstance(atlas, PositiveFluenceAtlas):
         atlas = PositiveFluenceAtlas.load(atlas)
+    if kernel.config.scattered_receiver=='first-entry':check_atlas_optics(atlas,kernel)
     groups = group_elements(source, primary_uid=primary_uid)
     estimate = query_groups(atlas, groups, kernel.detector.positions_m)
     factors = np.asarray(kernel.detector.effective_area_m2)*acceptance_maximum(kernel)
     scattered = estimate['charge']*factors[:, None]
     sigma = estimate['sigma_sum']*factors[:, None]
+    if proposal is not None:
+        if not isinstance(proposal,PositiveFluenceAtlas):proposal=PositiveFluenceAtlas.load(proposal,include_angular=False)
+        old=query_groups(proposal,groups,kernel.detector.positions_m)
+        scattered=np.maximum(scattered,old['charge']*factors[:,None])
+        sigma=np.maximum(sigma,old['sigma_sum']*factors[:,None])
     direct = np.zeros(len(kernel.detector.positions_m))
     coarse = np.column_stack((direct, scattered))
     threshold = float(kernel.config.threshold_pe)
@@ -186,4 +198,6 @@ def independent_preview(kernel, source, atlas, *, primary_uid=0):
     return Preview(coarse, coarse.sum(1), forced, sigma,
                    dict(independent=True, inactivity_certified=False,
                         fine_event_data_loaded=False, groups=len(groups.points),
+                        separate_selection_proposal=proposal is not None,
+                        angular_receiver_reference='first-entry' if atlas.metadata.get('angular_receiver_contract') else 'centre',
                         angular_moments=atlas.angular_moments is not None), angular)

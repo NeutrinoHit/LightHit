@@ -315,6 +315,7 @@ class DirectionalCache:
     timings_s: dict = field(default_factory=dict)
     angular_backend: str = "numpy"
     radial_phase: str = "none"
+    receiver_contract: dict = field(default_factory=dict)
     _spline_cache: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self):
@@ -330,6 +331,13 @@ class DirectionalCache:
             raise ValueError("coefficients must be finite")
         if self.radial_phase not in ("none", "flight"):
             raise ValueError("radial_phase must be 'none' or 'flight'")
+        self.receiver_contract = dict(self.receiver_contract)
+        if self.receiver_contract:
+            radius = self.receiver_contract.get("radius_m", np.nan)
+            if (self.receiver_contract.get("schema") != "lighthit/first-entry-sphere/1"
+                    or not np.isscalar(radius) or not np.isfinite(radius)
+                    or radius <= 0 or self.grid.radii_m[0] <= radius):
+                raise ValueError("invalid first-entry receiver contract")
 
     @property
     def radius_range_m(self):
@@ -351,7 +359,8 @@ class DirectionalCache:
     @classmethod
     def build(cls, medium, settings, grid, acceptance_degree, *,
               angular_backend="numpy", radius_chunk=None, progress=None,
-              scratch_dir=None, radial_phase="none", report=None):
+              scratch_dir=None, radial_phase="none", report=None,
+              receiver_surface=None, receiver_config=None,reuse_receiver_cache=None):
         """Contract the ``m``-block resolvent rows against a Bessel table.
 
         The loop structure mirrors :meth:`lighthit.cache.ResponseCache.build`:
@@ -362,7 +371,34 @@ class DirectionalCache:
         """
         _check_backend(angular_backend)
         start = perf_counter()
+        receiver_contract = {}
+        boundary_runs = []
+        if receiver_surface is not None:
+            from .receiver import SphereSurface
+            from .receiver_vertex import ReceiverVertexConfig
+            if not isinstance(receiver_surface, SphereSurface) or receiver_surface.radius_m.ndim != 0:
+                raise ValueError("one explicit spherical receiver radius required")
+            if grid.radii_m[0] <= float(receiver_surface.radius_m):
+                raise ValueError("cached sources must lie outside the glass")
+            receiver_config = receiver_config or ReceiverVertexConfig()
+            receiver_contract = dict(schema="lighthit/first-entry-sphere/1",
+                radius_m=float(receiver_surface.radius_m), solver="boundary-jump-exact-free-tail",
+                numerics=asdict(receiver_config), scattering_degree=settings.scattering_degree,
+                convergence_verified=False)
         table = CouplingTable.build(settings.spatial_degree, acceptance_degree)
+        minimum_return_degree=0
+        if reuse_receiver_cache is not None:
+            from ._portable import same_values
+            old=reuse_receiver_cache
+            if (receiver_surface is None or not isinstance(old,cls)
+                    or old.acceptance_degree>=acceptance_degree
+                    or old.settings!=settings or old.radial_phase!=radial_phase
+                    or not same_values(asdict(old.medium),asdict(medium))
+                    or not same_values({key:old.receiver_contract.get(key) for key in receiver_contract},receiver_contract)
+                    or not np.array_equal(old.grid.radii_m,grid.radii_m)
+                    or not np.array_equal(old.grid.omega_per_ns,grid.omega_per_ns)):
+                raise ValueError('reused receiver cache must match physics, numerics and grids at lower acceptance degree')
+            minimum_return_degree=old.acceptance_degree+1
         radii = grid.radii_m
         omega = grid.omega_per_ns
         k, kw = settings.quadrature()
@@ -410,9 +446,21 @@ class DirectionalCache:
                 bessel_time = perf_counter() - before
                 for iw, frequency in enumerate(omega):
                     before = perf_counter()
-                    first, multiple = resolvent_rows(
-                        k, frequency, medium, settings.scattering_degree, L_s,
-                        L_A, backend=angular_backend, report=solve_report)
+                    if receiver_surface is None:
+                        first, multiple = resolvent_rows(
+                            k, frequency, medium, settings.scattering_degree, L_s,
+                            L_A, backend=angular_backend, report=solve_report)
+                    else:
+                        from .receiver_vertex import first_entry_vertex, receiver_rows
+                        details = {}
+                        vertex_table, vertex = first_entry_vertex(k, frequency, medium,
+                            receiver_surface, settings.scattering_degree, L_A,
+                            config=receiver_config, report=details,_minimum_return_degree=minimum_return_degree)
+                        first, multiple = receiver_rows(k, frequency, medium,
+                            settings.scattering_degree, L_s, L_A, vertex, vertex_table,
+                            backend=angular_backend)
+                        details.pop("receiver_contract", None)
+                        boundary_runs.append(dict(omega_per_ns=float(frequency), **details))
                     angular_time += perf_counter() - before
                     before = perf_counter()
                     g = np.zeros((len(k), table.triples, len(MOMENT_ORDERS)),
@@ -458,10 +506,18 @@ class DirectionalCache:
                        bessel_block_bytes=max_block_bytes,
                        temporary_disk_bytes=scratch_bytes,
                        output_bytes=coefficients.nbytes, **solve_report)
+        if receiver_surface is not None:
+            timings["receiver_boundary_runs"] = boundary_runs
+        if reuse_receiver_cache is not None:
+            for p,(lam,m) in enumerate(zip(table.pair_lambda,table.pair_mu)):
+                indices=np.flatnonzero((reuse_receiver_cache.table.pair_lambda==lam)&(reuse_receiver_cache.table.pair_mu==m))
+                if len(indices):coefficients[:,:,:,p,:]=reuse_receiver_cache.coefficients[:,:,:,indices[0],:]
+            timings['reused_acceptance_degree']=reuse_receiver_cache.acceptance_degree
         if report is not None:
             report.update(timings)
         return cls(grid, medium, settings, table, coefficients, timings,
-                   angular_backend, radial_phase=radial_phase)
+                   angular_backend, radial_phase=radial_phase,
+                   receiver_contract=receiver_contract)
 
     # -- lookup ----------------------------------------------------------
 
@@ -507,6 +563,7 @@ class DirectionalCache:
                     source_degree=self.table.source_degree,
                     timings_s=self.timings_s, angular_backend=self.angular_backend,
                     moment_orders=list(MOMENT_ORDERS), radial_phase=self.radial_phase,
+                    receiver_contract=self.receiver_contract,
                     detector_angular_model="exact_m_blocks",
                     units="photons per m^2 effective area")
 
@@ -532,7 +589,8 @@ class DirectionalCache:
                        SolverSettings(**metadata["settings"]), table,
                        data["coefficients"], metadata.get("timings_s", {}),
                        metadata.get("angular_backend", "numpy"),
-                       radial_phase=metadata.get("radial_phase", "none"))
+                       radial_phase=metadata.get("radial_phase", "none"),
+                       receiver_contract=metadata.get("receiver_contract", {}))
 
 
 # ------------------------------------------------------------------ apply

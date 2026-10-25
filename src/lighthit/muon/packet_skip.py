@@ -5,7 +5,8 @@ upper bound per (band, receiver). Each element and band uses the smaller of
 two independent valid bounds from ``track_first_bounds``: the finite-ray
 cone-separation bound and the infinite-uniform-line bound. Taking the minimum
 per band, rather than of band sums, is valid because each candidate bounds
-its own band. The bounds apply to the supplied positive spectral quadrature,
+its own band. Spheres also admit a visible-cap line bound with a last-path
+advance of at most their radius. The bounds apply to the positive quadrature,
 not to its continuum integration error.
 
 ``select_skips`` chooses omitted packet-receiver pairs per band. A packet may be
@@ -51,6 +52,14 @@ def _yukawa_upper(rho, a, b):
 
 
 @njit(cache=True)
+def _entry_yukawa_upper(rho,a,b,radius):
+    """The line convolution with the exact maximum entry-path advance."""
+    c=.5*rho*(a+b);d=.5*rho*(a-b)
+    angular=min(1.,math.sqrt(math.pi/(8.*max(d,1e-300))))
+    return 2.*math.pi*math.exp(-b*(rho-radius))*math.sqrt(math.pi/(2.*c))*angular
+
+
+@njit(cache=True)
 def _ray_bound(psi, rmin, mus, mut, g):
     # Per-ray all-time Q1 bound for angle psi to the receiver and distance
     # >= rmin; both candidates decrease with psi and with rmin.
@@ -70,7 +79,7 @@ def _ray_bound(psi, rmin, mus, mut, g):
 
 @njit(cache=True)
 def _azimuth_ray_bound(cone, theta_low, theta_high, rmin, mus, mut, g,
-                       phi_cos, phi_weight):
+                       phi_cos, phi_weight,receiver_cap=0.):
     """Upper Riemann sum of the cone-azimuth average of the per-ray bound.
 
     Directions from the segment to the receiver share one plane through the
@@ -91,7 +100,7 @@ def _azimuth_ray_bound(cone, theta_low, theta_high, rmin, mus, mut, g,
         else:
             best = max(cc * math.cos(theta_low) + sc * cp * math.sin(theta_low),
                        cc * math.cos(theta_high) + sc * cp * math.sin(theta_high))
-        psi = math.acos(min(1.0, max(-1.0, best)))
+        psi = max(0.,math.acos(min(1.0, max(-1.0, best)))-receiver_cap)
         value = _ray_bound(psi, rmin, mus, mut, g)
         if not value < np.inf:
             return np.inf
@@ -101,11 +110,12 @@ def _azimuth_ray_bound(cone, theta_low, theta_high, rmin, mus, mut, g,
 
 @njit(cache=True, parallel=True)
 def _packet_bounds(start, direction, length, beta, c0, c2, receivers, areas,
-                   phase, mus, mut, s0w, s2w, g, amax, pmax, phi_cos, phi_weight, out):
+                   phase, cone_phase, mus, mut, s0w, s2w, g, amax, pmax, phi_cos, phi_weight, receiver_radius, out):
     """Accumulate the per-element, per-band minimum of ray and line bounds into ``out``."""
     n_band = phase.shape[0]
+    same_cone=np.all(cone_phase==cone_phase[0])
     for j in prange(receivers.shape[0]):
-        scale = areas[j] * amax
+        radius=receiver_radius[j];scale = areas[j] * amax*(4. if radius>0 else 1.)
         for e in range(start.shape[0]):
             dx = receivers[j, 0] - start[e, 0]
             dy = receivers[j, 1] - start[e, 1]
@@ -126,8 +136,22 @@ def _packet_bounds(start, direction, length, beta, c0, c2, receivers, areas,
             else:
                 nearest = 0.0
             rmin = math.hypot(rho, nearest)
+            cap=math.asin(min(1.,radius/rmin)) if radius>0 and rmin>0 else 0.
+            surface_rmin=max(0.,rmin-radius);surface_rho=max(0.,rho-radius)
             theta_low = math.atan2(rho, high)
             theta_high = math.atan2(rho, low)
+            fixed_cone=0.;fixed_sine=0.;fixed_separation=0.;ray_a=0.;ray_b=0.
+            fixed_bp=beta[e]*cone_phase[0]
+            if same_cone and fixed_bp>1.:
+                fixed_cone=math.acos(min(1.,1./fixed_bp))
+                fixed_sine=math.sqrt(max(0.,1.-1./(fixed_bp*fixed_bp)))
+                fixed_separation=max(0.,max(theta_low-fixed_cone,fixed_cone-theta_high)-cap)
+                if fixed_separation>1e-12 and surface_rmin>0.:
+                    distance=surface_rmin*math.sin(min(fixed_separation,.5*math.pi))
+                    kappa=2.*math.sin(.5*fixed_separation)**2
+                    peak=(1.-g*g)/(4.*math.pi*(1.+g*g-2.*g*math.cos(fixed_separation))**1.5)
+                    ray_a=peak/(kappa*distance*distance)
+                    ray_b=_hg_angle_upper(fixed_separation,g)/surface_rmin
             for b in range(n_band):
                 bp = beta[e] * phase[b]
                 if bp <= 1.0 or mus[b] <= 0.0:
@@ -135,23 +159,42 @@ def _packet_bounds(start, direction, length, beta, c0, c2, receivers, areas,
                 photons = c0[e] * s0w[b] + c2[e] * s2w[b]
                 if photons <= 0.0:
                     continue
-                cone = math.acos(min(1.0, 1.0 / bp))
-                separation = max(0.0, max(theta_low - cone, cone - theta_high))
-                ray = photons * _ray_bound(separation, rmin, mus[b], mut[b], g)
+                cone_bp=beta[e]*cone_phase[b]
+                if cone_bp<=1.:
+                    out[b,j]=np.inf
+                    continue
+                if same_cone:
+                    cone=fixed_cone;sine=fixed_sine
+                    # Cone geometry is identical in every band; only the
+                    # extinction and scattering coefficients change.
+                    ray=(photons*mus[b]*math.exp(-mut[b]*surface_rmin)*min(ray_a/mut[b],ray_b)
+                         if fixed_separation>1e-12 and surface_rmin>0. else np.inf)
+                else:
+                    cone=math.acos(min(1.,1./cone_bp));sine=math.sqrt(max(0.,1.-1./(cone_bp*cone_bp)))
+                    separation=max(0.,max(theta_low-cone,cone-theta_high)-cap)
+                    ray=photons*_ray_bound(separation,surface_rmin,mus[b],mut[b],g)
                 if phi_cos.shape[0] > 0 and ray < np.inf:
                     ray = min(ray, photons * _azimuth_ray_bound(
-                        cone, theta_low, theta_high, rmin, mus[b], mut[b], g,
-                        phi_cos, phi_weight))
+                        cone, theta_low, theta_high, surface_rmin, mus[b], mut[b], g,
+                        phi_cos, phi_weight,cap))
                 elif phi_cos.shape[0] > 0:
                     ray = photons * _azimuth_ray_bound(
-                        cone, theta_low, theta_high, rmin, mus[b], mut[b], g,
-                        phi_cos, phi_weight)
+                        cone, theta_low, theta_high, surface_rmin, mus[b], mut[b], g,
+                        phi_cos, phi_weight,cap)
                 line = np.inf
-                sine = math.sqrt(max(0.0, 1.0 - 1.0 / (bp * bp)))
-                if rho > 0.0 and sine > 0.0:
+                if surface_rho > 0.0 and sine > 0.0:
                     line = (photons / length[e] * mus[b] * pmax / (2.0 * sine)
-                            * _yukawa_upper(rho, mut[b] / sine, mut[b]))
-                out[b, j] += scale * min(ray, line)
+                            * _yukawa_upper(surface_rho, mut[b] / sine, mut[b]))
+                bound=scale*min(ray,line)
+                if radius>0. and rmin>radius and rho>0. and sine>0.:
+                    # Visible solid angle <= 2*pi*R^2/D^2 for D>=R.
+                    # Extinction to entry advances the last path by at most R.
+                    # This tightens only the bound, never the signal.
+                    shifted=_entry_yukawa_upper(rho,mut[b]/sine,mut[b],radius)
+                    centre=(photons/length[e]*mus[b]*pmax/(2.*sine)*shifted
+                            if math.isfinite(shifted) else np.inf)
+                    bound=min(bound,2.*areas[j]*amax*centre)
+                out[b,j]+=bound
 
 
 def bound_constants(kernel):
@@ -178,18 +221,35 @@ def azimuth_partition(nodes):
 
 
 def packet_first_bounds(elements, receivers_m, areas, tables, constants, *,
-                        azimuth_nodes=0):
+                        azimuth_nodes=0,receiver_radius_m=None):
     """All-time Q1 upper bounds, shape (bands, receivers), for one packet.
 
     ``tables`` are prompt._spectral_tables(kernel); every band's own Cherenkov
     threshold is applied to the supplied elements. Infinity marks pairs with
     no supported bound (cone crossing on the line through the receiver).
+
+    Frozen cones use the source's reference phase index for geometry while
+    each wavelength retains its own emission threshold and spectral yield.
+
+    For a supplied glass radius, every point on the sphere uses distance
+    minima reduced by R and ray separation reduced by its angular cap. The
+    full inward flux is at most surface area times the largest point fluence;
+    dividing by projected area gives the conservative factor four. First-entry
+    stopping can only reduce it. This bound retains the packet skip tolerance.
     """
     g, amax, pmax = constants
     if np.any(np.asarray(elements.length_m) <= 0):
         raise ValueError('positive segment lengths required')
     receivers = np.ascontiguousarray(receivers_m, float)
+    radii=np.zeros(len(receivers)) if receiver_radius_m is None else np.broadcast_to(np.asarray(receiver_radius_m,float),(len(receivers),)).copy()
+    if not np.isfinite(radii).all() or np.any(radii<0):raise ValueError('finite nonnegative receiver radii required')
     out = np.zeros((len(tables['wavelength_nm']), len(receivers)))
+    phase=np.ascontiguousarray(tables['phase_index'],float)
+    cone_phase=phase
+    if getattr(elements,'cone_model','spectral')=='frozen':
+        reference=float(elements.reference_phase_index)
+        if not np.isfinite(reference) or reference<=0:raise ValueError('finite positive cone phase index required')
+        cone_phase=np.full_like(phase,reference)
     if len(receivers) and len(elements):
         _packet_bounds(np.ascontiguousarray(elements.start_m, float),
                        np.ascontiguousarray(elements.direction, float),
@@ -198,12 +258,12 @@ def packet_first_bounds(elements, receivers_m, areas, tables, constants, *,
                        np.ascontiguousarray(elements.coefficient0, float),
                        np.ascontiguousarray(elements.coefficient2, float),
                        receivers, np.ascontiguousarray(areas, float),
-                       np.ascontiguousarray(tables['phase_index'], float),
+                       phase,cone_phase,
                        np.ascontiguousarray(tables['mus'], float),
                        np.ascontiguousarray(tables['mut'], float),
                        np.ascontiguousarray(tables['s0w'], float),
                        np.ascontiguousarray(tables['s2w'], float),
-                       g, amax, pmax, *azimuth_partition(int(azimuth_nodes)), out)
+                       g, amax, pmax, *azimuth_partition(int(azimuth_nodes)), radii, out)
     # Absorb accumulated rounding of the sums; bounds stay upper bounds.
     return np.nextafter(out * (1 + 1e-12), np.inf)
 

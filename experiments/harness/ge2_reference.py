@@ -81,7 +81,7 @@ def cap_score(w,incoming,look,R,mu,g,p,qx,qw,phix,phiw):
 
 @njit(cache=True)
 def collision_batch(count,seed,start,axis,length,beta,source_cdf,edges,phase_index,extinction,scattering,efficiency,eta_max,max_sin2,g,
-          receivers,looks,radii,areas,apoly,qx,qw,phix,phiw,target_prob,importance=3):
+          receivers,looks,radii,areas,apoly,qx,qw,phix,phiw,target_prob,importance=3,fixed_wavelength_nm=0.):
     np.random.seed(seed);total=np.zeros((2,2));square=total.copy();inside=np.zeros(2,np.int64)
     norm_total=np.zeros(2);norm_square=np.zeros(2)
     target_cdf=np.cumsum(target_prob)
@@ -90,7 +90,7 @@ def collision_batch(count,seed,start,axis,length,beta,source_cdf,edges,phase_ind
         target_index=np.searchsorted(target_cdf,np.random.random(),side='right')
         receiver=receivers[target_index];look=looks[target_index]
         R=radii[target_index];area=areas[target_index]
-        while True:
+        while fixed_wavelength_nm<=0:
             wavelength=1/(1/edges[0]-np.random.random()*(1/edges[0]-1/edges[-1]))
             panel=np.searchsorted(edges,wavelength,side='right')-1
             fraction=(wavelength-edges[panel])/(edges[panel+1]-edges[panel])
@@ -98,6 +98,8 @@ def collision_batch(count,seed,start,axis,length,beta,source_cdf,edges,phase_ind
             eta=((e[3]*fraction+e[2])*fraction+e[1])*fraction+e[0]
             if len(e)>4:eta*=math.exp(e[4]+fraction*e[5])
             if np.random.random()*eta_max<eta:break
+        if fixed_wavelength_nm>0:
+            panel=0;fraction=0.
         i=np.searchsorted(source_cdf,np.random.random(),side='right')
         index=phase_index[panel]+fraction*(phase_index[panel+1]-phase_index[panel])
         if beta[i]*index<=1:continue
@@ -183,13 +185,16 @@ def collision_batch(count,seed,start,axis,length,beta,source_cdf,edges,phase_ind
 
 
 def estimate(kernel, source, receivers, *, samples=1_000_000, seed=582317,
-             allocation=None, batch_size=100_000):
+             allocation=None, batch_size=100_000, wavelength_nm=None):
     """Return order 1 and >=2 first-entry charge and photon-sampling error.
 
     ``allocation`` optionally supplies positive receiver proposal weights.
     The angular response must be a nonnegative cubic and the medium must
     have nonnegative HG g and albedo strictly below one half. Point scores
     are returned for comparison; their second moment need not be finite.
+    With ``wavelength_nm`` the optics and Cherenkov cone are monochromatic;
+    the result is differential PE per nm, including efficiency at that
+    wavelength but no wavelength quadrature weight.
     """
     from lighthit.ballistic_interval import prepare_optics
     from lighthit._surface_ballistic_bounds import efficiency_upper
@@ -213,14 +218,28 @@ def estimate(kernel, source, receivers, *, samples=1_000_000, seed=582317,
     extrema=[-1.,1.]+[float(v.real) for v in roots if abs(v.imag)<1e-12 and -1<v.real<1]
     if np.polynomial.polynomial.polyval(extrema,poly).min() < -1e-12*max(1.,abs(poly).sum()):
         raise ValueError('HG-cap reference requires a nonnegative angular polynomial')
-    t=prepare_optics(kernel,exact_response=True);edges=t['panel_edges']
-    optics=kernel.medium.sample(edges)
+    if wavelength_nm is None:
+        t=prepare_optics(kernel,exact_response=True);edges=t['panel_edges']
+        optics=kernel.medium.sample(edges)
+        x,w=np.polynomial.legendre.leggauss(16)
+        lam=((edges[:-1]+edges[1:])[:,None]/2+np.diff(edges)[:,None]/2*x).ravel()
+        eta_integral=np.sum((np.diff(edges)[:,None]/2*w).ravel()*kernel.detector.spectral_weight(lam)/lam**2)
+    else:
+        if (isinstance(wavelength_nm,(bool,np.bool_)) or np.ndim(wavelength_nm)!=0
+                or not np.isfinite(wavelength_nm) or wavelength_nm<=0):
+            raise ValueError('monochromatic wavelength must be finite and positive')
+        wavelength_nm=float(wavelength_nm)
+        # No spectral draw or interpolation occurs in this branch. Constant
+        # endpoint arrays keep the collision kernel's optical interface.
+        edges=np.array([wavelength_nm,2*wavelength_nm])
+        optics=kernel.medium.sample(np.full(2,wavelength_nm))
+        t=dict(phase_nodes=optics['phase_index'],
+               extinction_nodes=optics['absorption_per_m']+optics['scattering_per_m'],
+               efficiency_coefficients=np.array([[1.,0.,0.,0.,0.,0.]]))
+        eta_integral=float(np.asarray(kernel.detector.spectral_weight(np.array([wavelength_nm])))[0])/wavelength_nm**2
     albedo=optics['scattering_per_m']/(optics['absorption_per_m']+optics['scattering_per_m'])
     if np.max(albedo)>=.5:
         raise ValueError('this reference requires albedo below one half')
-    x,w=np.polynomial.legendre.leggauss(16)
-    lam=((edges[:-1]+edges[1:])[:,None]/2+np.diff(edges)[:,None]/2*x).ravel()
-    eta_integral=np.sum((np.diff(edges)[:,None]/2*w).ravel()*kernel.detector.spectral_weight(lam)/lam**2)
     max_sin2=np.maximum(0.,1-1/(source.beta*optics['phase_index'].max())**2)
     weights=source.coefficient0*max_sin2
     if weights.sum()<=0 or eta_integral<=0:
@@ -250,12 +269,16 @@ def estimate(kernel, source, receivers, *, samples=1_000_000, seed=582317,
     while count<samples:
         n=min(int(batch_size),int(samples-count))
         q,v,within,nt,nv=collision_batch(n,int(seed+batch_index),*base,
-            empty,empty,empty,empty,proposal,4)
+            empty,empty,empty,empty,proposal,4,0. if wavelength_nm is None else wavelength_nm)
         total+=q;square+=v;inside+=within;norm+=nt;norm2+=nv
         count+=n;batch_index+=1
     mean=yield_scale*total/count
     error=yield_scale*np.sqrt(np.maximum(0.,square-total*total/count)/(count-1)/count)
-    return dict(charge_pe=mean[:,1].tolist(),mc_sigma_pe=error[:,1].tolist(),
+    result=dict(charge_pe=mean[:,1].tolist(),mc_sigma_pe=error[:,1].tolist(),
                 point_charge_pe=mean[:,0].tolist(),samples=count,seed=int(seed),
                 receivers=ids.tolist(),spectral_sampling='continuous',
                 no_collision_order_cutoff=True,normalization_yield=float(yield_scale))
+    if wavelength_nm is not None:
+        result.update(spectral_sampling='monochromatic',wavelength_nm=wavelength_nm,
+                      charge_unit='pe/nm')
+    return result

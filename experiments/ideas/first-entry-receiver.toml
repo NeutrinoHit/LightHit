@@ -1,10 +1,10 @@
 id = "first-entry-receiver"
-title = "Geometry-only first-scattering profiles at the first glass entry"
+title = "First-entry glass kernels on the fast shower and muon routes"
 area = "core"
 question = "Can the true receiver boundary be tabulated independently of wavelength while retaining the existing ten angular moments?"
 kind = "table-builder"
 status = "open"
-verdict = "The geometry-row builder is checked against independent visible-cap integration and supplies ten arrival-direction moments. Interpolated tables and integration into the fast event routes remain unfinished; the default routes are unchanged."
+verdict = "Separately prepared glass kernels retain source degree 32, grouping, track atlases and the three-band fold. Secondary-Q1 optimization restores the full warm mu100 time to 116.80 s against the previous 117.52 s; the per-unit tolerance and residual distance flags remain unchanged. The new boundary requires its own data manifest; centre-reference bundles remain available."
 cases = ["first-entry-receiver/geometry-rows"]
 how-to-run = "PYTHONPATH=src python experiments/run.py run 'first-entry-receiver/geometry-rows'"
 inputs = ["unit-radius sphere, source distance 6 radii, pencil angles 0 / 0.7 / 2.8 rad, HG g=0.9, extinction times radius 0.12; synthetic geometry checks"]
@@ -13,14 +13,22 @@ notes = [
   "The row carries no wavelength-dependent attenuation, scattering coefficient, yield or detector efficiency. Path density scales as R^-2 and cumulative moments as R^-1.",
   "The path grid splits at the glass front, direct entry and tangent path. The direct entry is an internal logarithmic singularity for a pencil that hits the receiver.",
   "The registry case checks three scalar folded rows; tests/test_receiver_first.py checks all ten moments, physical-radius scaling and additional geometry. These checks establish no event-route timing or interpolation accuracy.",
+  "The receiver boundary jump uses a geometric full-HG first return and an exact free-space tail; a distant PN radial solution and its inaccurate first-return reconstruction were rejected. Orders 0, 1 and >=2 remain separate.",
+  "Physical-time Q1 uses a shared coarse/fine CDF error budget; source grouping and spatial/angular truncation require separate checks. Primary beta-time anchors retain actual cone angles and emission clocks, including the original residual-clock guard.",
+  "A narrow point-cone preview needs a separate higher-degree stationary reference. The event degree remains 32. Cubic-response positivity is checked over all orientations; unresolved cells use a positive independent collision-series reference with retained sampling errors, without charge clipping.",
+  "A 17-node positive wavelength rule failed the additional glass waveform check (1.20% against 1%). The existing 25-node rule passed eight synthetic segment states and three looks: maximum bin L1 0.792%, charge error 5.61e-7 relative. No event response entered fitting.",
+  "The full-event checks reuse identical saved charged steps and photon MC with suppression=1. Failed significant distance/order flags are retained, even when the total agrees. See docs/receiver-surface.md for data contracts and validation scope.",
+  "Addressed mu1TeV 100-150 m controls retain the failed >=2 ratio 1.12109. An independent stratified first-entry estimate gives .01098161 +/- .00055870 pe against route .01255750 and saved MC .01120119. Detailed ready-kernel application to all 260 OMs changes the route by -0.962%; L32 to L128 differs below 0.988% on five contribution-selected OMs in three physical bands. The independent precision is 5.09%, so neither a unique kernel defect nor a saved-MC fluctuation is established. No production settings change.",
+  "Monochromatic mu1TeV tail controls at 481/493/538 nm give RTE/independent >=2 ratios 1.00486+/-.04137, 1.04642+/-.03436 and 1.01919+/-.13477 with four million histories each. All pass the unchanged statistical criterion; none certifies all-wavelength 3% accuracy. Exact 32-band/fold3 agreement on five contribution-selected OMs is within 2.683e-6 relative, separating fold error from wavelength quadrature and kernel convergence. Production remains unchanged.",
+  "Exact emission geometry, shared charge/time interpolation data and lazy contiguous-time CDF rows remove repeated work. Read-only layout controls preserve charges, bins and cancellation guards bitwise; low-memory cases retain the canonical interpolator.",
 ]
 
 [code]
-modules = ["lighthit.receiver_first", "lighthit._receiver_first_numba"]
-functions = ["first_entry_profile", "FirstEntryProfile"]
-options = ["supplied SphereSurface; explicit max_path_m; path_nodes / path_order / scatter_order"]
-scripts = []
-tests = ["tests/test_receiver_first.py"]
+modules = ["lighthit.receiver_first", "lighthit._receiver_first_numba", "lighthit.receiver_vertex", "lighthit.receiver_adjoint", "lighthit.receiver_bank", "lighthit.receiver_geometry", "lighthit.receiver_first_atlas", "lighthit.receiver_first_spectral", "lighthit.receiver_first_adaptive", "lighthit.receiver_prompt", "lighthit.receiver_segment", "lighthit.muon.first_time_beta", "lighthit.muon._surface_preview", "lighthit.muon._surface_preview_mc"]
+functions = ["first_entry_profile", "FirstEntryProfile", "FirstTimeBetaAtlas"]
+options = ["supplied SphereSurface; explicit max_path_m; path_nodes / path_order / scatter_order", "KernelConfig.scattered_receiver=first-entry; first_entry_tables; receiver_vertex", "separate shower/muon manifests; optional primary_first_time_beta and primary_first_cubature"]
+scripts = ["experiments/receiver_surface.py", "experiments/prepare_receiver_route.py", "experiments/receiver_event_check.py", "experiments/receiver_prompt_check.py", "experiments/validate_receiver_cubature.py", "experiments/validate_receiver_time_beta.py", "tools/tables/build_surface_preview.py"]
+tests = ["tests/test_receiver_first.py", "tests/test_receiver_vertex.py", "tests/test_receiver_contract.py", "tests/test_receiver_geometry.py", "tests/test_receiver_first_atlas.py", "tests/test_receiver_spectral.py", "tests/test_receiver_prompt.py", "tests/test_first_time_beta.py", "tests/test_surface_preview_mc.py", "tests/test_preview_positivity.py"]
 
 # ---- measured (generated by experiments/report.py from experiments/results; do not edit below) ----
 

@@ -200,18 +200,31 @@ class Ge2KernelStore:
                     and all(name in known for name, known in zip(key[0], names))):
                 self._bundles.setdefault((current,) + key[1:], self._bundles.pop(key))
 
+    @staticmethod
+    def _check_boundary(kernel,bundle):
+        matches=getattr(kernel,'_bundle_matches',None)
+        if matches is None:
+            # Minimal centre-reference kernel protocols predate boundary
+            # metadata. They cannot safely consume a surface pack.
+            valid=(not bundle.get('receiver_contract')
+                and getattr(kernel.config,'scattered_receiver','centre')=='centre')
+        else:valid=matches(bundle)
+        if not valid:raise ValueError('order >=2 pack has another receiver boundary')
+
     def bundle(self, kernel, indices):
         """The stacked order >=2 spline of every kernel wavelength (built once)."""
         from ._directional_numba import PreparedDirectionalKernel
         self._adopt(kernel)
         key = self._key(kernel, indices)
         if key in self._bundles:
+            self._check_boundary(kernel,self._bundles[key])
             return self._bundles[key]
         # A prepared dense pack can serve a sparse frequency subset without
         # rebuilding splines or copying their large coefficient array.
         for old_key, prepared in list(self._bundles.items()):
             if old_key[:2] != key[:2]:
                 continue
+            self._check_boundary(kernel,prepared)
             old_indices = np.asarray(old_key[2], np.int64)
             requested = np.asarray(indices, np.int64)
             locations = np.searchsorted(old_indices, requested)
@@ -267,6 +280,8 @@ class Ge2KernelStore:
         coefficients.setflags(write=False)
         bundle = dict(shared, coefficients=coefficients, _norm_cache={},
                       absorption=np.asarray(absorption, float), speed=np.asarray(speed, float))
+        if kernel.config.scattered_receiver!='centre':
+            bundle['receiver_contract']=kernel._receiver_contract();bundle['kernel_keys']=list(key[0])
         self._bundles[key] = bundle
         return bundle
 
@@ -281,6 +296,7 @@ class Ge2KernelStore:
         self._adopt(kernel)
         selected_indices=np.atleast_1d(np.asarray(indices) if frequencies is None else np.asarray(indices)[frequencies])
         compact=self._bundles.get(self._key(kernel,selected_indices)) if frequencies is not None else None
+        if compact is not None:self._check_boundary(kernel,compact)
         bundle = compact if compact is not None else self.bundle(kernel, indices)
         lam = int(np.flatnonzero(np.isclose(kernel.wavelength.wavelength_nm,
                                             float(wavelength_nm), rtol=0, atol=1e-9))[0])

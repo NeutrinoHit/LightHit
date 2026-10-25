@@ -54,8 +54,28 @@ def test_selection_respects_certificate_seeds_and_unsupported_pairs():
     assert skip.sum() > 6
 
 
+def test_computed_pairs_with_infinite_bounds_keep_a_finite_certificate(tmp_path,monkeypatch):
+    import lighthit.muon.packet_skip as bounds_module
+    kernel,source,packets=secondary_case(tmp_path)
+    def unsupported(part,positions,areas,tables,*args,**options):
+        return np.full((len(tables['mut']),len(positions)),np.inf)
+    monkeypatch.setattr(bounds_module,'packet_first_bounds',unsupported)
+    ids=np.array([0,1]);origins=np.zeros(2)
+    expected,bins,_=evaluate_secondary_first(kernel,source,packets,ids,origins)
+    with np.errstate(invalid='raise'):
+        q,b,metadata=evaluate_secondary_first(kernel,source,packets,ids,origins,
+            skip_epsilon=.001,skip_seed_fraction=.5)
+    np.testing.assert_allclose(q,expected,rtol=3e-15)
+    np.testing.assert_allclose(b,bins,rtol=3e-14,atol=1e-25)
+    for row in metadata['packet_skip']['bands']:
+        assert row['skipped_pairs']==0
+        assert row['max_omitted_bound_over_seed_charge']==0.
+        np.testing.assert_array_equal(row['omitted_bound_pe'],0.)
+
+
 @pytest.mark.parametrize('epsilon', [1e-3, .5])
-def test_skipping_route_is_certified_against_full_secondary_q1(tmp_path, epsilon):
+@pytest.mark.parametrize('fuse_bands',[False,True])
+def test_skipping_route_is_certified_against_full_secondary_q1(tmp_path, epsilon,fuse_bands):
     kernel, source, packets = secondary_case(tmp_path)
     # A weak packet 250 m below both near modules, emitting away from them.
     far = SpectralLightElements(np.array([[11., 4., -250.]]), np.array([[0., 0., -1.]]),
@@ -69,11 +89,12 @@ def test_skipping_route_is_certified_against_full_secondary_q1(tmp_path, epsilon
     ids = np.array([1, 0, 2]); origins = np.array([.7, -.3, 0.])
     import lighthit as lh
     settings = lh.PromptConfig(element_method='grouped', screen=False, batch_charge_tolerance_pe=1e-6)
-    q0, b0, _ = evaluate_secondary_first(kernel, source, packets, ids, origins, config=settings)
+    q0, b0, _ = evaluate_secondary_first(kernel, source, packets, ids, origins, config=settings,fuse_bands=fuse_bands)
     q, b, meta = evaluate_secondary_first(kernel, source, packets, ids, origins, config=settings,
-                                          skip_epsilon=epsilon, skip_seed_fraction=.3)
+                                          skip_epsilon=epsilon, skip_seed_fraction=.3,fuse_bands=fuse_bands)
     skip = meta['packet_skip']
-    assert skip['epsilon'] == epsilon and len(skip['bands']) == 9
+    assert skip['epsilon'] == epsilon and len(skip['bands']) > 0
+    if not fuse_bands:assert len(skip['bands'])==9
     for band in skip['bands']:
         assert band['max_omitted_bound_over_seed_charge'] <= epsilon*(1+1e-9)
     # Omitted grouped Q1 is nonnegative mass below epsilon times the computed charge.
@@ -85,6 +106,63 @@ def test_skipping_route_is_certified_against_full_secondary_q1(tmp_path, epsilon
     assert np.all(l1 <= epsilon*q*(1+1e-9)+1e-30)
     if epsilon == .5:
         assert sum(band['skipped_pairs'] for band in skip['bands']) > 0
+
+
+def test_remainder_bounds_do_not_depend_on_brightness_of_the_fused_source(tmp_path,monkeypatch):
+    from dataclasses import replace
+    import lighthit.muon.packet_skip as skip_module
+    kernel,source,packets=secondary_case(tmp_path)
+    recorded=[];select=skip_module.select_skips
+    def capture(bounds,*args):
+        recorded.append(bounds.copy())
+        return select(bounds,*args)
+    monkeypatch.setattr(skip_module,'select_skips',capture)
+    options=dict(fuse_bands=True,skip_epsilon=.001)
+    evaluate_secondary_first(kernel,source,[packets[1]],np.array([0]),np.zeros(1),**options)
+    before=recorded.copy();recorded.clear()
+    c0=source.coefficient0.copy();c2=source.coefficient2.copy()
+    c0[1]*=1000;c2[1]*=1000
+    changed=replace(source,coefficient0=c0,coefficient2=c2)
+    evaluate_secondary_first(kernel,changed,[packets[1]],np.array([0]),np.zeros(1),**options)
+    assert len(before)==len(recorded)>1
+    assert np.any(recorded[0]>100*before[0])
+    for a,b in zip(before[1:],recorded[1:]):np.testing.assert_array_equal(a,b)
+
+
+@pytest.mark.parametrize('rho',[3.,30.])
+def test_visible_cap_line_bound_exceeds_independent_sphere_entry_integral(rho):
+    from lighthit.muon.packet_skip import _yukawa_upper
+    # Uniform track, isotropic scattering, unit area/acceptance. Integrate
+    # emission position, cone azimuth, first flight and the visible sphere cap.
+    n=1.34;R=.216;mu=.05;mus=.02;length=100.;sine=np.sqrt(1-1/n**2)
+    c0=length/(1-1/n**2)
+    source=SpectralLightElements(np.array([[0.,0.,-length/2]]),np.array([[0.,0.,1.]]),
+        np.array([length]),np.array([c0]),np.array([-c0]),np.ones(1),np.zeros(1),
+        np.array([length/.299792458]),np.zeros(1,int),np.zeros(1,int),cone_model='spectral')
+    tables=dict(wavelength_nm=np.array([450.]),phase_index=np.array([n]),mut=np.array([mu]),
+        mus=np.array([mus]),s0w=np.ones(1),s2w=np.array([1/n**2]))
+    bound=packet_first_bounds(source,np.array([[rho,0.,0.]]),np.ones(1),tables,(0.,1.,1/(4*np.pi)),receiver_radius_m=R)[0,0]
+    previous=4*mus/(8*np.pi*sine)*_yukawa_upper(rho-R,mu/sine,mu)
+    assert bound<previous
+    ax,aw=np.polynomial.legendre.leggauss(32);fx,fw=np.polynomial.legendre.leggauss(192)
+    cx,cw=np.polynomial.legendre.leggauss(8);cap_t=(cx+1)/2;cap_w=cw/2
+    phi=2*np.pi*(np.arange(64)+.5)/64
+    directions=np.column_stack((sine*np.cos(phi),sine*np.sin(phi),np.full(len(phi),1/n)))
+    t=(fx+1)/2;ell=rho*t/(1-t);lw=fw/2*rho/(1-t)**2
+    result=0.
+    for a,w in zip(ax*length/2,aw*length/2):
+        target=np.array([rho,0.,-a]);along=directions@target
+        discriminant=along**2-(target@target-R*R)
+        entry=np.where((along>0)&(discriminant>=0),along-np.sqrt(np.maximum(0.,discriminant)),np.inf)
+        delta=target-directions[:,None,:]*ell[None,:,None];distance=np.linalg.norm(delta,axis=2)
+        outside=(distance>R)&(ell[None,:]<entry[:,None])
+        d=np.maximum(distance,R);x=(R/d)**2
+        width=x/(1+np.sqrt(np.maximum(0.,1-x)))
+        u=1-width[:,:,None]*(1-cap_t)
+        flight=d[:,:,None]*u-np.sqrt(np.maximum(0.,R*R-d[:,:,None]**2*(1-u)*(1+u)))
+        probability=.5*width*np.sum(cap_w*np.exp(-mu*flight),axis=2)
+        result+=w*np.sum(lw[None,:]*mus*np.exp(-mu*ell)[None,:]*probability*outside)/len(phi)/(np.pi*R*R)
+    assert 0<result<=bound
 
 
 def test_packet_bounds_exceed_each_packet_q1_on_spectral_kernel(tmp_path):
@@ -105,17 +183,19 @@ def test_packet_bounds_exceed_each_packet_q1_on_spectral_kernel(tmp_path):
 
 @pytest.mark.parametrize('receiver', [[40., 0., 20.], [180., 0., -50.], [20., 0., 100.],
                                       [0., 60., 52.], [-30., 25., 5.], [3., 1., 300.]])
-def test_azimuth_bound_exceeds_independent_single_scattering_integral(receiver):
+@pytest.mark.parametrize('frozen_phase',[None,1.2])
+def test_azimuth_bound_exceeds_independent_single_scattering_integral(receiver,frozen_phase):
     # Independent quadrature over segment position, Cherenkov azimuth and the
     # first flight; HG, exact attenuation and constant unit acceptance.
     from dataclasses import replace
     kernel, source = bound_case()
     source = replace(source, start_m=np.zeros((1, 3)), length_m=np.array([.2]),
                      coefficient0=np.array([.2]), coefficient2=np.array([-.2]))
+    if frozen_phase is not None:source=replace(source,cone_model='frozen',reference_phase_index=frozen_phase)
     tables = prompt._spectral_tables(kernel)
     mus, mut, g = tables['mus'][0], tables['mut'][0], .9
     photons = .2*tables['s0w'][0]-.2*tables['s2w'][0]
-    cone = 1/1.34; sincone = np.sqrt(1-cone**2)
+    cone = 1/(1.34 if frozen_phase is None else frozen_phase); sincone = np.sqrt(1-cone**2)
     px, pw = np.polynomial.legendre.leggauss(256); phi = np.pi*(px+1); pw = pw/2
     ax, aw = np.polynomial.legendre.leggauss(8)
     y, v = np.polynomial.legendre.leggauss(400); t = (y+1)/2

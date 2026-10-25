@@ -118,6 +118,8 @@ def secondary_joint_transport(kernel, source, ancestry, receiver_indices, *,
     from ..readout import inverse_bins
     from scipy.interpolate import CubicSpline
     config=config or JointMuonConfig()
+    if kernel.config.scattered_receiver=='first-entry' and config.first_backend!='grouped':
+        raise ValueError('first-entry muon Q1 requires the grouped backend')
     if config.first_backend=='atlas':
         # Research route: secondary Q1 from photon histograms (experimental).
         from ..experimental.joint_first import direct_photon_histogram
@@ -374,6 +376,8 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
     from functools import partial
     config=config or JointMuonConfig()
     elements=kernel._source_elements(source)
+    if kernel.config.scattered_receiver=='first-entry' and config.first_backend!='grouped':
+        raise ValueError('first-entry muon Q1 requires the grouped backend')
     n=len(kernel.detector.positions_m);omega=kernel.config.omega_per_ns
     if not np.array_equal(np.asarray(primary_ge2_store.omega_per_ns),omega):
         raise ValueError('primary atlas and joint RTE frequency grids differ')
@@ -466,11 +470,12 @@ def transport_joint_muon(kernel,source,ancestry,*,preview,primary_first_store,
         ballistic_seconds=q0_seconds,config=asdict(config),batches=batches,smart_screen=audit,
         ballistic=ballistic_metadata,
         receiver_reference_by_order={'0': ('first-entry' if prepared is not None else 'centre-ray'),
-                                     '1': 'centre', '>=2': 'centre'},
+                                     '1': kernel.config.scattered_receiver, '>=2': kernel.config.scattered_receiver},
         fine_charge_mask=evaluated.tolist(),active_modules=int(active.sum()),
         inactive_order1_charge_may_be_coarse=bool((~evaluated).any()),
         inactive_ge2_charge_may_be_coarse=bool((~evaluated).any()),
-        inactive_scattered_estimate='spectral cone fluence with arrival-direction moments',
+        inactive_scattered_estimate=('first-entry cone fluence with arrival-direction moments'
+            if kernel.config.scattered_receiver=='first-entry' else 'spectral cone fluence with arrival-direction moments'),
         prompt_order1_level=np.where(evaluated,2,1).tolist(),
         computed_orders=[0,1,'>=2'],first_backend=config.first_backend,ge2_backend=config.ge2_backend,
         source_representation=('original grouped secondary Q1; joint harmonic bins for >=2'

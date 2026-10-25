@@ -125,7 +125,7 @@ def build_track_first_primitive(kernel, *, rho_m, orientation, beta, speed_m_per
 
 def build_track_first_rows(kernel, *, rho_m, orientations, beta, speed_m_per_ns,
                                 u_edges_m, tau_edges_ns, spectral_order=2,
-                                prompt_config=None):
+                                prompt_config=None,progress=None,workers=1):
     """Build one explicitly orientation-specific row with the direct integrator.
 
     ``kernel`` supplies medium, optical acceptance and detector properties; its
@@ -138,6 +138,7 @@ def build_track_first_rows(kernel, *, rho_m, orientations, beta, speed_m_per_ns,
     from time import perf_counter, process_time
     from ..sources import SpectralLightElements
     from ..prompt import PromptConfig
+    from ..receiver import SphereSurface
     from .muon_integral import order1_integrals
     from .primary_polyline import primary_spectral_quadrature
     u,t = np.asarray(u_edges_m,float),np.asarray(tau_edges_ns,float)
@@ -162,29 +163,51 @@ def build_track_first_rows(kernel, *, rho_m, orientations, beta, speed_m_per_ns,
     d = kernel.detector
     local.detector = replace(d,positions_m=np.tile([rho,0.,0.],(count,1)),
         orientations=directions,effective_area_m2=np.repeat(d.effective_area_m2[:1],count),
-        receiver_surface=None,
+        receiver_surface=(None if kernel.config.scattered_receiver=='centre' else
+            SphereSurface(kernel._receiver_contract()['radius_m'])),
         identifiers={k:np.repeat(val[:1],count,axis=0) for k,val in d.identifiers.items()})
     local.config = replace(kernel.config,relative_time_edges_ns=t)
     local.wavelength = primary_spectral_quadrature(kernel.medium,d,order=spectral_order,
         wavelength_range_nm=kernel.config.wavelength_range_nm)
     config = prompt_config or PromptConfig(element_method='segment',screen=False)
+    if isinstance(workers,(bool,np.bool_)) or not isinstance(workers,(int,np.integer)) or workers<1:
+        raise ValueError('positive integer worker count required')
+    workers=min(int(workers),len(u)-1)
+    # Only read-only geometry and optical functions are shared between cells.
+    # Each cell retains its own wavelength sum, quadrature and output arrays.
+    local.acceptance()
+    if kernel.config.scattered_receiver!='centre':
+        from ..receiver_segment import geometry_for
+        geometry_for(local)
     q,b = [],[]
     started,cpu = perf_counter(),process_time()
-    for low,high in zip(u[:-1],u[1:]):
+    def cell(bounds):
+        low,high=bounds
         length = high-low
         source = SpectralLightElements(np.array([[0.,0.,-high]]),np.array([[0.,0.,1.]]),
             np.array([length]),np.array([length]),np.array([-length/beta**2]),
             np.array([beta]),np.array([-high/v]),np.array([-low/v]),
             np.array([0]),np.array([0]),cone_model='spectral')
         charge,bins,_ = order1_integrals(local,source,time_origin_ns=np.zeros(count),config=config)
-        q.append(charge);b.append(bins)
+        return charge,bins
+    def collect(results):
+        for charge,bins in results:
+            q.append(charge);b.append(bins)
+            if progress is not None:progress(len(q),len(u)-1)
+    bounds=list(zip(u[:-1],u[1:]))
+    if workers==1:collect(map(cell,bounds))
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as pool:collect(pool.map(cell,bounds))
     metadata = dict(rho_m=rho,beta=beta,batch_orientations=count,
         spectral_nodes=len(local.wavelength.wavelength_nm),spectral_order=spectral_order,
         build_wall_s=perf_counter()-started,build_cpu_s=process_time()-cpu,
+        build_workers=workers,
         orientation_specific=True,rho_interpolation=False,truncated_source=False,
         source_coverage_m=[float(u[0]),float(u[-1])],time_coverage_ns=[float(t[0]),float(t[-1])],
         source_interpolation='piecewise constant; cumulative linear',
         time_interpolation='piecewise linear cumulative',certified_accuracy=False)
+    if kernel.config.scattered_receiver!='centre':metadata['receiver_contract']=kernel._receiver_contract()
     q,b=np.asarray(q),np.asarray(b)
     tolerance=512*np.finfo(float).eps*np.maximum(q[:,:,None],np.finfo(float).tiny)
     if np.any(b < -tolerance):
@@ -252,9 +275,10 @@ class TrackFirstAtlas:
         _,expected,_=orientation_nodes()
         if not np.array_equal(self.powers,expected):raise ValueError('unsupported orientation basis')
 
-    def query(self,rho_m,orientation,u_low_m,u_high_m,tau_edges_ns,*,coefficient0_per_m=1.):
+    def query(self,rho_m,orientation,u_low_m,u_high_m,tau_edges_ns,*,coefficient0_per_m=1.,radial_time_origin_ns=0.):
         """Q1 time bins of a straight piece at transverse distance ``rho_m``."""
         rho=float(rho_m);look=np.asarray(orientation,float);density=float(coefficient0_per_m)
+        if not np.isfinite(radial_time_origin_ns):raise ValueError('finite radial time origin required')
         if (not np.isfinite([rho,density]).all() or density<0 or rho<self.radii_m[0] or rho>self.radii_m[-1]
                 or look.shape!=(3,) or not np.isfinite(look).all() or not np.isclose(np.linalg.norm(look),1.)):
             raise ValueError('invalid rho/orientation/density or radius outside atlas')
@@ -284,7 +308,12 @@ class TrackFirstAtlas:
                 return np.where(abs(l0)+abs(l1)<=abs(r0)+abs(r1),l1-l0,r0-r1)
             q=float(interval(self.charge_left,self.charge_right))
             cdf=interval(self.cdf_left,self.cdf_right)
-            bins=np.diff(np.interp(time,self.time_over_rho_edges,cdf))
+            aligned_time=time+float(radial_time_origin_ns)*(1/rho-1/self.radii_m[j])
+            if aligned_time[-1]>self.time_over_rho_edges[-1]:raise ValueError('aligned time edges outside atlas')
+            if (aligned_time[0]<self.time_over_rho_edges[0]
+                    and not self.metadata.get('causal_zero_before_tau0',False)):
+                raise ValueError('aligned time edges outside atlas')
+            bins=np.diff(np.interp(aligned_time,self.time_over_rho_edges,cdf))
             total=float(self.charge_left[j][-1]@features)
             tolerance=256*np.finfo(float).eps*max(total,1e-300)
             if total<=0 or q < -tolerance or np.min(bins)<-tolerance:
@@ -434,6 +463,7 @@ def build_track_first_atlas(kernel,*,radii_m,x_edges,time_over_rho_edges,beta,sp
             scattering_per_m=kernel.medium.scattering_per_m.tolist(),
             phase_index=kernel.medium.phase_index.tolist(),group_index=kernel.medium.group_index.tolist(),
             g=float(kernel.medium.g)),certified_accuracy=False)
+    if kernel.config.scattered_receiver!='centre':metadata['receiver_contract']=kernel._receiver_contract()
     return TrackFirstAtlas(radii,x,t,powers,np.array(ql),np.array(qr),np.array(cl),np.array(cr),metadata)
 
 
@@ -479,6 +509,16 @@ def first_scattering_segment_bounds(kernel,elements,receiver_m,*,effective_area_
     emitting=elements.beta[:,None]*phase>1
     cone=np.arccos(np.clip(1/(elements.beta[:,None]*phase),-1.,1.))
     separation=np.maximum(0.,np.maximum(theta_low[:,None]-cone,cone-theta_high[:,None]))
+    surface_radius=0.
+    if getattr(getattr(kernel,'config',None),'scattered_receiver','centre')=='first-entry':
+        surface_radius=kernel._receiver_contract()['radius_m']
+        cap=np.arcsin(np.minimum(1.,surface_radius/np.maximum(rmin,np.finfo(float).tiny)))
+        separation=np.maximum(0.,separation-cap[:,None])
+        rmin=np.maximum(0.,rmin-surface_radius)
+        # Full inward flux / projected area <= four times the largest
+        # free point fluence on the sphere. This factor bounds omission;
+        # it is never applied to a predicted signal.
+        area*=4.
     distance=rmin[:,None]*np.sin(np.minimum(separation,np.pi/2))
     known=(separation>1e-12)&(rmin[:,None]>0)&emitting
     # Infinity means unsupported, not a numerical estimate of a dark piece.
@@ -509,6 +549,7 @@ def first_scattering_segment_bounds(kernel,elements,receiver_m,*,effective_area_
     positive=bounds>0
     bounds[positive]=np.nextafter(bounds[positive]*(1+128*np.finfo(float).eps),np.inf)
     return bounds,dict(acceptance_upper=amax,spectral_nodes=len(tables['wavelength_nm']),
+        receiver_radius_m=surface_radius,receiver_surface_factor=4. if surface_radius else 1.,
         angular_integral_bound='HG sine-half-angle concavity chord; monotone pencil response',
         bound_scope='all-time q1 for supplied positive spectral quadrature',
         continuum_spectral_error_included=False,phase_function='HG',
@@ -614,5 +655,6 @@ def track_first_optical_contract(kernel,*,spectral_order=2):
         effective_area_m2=float(kernel.detector.effective_area_m2[0]),g=float(kernel.medium.g),
         spectral_order=int(spectral_order),spectral_nodes=len(local.wavelength.wavelength_nm),
         spectral_tables={key:np.asarray(value).tolist() for key,value in tables.items()})
+    if getattr(kernel.config,'scattered_receiver','centre')!='centre':values['receiver_contract']=kernel._receiver_contract()
     digest=sha256(json.dumps(values,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
     return values,digest

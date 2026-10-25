@@ -18,6 +18,8 @@ from .green import SolverSettings
 from .model import DetectorArray, SpectralMedium, WavelengthQuadrature
 from .readout import inverse_bins, readout_bins
 from .single import single_bins
+from .receiver_vertex import ReceiverVertexConfig
+from .receiver import SphereSurface
 from .sources import (CherenkovTrack, G4Shower, IsotropicFlash,
                       SpectralLightElements, SyntheticShower)
 
@@ -63,6 +65,9 @@ class KernelConfig:
     spectral_folded_cache: bool | str = "auto"
     allow_experimental: bool = False
     readout_omega_per_ns: np.ndarray | None = None
+    scattered_receiver: str = 'centre'
+    receiver_vertex: ReceiverVertexConfig | None = None
+    first_entry_tables: str | Path | None = None
 
     def __post_init__(self):
         omega = np.asarray(self.omega_per_ns, float)
@@ -91,6 +96,10 @@ class KernelConfig:
             raise ValueError("angular_backend must be 'auto', 'numpy' or 'numba'")
         if self.cache_policy not in ("build", "require"):
             raise ValueError("cache_policy must be 'build' or 'require'")
+        if self.scattered_receiver not in ('centre','first-entry'):
+            raise ValueError("scattered_receiver must be 'centre' or 'first-entry'")
+        if self.receiver_vertex is not None and not isinstance(self.receiver_vertex,ReceiverVertexConfig):
+            raise ValueError('receiver_vertex must be ReceiverVertexConfig or None')
         if (self.spectral_folded_cache != "auto"
                 and not isinstance(self.spectral_folded_cache, (bool, np.bool_))):
             raise ValueError("spectral_folded_cache must be 'auto', True or False")
@@ -441,6 +450,33 @@ class TransportKernel:
         return SolverSettings(c.scattering_degree, c.source_degree,
                               c.k_max_per_m, c.k_panel_per_m, c.k_order, True)
 
+    def _receiver_contract(self):
+        """Physical and numerical boundary shared by directional table keys."""
+        if self.config.scattered_receiver=='centre':return {}
+        surface=self.detector.receiver_surface
+        if not isinstance(surface,SphereSurface):
+            raise ValueError('first-entry scattered transport requires spherical glass geometry')
+        radii=surface.radii(len(self.detector))
+        if not np.allclose(radii,radii[0],rtol=1e-12,atol=0.):
+            raise ValueError('one directional receiver bank requires a common glass radius')
+        config=self.config.receiver_vertex or ReceiverVertexConfig()
+        return dict(schema='lighthit/first-entry-sphere/1',radius_m=float(radii[0]),
+            solver='boundary-jump-exact-free-tail',numerics=asdict(config),
+            scattering_degree=self.config.scattering_degree)
+
+    def _receiver_matches(self,contract):
+        from ._portable import same_values
+        expected=self._receiver_contract()
+        return (not contract) if not expected else same_values(
+            {key:contract.get(key) for key in expected},expected)
+
+    def _bundle_matches(self,bundle):
+        if not self._receiver_matches(bundle.get('receiver_contract') or {}):return False
+        if self.config.scattered_receiver=='centre':return True
+        keys=bundle.get('kernel_keys')
+        return (keys is not None and len(keys)==len(self.wavelength.wavelength_nm)
+            and all(key in self._directional_cache_aliases(float(wave)) for key,wave in zip(keys,self.wavelength.wavelength_nm)))
+
     def resolved_angular_backend(self):
         """Concrete angular backend selected by the configuration.
 
@@ -542,6 +578,12 @@ class TransportKernel:
 
     def _table_matches(self, kind, wavelength_nm, metadata, radii, omega):
         from ._portable import same_values
+        # A finite first-entry receiver is a different optical boundary.
+        # The centre-reference loader must never adopt it via the directory
+        # scan merely because the multipole dimensions and medium match.
+        contract=metadata.get('receiver_contract') or {}
+        if (kind!='directional' and self.config.scattered_receiver!='centre') or not self._receiver_matches(contract):
+            return False
         band = dict(metadata.get("medium") or {})
         band.pop("provenance", None)
         # the band coefficients are interpolated, so another platform
@@ -659,6 +701,8 @@ class TransportKernel:
 
     def _cache_for(self, wavelength_nm, *, force=False, progress=None,
                    allow_build=None, entries=None):
+        if self.config.scattered_receiver!='centre':
+            raise ValueError('first-entry scattered transport requires directional receiver tables')
         wavelength_nm = float(wavelength_nm)
         key = self._cache_key(wavelength_nm)
         began = perf_counter()
@@ -723,6 +767,8 @@ class TransportKernel:
                    "nodes": self.config.radial_nodes, "phase": "flight",
                    "acceptance_degree": self.acceptance()["degree"],
                    "kernel": "directional_m_blocks"}
+        if self.config.scattered_receiver!='centre':
+            payload['receiver_contract']=self._receiver_contract()
         return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:20]
 
     def _directional_cache_for(self, wavelength_nm, *, force=False, progress=None,
@@ -743,6 +789,8 @@ class TransportKernel:
         stored = None if force else self._stored_table("directional", wavelength_nm)
         if stored is not None:
             cache = DirectionalCache.load(stored)
+            if not self._receiver_matches(cache.receiver_contract):
+                raise ValueError('directional cache has another receiver boundary')
             entry = CacheBuildEntry("directional", wavelength_nm, "loaded", str(stored),
                                     perf_counter() - began)
             self._notify_cache(progress, CacheProgress(
@@ -770,7 +818,10 @@ class TransportKernel:
                 self.acceptance()["degree"],
                 angular_backend=self.resolved_angular_backend(),
                 progress=update,
-                radial_phase="flight")
+                radial_phase="flight",
+                receiver_surface=(None if self.config.scattered_receiver=='centre' else
+                    SphereSurface(self._receiver_contract()['radius_m'])),
+                receiver_config=self.config.receiver_vertex)
             if path is not None:
                 self._atomic_cache_save(cache, path)
                 self._table_files[("directional", wavelength_nm)] = path

@@ -78,6 +78,23 @@ def test_lookup_uses_actual_orientation_and_is_invariant_under_rotation():
     np.testing.assert_allclose(query_angular_groups(atlas, groups, detector, alpha), result)
 
 
+def test_selection_proposal_does_not_change_output_angular_charge():
+    from lighthit.muon.preview import independent_preview
+    atlas=directional_atlas()
+    proposal=PositiveFluenceAtlas(atlas.rho_edges_m,atlas.z_edges_m,atlas.beta_nodes,
+        10*atlas.density,np.ones_like(atlas.sigma),{})
+    detector=SimpleNamespace(positions_m=np.array([[1.,0.,0.]]),orientations=np.array([[0.,0.,-1.]]),
+        effective_area_m2=np.array([.1]))
+    kernel=SimpleNamespace(detector=detector,config=SimpleNamespace(threshold_pe=.1,scattered_receiver='centre'),
+        acceptance=lambda:dict(alpha=4*np.pi*np.array([1.,.5/3])))
+    source=SimpleNamespace(coefficient0=np.array([1.]),coefficient2=np.array([-1/.9**2]),beta=np.array([.9]),
+        uid=np.array([0]),midpoints_m=np.zeros((1,3)),direction=np.array([[0.,0.,1.]]),length_m=np.array([.01]))
+    plain=independent_preview(kernel,source,atlas)
+    guarded=independent_preview(kernel,source,atlas,proposal=proposal)
+    np.testing.assert_allclose(guarded.charge_components_pe,10*plain.charge_components_pe)
+    np.testing.assert_array_equal(guarded.angular_scattered_pe,plain.angular_scattered_pe)
+
+
 def test_isotropic_acceptance_and_axis_limit_match_scalar_fluence():
     atlas = directional_atlas()
     groups = SimpleNamespace(points=np.zeros((1, 3)), directions=np.array([[0., 0., 1.]]),

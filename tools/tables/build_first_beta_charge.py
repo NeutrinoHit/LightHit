@@ -13,7 +13,14 @@ def main():
     p.add_argument('--cubature',type=Path,required=True)
     p.add_argument('--anchor',type=float,default=.999)
     p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--model',type=Path,help='serialized model with the actual glass geometry')
+    p.add_argument('--first-entry-tables',type=Path,help='prepared geometry for first glass entry')
+    p.add_argument('--workers',type=int,default=1,help='independent source cells; wavelength sums remain ordered')
+    p.add_argument('--check-radii',type=float,nargs='+',default=[4.,10.,30.,80.,180.,280.])
+    p.add_argument('--check-betas',type=float,nargs='+',default=[1.,.99999,.9999,.9995])
+    p.add_argument('--check-cuts',type=int,nargs='+',choices=range(7),default=list(range(7)))
     args=p.parse_args();args.output.mkdir(parents=True,exist_ok=True)
+    if args.workers<1:p.error('positive worker count required')
     import numba
     from build_track_first_atlas import optical_kernel
     from lighthit import SpectralLightElements
@@ -24,7 +31,7 @@ def main():
     from lighthit.experimental.primary_polyline import primary_spectral_quadrature
     from lighthit.prompt import _spectral_tables
     if numba.get_num_threads()!=1:p.error('one thread required')
-    kernel=optical_kernel();base=TrackFirstAtlasStore(args.base);base.validate_kernel(kernel)
+    kernel=optical_kernel(args.model,args.first_entry_tables);base=TrackFirstAtlasStore(args.base);base.validate_kernel(kernel)
     if not .99<=args.anchor<1:p.error('anchor must lie in[0.99,1)')
     cubature=ResponseCubature.load(args.cubature);cubature.validate_optics(kernel)
     digest=hashlib.sha256((args.base/'manifest.json').read_bytes()).hexdigest()
@@ -48,13 +55,22 @@ def main():
             continue
         local=scenario_kernel(kernel,float(rho),looks);local.wavelength=cubature.quadrature
         q0=[];qa=[];cpu=process_time();wall=perf_counter()
-        for a,b in zip(base.x_edges[:-1]*rho,base.x_edges[1:]*rho):
+        def cell(bounds):
+            a,b=bounds
             length=b-a
-            for beta,output in [(1.,q0),(args.anchor,qa)]:
+            result=[]
+            for beta in [1.,args.anchor]:
                 source=SpectralLightElements(np.array([[0.,0.,-b]]),np.array([[0.,0.,1.]]),np.array([length]),
                     np.array([length]),np.array([-length/beta**2]),np.array([beta]),np.zeros(1),np.array([length/.299792458]),
                     np.array([0]),np.array([0]),cone_model='spectral')
-                output.append(first_scattering_charge_only(local,source)[0])
+                result.append(first_scattering_charge_only(local,source)[0])
+            return result
+        bounds=list(zip(base.x_edges[:-1]*rho,base.x_edges[1:]*rho))
+        if args.workers==1:result=list(map(cell,bounds))
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=min(args.workers,len(bounds))) as pool:result=list(pool.map(cell,bounds))
+        q0,qa=zip(*result)
         difference=(np.asarray(qa)/ra-np.asarray(q0))/sa
         coefficients=difference@inverse.T
         l=np.vstack((np.zeros((1,10)),np.cumsum(coefficients,axis=0)))
@@ -73,12 +89,16 @@ def main():
     model=FirstChargeBetaAtlas(path,base,require_validated=False)
     test_looks=np.array([[.8,0.,.6],[-.3,.4,np.sqrt(.75)],[0.,0.,-1.]])
     tests=[]
-    for rho in [4.,10.,30.,80.,180.,280.]:
-        for beta in [1.,.99999,.9999,.9995,args.anchor]:
+    check_betas=sorted(set(args.check_betas+[args.anchor]),reverse=True)
+    metadata['synthetic_validation_domain']=dict(radii_m=args.check_radii,betas=check_betas,cuts=args.check_cuts)
+    if not any(cut!=4 for cut in args.check_cuts):p.error('include at least one regular validation interval')
+    for rho in args.check_radii:
+        for beta in check_betas:
             phase=float(kernel.medium.sample([480.])['phase_index'][0]);root=1/np.sqrt((beta*phase)**2-1)
             cuts=[(-1.,4.),(root-.4,root+.5),(root-1.,root+.03),(-6.,-2.),(root-.003,root+.003),
                 (root-.025,root+.025),(root+.037-.025,root+.037+.025)]
             for cut,(a,b) in enumerate(cuts):
+                if cut not in args.check_cuts:continue
                 length=(b-a)*rho
                 source=SpectralLightElements(np.array([[0.,0.,-b*rho]]),np.array([[0.,0.,1.]]),np.array([length]),
                     np.array([length]),np.array([-length/beta**2]),np.array([beta]),np.zeros(1),np.array([length/.299792458]),
@@ -97,7 +117,7 @@ def main():
     metadata['synthetic_validation_passed']=bool(passed);payload['metadata']=json.dumps(metadata);np.savez_compressed(path,**payload)
     report=dict(metadata=metadata,build_cpu_s=sum(timings),elapsed_s=perf_counter()-begin,disk_bytes=path.stat().st_size,
         tests=tests,max_regular_error=max(t['relative_error'] for t in regular),max_regular_scaled_error=max(t['scaled_error'] for t in regular),
-        max_narrow_error=max(t['relative_error'] for t in tests if t['cut']==4))
+        max_narrow_error=max((t['relative_error'] for t in tests if t['cut']==4),default=None))
     (args.output/'report.json').write_text(json.dumps(report,indent=2));print('SUMMARY',json.dumps({k:v for k,v in report.items() if k!='tests'}),flush=True)
 
 

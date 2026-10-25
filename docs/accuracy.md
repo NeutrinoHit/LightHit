@@ -1,5 +1,124 @@
 # Accuracy and speed
 
+The [first-entry scattered-kernel checks](receiver-surface.md#addressed-event-measurements)
+of 2026-10-25 cover complete e10/e100, pion100 and mu100/mu1TeV events on
+separate glass-reference data manifests. They retain the existing MC criteria
+and report the remaining distance flags and muon performance cost. Older
+measurements below retain their recorded receiver conventions.
+
+## Interpretation of the complete signal
+
+The complete glass-reference event checks pass the existing total-charge
+criterion for electrons at 10 and 100 GeV, a 100 GeV pion, and muons at
+100 GeV and 1 TeV. The fast route retains its source grouping, source degree
+32, three-band fold and original numerical tolerances. The complete warm
+100 GeV muon time is 116.80 s against the previous centre-reference 117.52 s.
+See [the event measurements](receiver-surface.md#addressed-event-measurements)
+for the separate orders, timing scope and remaining distance flags.
+
+In the last complete 1 TeV muon check, the total is 4.61251 pe against
+4.55078 pe in photon MC, a ratio of 1.01356; each integrated collision order
+also passes its statistical criterion. The 100–150 m group carries only
+0.3973% of the MC event charge. Its total ratio of 1.10119 remains a failed
+distance check, but its absolute excess is 0.00182945 pe, or 0.0402% of the
+full MC event charge. It is retained as a weak-tail accuracy limitation.
+The studies below do not establish a unique stochastic or numerical cause
+and introduce no fitted signal correction. Agreement in integrated charge
+does not certify every OM or unrestricted time profile to the same precision.
+
+## Addressed 1 TeV muon tail at 100–150 m (2026-10-25)
+
+The same 260 OMs and eight saved unsuppressed photon runs retain the
+original failed ratios: total 1.10119, order >=2 1.12109. All numeric source
+arrays agree between runs; hit hashes agree with the recorded inputs.
+Removing any single run leaves >=2 ratios between 1.09292 and 1.14517;
+the two halves give 1.10986 and 1.13254. Thus one outlying run does not
+explain the residual. There are 32,037 raw >=2 hits but only 412.3 effective
+weighted hits. Its standard error is 0.00040903 pe from run spread or
+0.00055164 pe from squared weights. The observed Q1/>=2 run correlation
+of -0.595 reduces the spread of their sum; eight points do not establish
+that the run-based uncertainty is biased. The predefined criterion remains
+`max(3%, 2 ratio SE)`; the failed flags are retained.
+
+An independent continuous-spectrum next-event control stops each history at
+first entry on the physical 0.216 m sphere, with the actual cubic response.
+It uses no RTE tables and no finite collision-order cutoff. Primary and
+secondary steps are each partitioned into eight longitudinal light-yield
+quantiles. All emitting steps enter exactly one stratum. A separate pilot
+of 20,000 histories per stratum sets the allocation of a fixed four million
+final histories; pilot scores do not enter the estimate. The positive OM
+proposal uses the saved charge only for allocation and is divided out of
+every score. Stratum means and independent variances are summed.
+
+| Order | Fast route, pe | Saved photon MC, pe | Independent first entry, pe ± 1 SE |
+|---|---:|---:|---:|
+| 1 | 0.00506789 | 0.00497380 | 0.00487385 ± 0.00016213 |
+| >=2 | 0.01255750 | 0.01120119 | 0.01098161 ± 0.00055870 |
+
+The complete control takes 56.76 s on one VM thread. Its >=2 result is
+closer to the saved MC than to the fast route; the latter differs by
+2.82 control standard errors. The control's 5.09% standard error does not
+certify 3% accuracy or establish a unique cause. A fluctuation of the saved
+MC alone is therefore not an established explanation of the muon residual.
+The pilot seeds are `241025000 + 10000*j`, final seeds
+`241026000 + 10000*j`, with disjoint batch seeds and no seed selection.
+
+The five OMs selected by descending saved >=2 contribution are 239, 273,
+21, 204 and 167, carrying 16.75% of that group's >=2 charge. Ready glass
+kernels with source degree 32 and 128, otherwise identical numerics, differ
+by at most 0.988% per OM in physical node bands 10, 16 and 21. Their five-OM
+sums change by +0.162%, +0.041% and +0.069%. These are three physical bands,
+not a full-spectrum convergence certificate for all 260 OMs.
+
+A detailed zero-frequency source-basis application of the ready glass RTE
+to all 260 OMs gives >=2 charge 0.01243673 pe in 30.66 s on 16 VM threads,
+only 0.962% below the composed muon route. Halving source cell, stencil and
+clock-grid sizes on the same five OMs changes charges by at most 3.86e-7
+relative. These controls do not explain the main residual, nor independently
+validate the underlying spectral-angular kernel. They are charge diagnostics,
+not new full-event throughput measurements. Production code, tolerances,
+grouping and data manifests are unchanged.
+
+## Monochromatic muon tail and spectral fold (2026-10-25)
+
+Three monochromatic first-entry controls use the same 1 TeV muon and all
+260 OMs at 100–150 m, without spectral integration. The independent
+collision estimator samples the original charged steps, full HG and actual
+0.216 m glass, with no RTE tables or finite collision-order cutoff.
+Each wavelength has a fixed four-million-history budget, using the previous
+independent pilot's sixteen source-stratum counts. The positive RTE-based
+OM proposal is divided out of the scores. Seeds are
+`241027000 + 1000000*band + 10000*stratum + batch`, without seed selection.
+
+| Band | Wavelength, nm | RTE / independent >=2 ± 1 ratio SE | One VM thread, s |
+|---|---:|---:|---:|
+| 16 | 481.038458 | 1.00486 ± 0.04137 | 45.95 |
+| 17 | 493.058995 | 1.04642 ± 0.03436 | 47.51 |
+| 21 | 538.362489 | 1.01919 ± 0.13477 | 42.40 |
+
+All three satisfy the unchanged `max(3%, 2 ratio SE)` criterion. Their
+uncertainties do not certify 3% kernel accuracy; the 538 nm estimate is
+particularly weak. The 493 nm control was added before its MC comparison
+because it is the largest contribution to the separately measured spectrum
+of the five contribution-selected OMs. These checks do not reproduce a
+stable 12% excess at the tested wavelengths, but do not establish the
+accuracy of every wavelength or the complete spectral integral.
+
+On the same five OMs (239, 273, 21, 204, 167), the exact sum of all 32 ready
+physical bands differs from the three-band fold by 1.75672e-6 relative in
+the sum and at most 2.68256e-6 per OM. Each physical band retains its own
+threshold, cone and yield. The three-band fold does not explain the
+residual on these OMs. This check does not validate the underlying
+32-node wavelength quadrature between nodes, nor all 260 OMs' fold error.
+The tested bands carry 59.64% of the five-OM 32-band charge.
+
+The independent estimator accepts `wavelength_nm` and reports differential
+`pe/nm`, including the detector response but no wavelength quadrature
+weight. The default retains its continuous-spectrum behavior. Analytic
+collision normalization, Frank–Tamm spectral normalization and wavelength
+scaling checks cover both modes. Production code, grouping, data and
+accuracy tolerances are unchanged; the original distance flags remain.
+
 ## What the test suite checks
 
 The tests (`pytest tests src/lighthit/tests`) use synthetic media and
@@ -729,7 +848,9 @@ within 50 m of the track (+- 1.0-1.3 %), that of the 10 TeV electron 0.975;
 order 0 of the 10 GeV showers is 1.06-1.12 at 20-50 m (+- 6 %, 2 sigma). About
 1-1.5 % of every comparison is the attenuation reference (section Order 0 near emitters).
 The addressed higher-statistics follow-up below no longer reproduces the
-muon deficit; the production glass-reference change remains unfinished.
+muon deficit. These measurements preceded the first-entry order-0 route and
+the separately prepared scattered surface kernels; they do not validate
+every high-energy case on the new receiver convention.
 
 What the 10 TeV order-0 deficit is not (checks of 2026-10-22, order 0 of the
 OMs within 50 m computed directly on the steps, `ballistic_interval`):

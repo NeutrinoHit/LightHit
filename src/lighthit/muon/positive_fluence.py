@@ -187,12 +187,12 @@ class PositiveFluenceAtlas:
         self.left, self.right = prefixes(self.density, self.z_edges_m)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path,*,include_angular=True):
         """Read an atlas written by :meth:`save`."""
         with np.load(path, allow_pickle=False) as data:
             return cls(*(data[k].copy() for k in ('rho_edges_m', 'z_edges_m', 'beta_nodes', 'density', 'sigma')),
                        json.loads(str(data['metadata'])),
-                       angular_moments=data['angular_moments'].copy() if 'angular_moments' in data else None)
+                       angular_moments=data['angular_moments'].copy() if include_angular and 'angular_moments' in data else None)
 
     def save(self, path):
         """Write the atlas; an existing file is never overwritten."""

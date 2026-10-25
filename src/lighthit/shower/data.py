@@ -13,7 +13,7 @@ manifest ``muon-data.json`` are used (same tables). A missing folded pack, or
 one of another rank, subdivision or frequency set, is built in memory from the
 >=2 pack on first use.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 import json
 import os
 from pathlib import Path
@@ -29,6 +29,7 @@ class ShowerData:
     ge2_pack: Path
     ge2_band_fold: Path | None = None
     manifest: Path | None = None
+    kernel_settings: dict = field(default_factory=dict)
 
     @classmethod
     def of(cls, rte_cache, ge2_pack, ge2_band_fold=None):
@@ -51,9 +52,11 @@ class ShowerData:
         if missing:
             raise ValueError(f"{path}: missing entries {missing}")
         base = path.parent
+        from ..receiver_data import decode_settings
         fold = entries.get("ge2_band_fold")
         data = cls((base / entries["rte_cache"]).resolve(), (base / entries["ge2_pack"]).resolve(),
-                   None if fold is None else (base / fold).resolve(), path.resolve())
+                   None if fold is None else (base / fold).resolve(), path.resolve(),
+                   decode_settings(entries.get('kernel_settings'),base))
         absent = [str(item) for item in (data.rte_cache, data.ge2_pack) if not item.exists()]
         if absent:
             raise FileNotFoundError("shower data incomplete: " + ", ".join(absent))

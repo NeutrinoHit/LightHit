@@ -18,6 +18,10 @@ def main():
     p.add_argument('--cache',type=Path,required=True)
     p.add_argument('--beta-min',type=float,default=.99)
     p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--model',type=Path)
+    p.add_argument('--check-radii',type=float,nargs='+',default=[3.5,14.,40.,80.,200.,290.])
+    p.add_argument('--check-betas',type=float,nargs='+',default=[1.,.9999,.999,.995,.99,.98,.95])
+    p.add_argument('--check-cuts',type=int,nargs='+',choices=range(5),default=list(range(5)))
     args=p.parse_args();args.output.mkdir(parents=True,exist_ok=True)
     import numba
     from build_track_ge2_atlas import load_optics
@@ -26,7 +30,7 @@ def main():
         orientation_basis_looks,build_track_ge2_orientation_row)
     from lighthit.experimental.ge2_charge_beta_atlas import Ge2ChargeBetaAtlas
     if numba.get_num_threads()!=1:p.error('one Numba thread required')
-    kernel,bundle,optics=load_optics(args.pack,args.cache)
+    kernel,bundle,optics=load_optics(args.pack,args.cache,args.model)
     if not np.isfinite(args.beta_min) or not 0<args.beta_min<=1 or args.beta_min*np.min(optics['phase_index'])<=1:
         p.error('beta-min must stay above all spectral Cherenkov thresholds and at most1')
     bundle=dict(bundle,omega=bundle['omega'][:1],coefficients=bundle['coefficients'][...,:1])
@@ -73,8 +77,9 @@ def main():
     # Independent quadrature at radii not used to build correction rows.
     test_looks=np.array([[0.,0.,1.],[.6,0.,.8],[-.5,np.sqrt(.5),.5]])
     gx,gw=leggauss(14);scale=2*np.pi/137.035999084*1e9
-    details=[];validation_betas=sorted(set([1.,.9999,.999,.995,.99,.98,.95,args.beta_min]),reverse=True)
-    for rho in [3.5,14.,40.,80.,200.,290.]:
+    details=[];validation_betas=sorted(set(args.check_betas+[args.beta_min]),reverse=True)
+    metadata['synthetic_validation_domain']=dict(radii_m=args.check_radii,betas=validation_betas,cuts=args.check_cuts)
+    for rho in args.check_radii:
         reach=np.sqrt(300**2-rho*rho)
         cuts=np.array([[reach,-reach],[rho,-rho],[1.5*rho,.5*rho],[1.1*rho,.9*rho],[-.5*rho,-1.5*rho]])
         cuts=np.clip(cuts,-reach,reach)
@@ -83,6 +88,7 @@ def main():
             delta=1/beta-1
             response=cone_point_evaluator(bundle,impact_m=rho,look=test_looks,source_harmonics=harmonics[0]+delta*harmonics[1]+delta**2*harmonics[2],backend='fused-looks',**common)
             for cut,(a,b) in enumerate(cuts):
+                if cut not in args.check_cuts:continue
                 if a<=b:continue
                 edges=np.linspace(b,a,max(1,int(np.ceil((a-b)/2)))+1);half=np.diff(edges)/2
                 u=(edges[:-1,None]+half[:,None]*(gx+1)).ravel();weights=(half[:,None]*gw).ravel()*scale

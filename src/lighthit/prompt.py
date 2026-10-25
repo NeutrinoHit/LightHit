@@ -510,6 +510,7 @@ def transport_prompt(kernel, source, config: PromptConfig | None = None, *,
         raise ImportError("transport_prompt requires the optional Numba accelerator; "
                           "install lighthit[accelerate]")
     config = config or PromptConfig()
+    if kernel.config.scattered_receiver=='first-entry':kernel._first_entry_common_charge=np.zeros(len(kernel.detector))
     fine_order1 = _order1 if _fine_order1 is None else _fine_order1
     if compute_bins_for_all and config.screen:
         config = replace(config, screen=False)
@@ -1019,7 +1020,19 @@ def _min_distance_to_segments(positions, segments):
 def _order1(mode, kernel, source, elements, segments, positions, looks, areas,
             origins, work, tables, coef, ipow, jpow, degree, g, edges, config,
             order0_charge, *, coarse_only=False, selection_extra_charge=None, compute_bins=True,
-            stationary_gauss_order=0,stationary_panel_width=1.0):
+            stationary_gauss_order=0,stationary_panel_width=1.0,reuse_geometry=False):
+    if kernel.config.scattered_receiver=='first-entry':
+        if mode!='grouped':
+            if mode!='segment':raise ValueError('first-entry Q1 supports grouped and segment quadratures')
+            from .receiver_segment import segment_order1
+            if coarse_only or stationary_gauss_order:
+                raise ValueError('first-entry segment uses its prepared analytic path fold')
+            return segment_order1(kernel,segments,positions,looks,areas,origins,work,tables,
+                acceptance_polynomial(coef,ipow,jpow,degree),edges,config,compute_bins=compute_bins)
+        from .receiver_prompt import grouped_order1
+        return grouped_order1(kernel,elements,segments,positions,looks,areas,origins,work,tables,
+            acceptance_polynomial(coef,ipow,jpow,degree),edges,config,order0_charge,
+            coarse_only=coarse_only,selection_extra_charge=selection_extra_charge,reuse_geometry=reuse_geometry)
     from . import _prompt_numba as kernels
     if not compute_bins and mode != "segment":
         raise ValueError("explicit charge-only control currently requires segment mode")

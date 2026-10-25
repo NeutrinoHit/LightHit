@@ -1,12 +1,12 @@
 id = "finite-receiver-order0"
-title = "Order 0 on the supplied OM sphere (BallisticIntervalConfig.receiver_mode)"
+title = "Order 0 at the first entry into the supplied OM sphere"
 area = "core"
 question = """
 Why does order 0 near a muon disagree with the photon Monte Carlo (OM 267 at 1.76 m: 63.6 against 58.1 +- 0.5 pe, OM 268 1.40 against 0.55, OM 266 0.02 against 0.17 in NTSim's photon MC with chord yields), and what does the finite OM change elsewhere?
 """
 kind = "alternative-option"
 status = "default"
-verdict = "The supplied OM sphere is used at every distance and source size; explicit point mode is a control. The historical measurements below used a distance switch. Since 2026-10-23, conservative cone rejection and the exact tabulated spectral response reduce the all-sphere cost; on the saved 100 GeV electron the complete fast route takes 10.68 instead of 8.90 s, with unchanged active OMs and detailed scattered responses. Attenuation and timing still use the centre ray; the glass-reference change is unfinished."
+verdict = "The supplied OM sphere is used at every distance and source size. The current shower and muon routes call first_entry_ballistic: extinction and timing end at the first glass entry, with bounded path-moment and finite-disk controls. Standalone ballistic_interval retains the earlier cone approximation for comparison. The historical measurements below precede this entry-reference change; direct-first-entry.md records the current algorithm and controls."
 baseline = "default-shower-route"
 cases = [
   "finite-receiver-order0/far-electron-100GeV",
@@ -47,8 +47,9 @@ The compiled kernel no longer allocates arrays per spectral panel: the point rec
 modules = [
   "lighthit.ballistic_interval",
   "lighthit._ballistic_interval_numba",
+  "lighthit._surface_ballistic",
 ]
-functions = ["ballistic_interval", "_support", "_semicircle_cdf", "_integral"]
+functions = ["first_entry_ballistic", "ballistic_interval", "_support", "_semicircle_cdf", "_integral"]
 options = [
   "BallisticIntervalConfig.receiver_mode=auto (supplied geometry) | point | surface (requires geometry)",
 ]

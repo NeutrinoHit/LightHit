@@ -30,12 +30,14 @@ def muon_kernel(kernel, data):
     from ..transport import TransportKernel
     from pathlib import Path
     config = kernel.config
+    settings=data.kernel_settings
+    if settings:config=replace(config,**settings)
     same = (config.cache_directory is not None
             and Path(config.cache_directory).expanduser().resolve() == Path(data.rte_cache).resolve()
             and np.array_equal(np.asarray(config.omega_per_ns), FREQUENCIES_PER_NS)
             and config.readout_omega_per_ns is not None
             and np.array_equal(np.asarray(config.readout_omega_per_ns), READOUT_PER_NS))
-    if same:
+    if same and not settings:
         return kernel
     return TransportKernel(kernel.medium, kernel.detector,
                            replace(config, omega_per_ns=FREQUENCIES_PER_NS,
@@ -83,8 +85,15 @@ class MuonTransport:
             ge2 = DiskTrackGe2Atlas(data.primary_ge2_atlas)
             preview = PositiveFluenceAtlas.load(data.preview_atlas)
             check_atlas_optics(preview, self.kernel)
+            proposal=None if data.preview_proposal_atlas is None else PositiveFluenceAtlas.load(data.preview_proposal_atlas,include_angular=False)
+            if proposal is not None:check_atlas_optics(proposal,self.kernel,selection_only=True)
+            from .first_time_beta import FirstTimeBetaAtlas
+            time_beta=None if data.primary_first_time_beta is None else FirstTimeBetaAtlas(data.primary_first_time_beta)
+            from ..experimental.spectral_response_basis import ResponseCubature
+            cubature=None if data.primary_first_cubature is None else ResponseCubature.load(data.primary_first_cubature)
+            if cubature is not None:cubature.validate_optics(self.kernel)
             self._tables = dict(
-                first=first, ge2=ge2, preview=preview,
+                first=first, ge2=ge2, preview=preview,preview_proposal=proposal,first_time_beta=time_beta,first_cubature=cubature,
                 first_beta=FirstChargeBetaAtlas(data.primary_first_beta, first),
                 ge2_beta=Ge2ChargeBetaAtlas(data.primary_ge2_beta, ge2),
                 ge2_store=self.kernel.ge2_kernel_store(data.ge2_pack))
@@ -135,7 +144,8 @@ class MuonTransport:
             from .universal_primary import subset_kernel
             kernel = subset_kernel(kernel, receivers)
             kernel.config = replace(kernel.config, threshold_pe=0.)
-        preview = independent_preview(kernel, source, tables['preview'], primary_uid=primary_uid)
+        preview = independent_preview(kernel, source, tables['preview'], primary_uid=primary_uid,
+            proposal=tables.get('preview_proposal'))
         config = replace(self.config, primary_uid=int(primary_uid))
         response = transport_joint_muon(
             kernel, source, ancestry, preview=preview,
@@ -145,6 +155,8 @@ class MuonTransport:
             progress=progress,
             primary_options=dict(ge2_beta_atlas=tables['ge2_beta'],
                                  first_beta_atlas=tables['first_beta'],
+                                 first_time_beta_atlas=tables.get('first_time_beta'),
+                                 first_cubature=tables.get('first_cubature'),
                                  direct_ge2_quadrature='filon', q1_charge_gauss_order=6,
                                  fallback_pack=self.data.ge2_pack,
                                  fallback_fold=self.data.ge2_band_fold))

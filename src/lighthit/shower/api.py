@@ -97,12 +97,14 @@ def shower_kernel(kernel, data):
     """
     from ..transport import TransportKernel
     config = kernel.config
+    settings=data.kernel_settings
+    if settings:config=replace(config,**settings)
     same = (config.cache_directory is not None
             and Path(config.cache_directory).expanduser().resolve() == Path(data.rte_cache).resolve()
             and np.array_equal(np.asarray(config.omega_per_ns), FREQUENCIES_PER_NS)
             and config.readout_omega_per_ns is not None
             and np.array_equal(np.asarray(config.readout_omega_per_ns), READOUT_PER_NS))
-    if same:
+    if same and not settings:
         return kernel
     return TransportKernel(kernel.medium, kernel.detector,
                            replace(config, omega_per_ns=FREQUENCIES_PER_NS,
@@ -148,6 +150,7 @@ class ShowerTransport:
                 prepared = load_folded(path)
                 omega = self.kernel.config.omega_per_ns[indices]
                 if (prepared["band_fold"]["rank"] == rank
+                        and self.kernel._bundle_matches(prepared)
                         and int(prepared.get("subdivide", 1)) == subdivide
                         and prepared["omega"].shape == omega.shape
                         and np.allclose(prepared["omega"], omega, rtol=0, atol=1e-12)):
@@ -523,7 +526,7 @@ def transport_shower(kernel, source, *, config=None, store=None, fold=None, fold
         "receiver_reference_by_order": {
             "0": ("first-entry" if config.prompt.ballistic_method == "first-entry"
                   and kernel.detector.receiver_surface is not None else "centre-ray"),
-            "1": "centre", ">=2": "centre"},
+            "1": kernel.config.scattered_receiver, ">=2": kernel.config.scattered_receiver},
         "inactive_order1_charge_may_be_coarse": bool(np.any(
             np.asarray(prompt.metadata.get("order1_level", [])) == 1)),
     }

@@ -203,6 +203,8 @@ def fold_bundle(bundle, fold, *, subdivide=1, dtype=np.complex64):
     result.update(coefficients=out, log_r=new_log_r,
                   absorption=np.full(rank, absorption_ref), speed=np.full(rank, speed_ref),
                   band_fold=fold.metadata(), subdivide=int(subdivide))
+    if bundle.get('receiver_contract'):result['receiver_contract']=dict(bundle['receiver_contract'])
+    if bundle.get('kernel_keys'):result['kernel_keys']=list(bundle['kernel_keys'])
     return result
 
 

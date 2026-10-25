@@ -1,5 +1,9 @@
 # `lighthit.experimental`
 
+The opt-in finite-receiver kernels live in the core package, separately from
+the aliases below. Their data contracts and validation scope are described in
+[Scattered light at the glass surface](receiver-surface.md).
+
 No default route imports a module of this package with default settings
 (checked by importing `lighthit`, `lighthit.shower`, `lighthit.muon`,
 `lighthit.event` and the core modules and inspecting `sys.modules`). Every

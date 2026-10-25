@@ -19,7 +19,7 @@ pieces (``universal_primary.DirectGe2``).
 All tables depend on the water optics and the OM response, not on the
 detector geometry. They are runtime inputs and are never part of a wheel.
 """
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields,field
 import json
 import os
 from pathlib import Path
@@ -40,6 +40,10 @@ class MuonData:
     preview_atlas: Path
     manifest: Path | None = None
     ge2_band_fold: Path | None = None
+    kernel_settings: dict = field(default_factory=dict)
+    preview_proposal_atlas: Path | None = None
+    primary_first_time_beta: Path | None = None
+    primary_first_cubature: Path | None = None
 
     @classmethod
     def load(cls, path):
@@ -48,16 +52,24 @@ class MuonData:
         if path.is_dir():
             path = path / MANIFEST
         entries = json.loads(path.read_text())
-        optional = ('manifest', 'ge2_band_fold')
+        optional = ('manifest', 'ge2_band_fold','kernel_settings','preview_proposal_atlas','primary_first_time_beta','primary_first_cubature')
         names = [item.name for item in fields(cls) if item.name not in optional]
         missing = [name for name in names if name not in entries]
         if missing:
             raise ValueError(f'{path}: missing entries {missing}')
         base = path.parent
+        from ..receiver_data import decode_settings
         fold = entries.get('ge2_band_fold')
+        proposal=entries.get('preview_proposal_atlas')
+        time_beta=entries.get('primary_first_time_beta')
+        cubature=entries.get('primary_first_cubature')
         data = cls(**{name: (base / entries[name]).resolve() for name in names},
                    manifest=path.resolve(),
-                   ge2_band_fold=None if fold is None else (base / fold).resolve())
+                   ge2_band_fold=None if fold is None else (base / fold).resolve(),
+                   preview_proposal_atlas=None if proposal is None else (base/proposal).resolve(),
+                   primary_first_time_beta=None if time_beta is None else (base/time_beta).resolve(),
+                   primary_first_cubature=None if cubature is None else (base/cubature).resolve(),
+                   kernel_settings=decode_settings(entries.get('kernel_settings'),base))
         data.check()
         return data
 
@@ -85,7 +97,7 @@ class MuonData:
     def check(self):
         """Fail early when a named table does not exist."""
         absent = [f'{item.name}={getattr(self, item.name)}' for item in fields(self)
-                  if item.name != 'manifest' and getattr(self, item.name) is not None
+                  if item.name not in ('manifest','kernel_settings') and getattr(self, item.name) is not None
                   and not Path(getattr(self, item.name)).exists()]
         if absent:
             raise FileNotFoundError('muon data incomplete: ' + ', '.join(absent))
@@ -97,6 +109,9 @@ class MuonData:
                  self.ge2_pack / 'pack.json']
         if self.manifest is not None:
             files.insert(0, self.manifest)
+        if self.preview_proposal_atlas is not None:files.append(self.preview_proposal_atlas)
+        if self.primary_first_time_beta is not None:files.append(self.primary_first_time_beta)
+        if self.primary_first_cubature is not None:files.append(self.primary_first_cubature)
         return files
 
 
@@ -104,6 +119,8 @@ def write_manifest(path, **entries):
     """Write ``muon-data.json`` with paths relative to its directory."""
     path = Path(path)
     base = path.parent.resolve()
-    relative = {name: os.path.relpath(Path(value).resolve(), base) for name, value in entries.items()}
+    from ..receiver_data import encode_settings
+    relative = {name: (encode_settings(value,base) if name=='kernel_settings' else
+        os.path.relpath(Path(value).resolve(), base)) for name, value in entries.items()}
     path.write_text(json.dumps(relative, indent=2) + '\n')
     return MuonData.load(path)

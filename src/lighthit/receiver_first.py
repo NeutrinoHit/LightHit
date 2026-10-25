@@ -34,7 +34,7 @@ class FirstEntryProfile:
 
 def first_entry_profile(surface, *, distance_m, direction_cosine, g,
                         max_path_m, receiver=0, path_nodes=256,
-                        path_order=8, scatter_order=16):
+                        path_order=8, scatter_order=16,outgoing_boundary=False):
     """Build one geometry row using the supplied detector surface.
 
     ``max_path_m`` is an explicit table boundary, not a physical cutoff.
@@ -46,7 +46,8 @@ def first_entry_profile(surface, *, distance_m, direction_cosine, g,
         raise ValueError('first-entry profiles require SphereSurface geometry')
     radius = float(surface.radius_m if surface.radius_m.ndim == 0
                    else surface.radius_m[receiver])
-    if not np.isfinite(distance_m) or distance_m <= radius:
+    boundary=(outgoing_boundary and distance_m==radius and direction_cosine<=0)
+    if not np.isfinite(distance_m) or (distance_m <= radius and not boundary):
         raise ValueError('the source must be outside the receiver surface')
     if not np.isfinite(direction_cosine) or abs(direction_cosine) > 1:
         raise ValueError('direction_cosine must be finite and in [-1, 1]')
@@ -90,5 +91,16 @@ def first_entry_profile(surface, *, distance_m, direction_cosine, g,
     values = cumulative(r, direction_cosine, paths, g,
                         *np.polynomial.legendre.leggauss(path_order),
                         *np.polynomial.legendre.leggauss(scatter_order))
-    return FirstEntryProfile(paths*radius, values/radius, radius,
+    physical_paths = paths*radius
+    if np.any(np.diff(physical_paths) == 0):
+        # Distinct unit-radius nodes can round to the same physical float.
+        # Integrate on the original mesh first, retaining its singular cuts;
+        # then keep the last cumulative value at every physical tick. Keep
+        # the exact zero at the front, so its first representable interval
+        # carries all accumulated mass rather than losing a short flight.
+        _, first = np.unique(physical_paths, return_index=True)
+        keep = np.r_[first[1:]-1, len(paths)-1]
+        keep[0] = 0
+        physical_paths, values = physical_paths[keep], values[keep]
+    return FirstEntryProfile(physical_paths, values/radius, radius,
                              float(distance_m), float(direction_cosine), float(g))

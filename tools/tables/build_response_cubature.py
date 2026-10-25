@@ -18,8 +18,12 @@ TEST_LOOKS=np.array([[.8,0.,.6],[-.3,.4,np.sqrt(.75)],[0.,0.,-1.]])
 
 def scenario_kernel(kernel,rho,looks):
     local=copy(kernel);d=kernel.detector;n=len(looks)
+    from lighthit.receiver import SphereSurface
+    surface=(SphereSurface(kernel._receiver_contract()['radius_m'])
+             if kernel.config.scattered_receiver=='first-entry' else None)
     local.detector=replace(d,positions_m=np.tile([rho,0.,0.],(n,1)),orientations=looks,
         effective_area_m2=np.repeat(d.effective_area_m2[:1],n),
+        receiver_surface=surface,
         identifiers={key:np.repeat(val[:1],n) for key,val in d.identifiers.items()})
     return local
 

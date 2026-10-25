@@ -83,12 +83,14 @@ def evaluate_secondary_first(kernel, full_source, packets, receiver_indices,
                      pixel_face=int(fused_pixel_face), ring_nodes=int(fused_ring_nodes),
                      secondary_elements=0, charge_pe_per_om=np.zeros(len(ids)),
                      first_compile_cpu_s=0., first_apply_cpu_s=0.) if fuse_bands else None
+    packet_states={};part_packet={}
 
     def prepare(packet, unit, selected):
         """Unit source part, support receivers, segments and settings."""
         from .muon_packets import SourcePacket
         part = SourcePacket(packet.kind, selected).source(full_source)
         part = replace(part, cone_model='frozen', reference_phase_index=float(unit['cone']))
+        part_packet[id(part)]=id(packet)
         ends = part.start_m + part.length_m[:, None]*part.direction
         centre = .5*(np.minimum(part.start_m.min(0), ends.min(0))+
                      np.maximum(part.start_m.max(0), ends.max(0)))
@@ -109,9 +111,14 @@ def evaluate_secondary_first(kernel, full_source, packets, receiver_indices,
 
     def apply(unit, part, segments, settings, targets):
         """Grouped Q1 of one unit part on ``targets``; accumulates the result."""
+        options={}
+        if kernel.config.scattered_receiver=='first-entry':
+            token=part_packet[id(part)]
+            kernel._first_entry_common_charge=packet_states.setdefault(token,np.zeros(len(ids)))
+            options['reuse_geometry']=True
         qp, bp, metadata = prompt._order1('grouped', kernel, part, part, segments,
             positions, looks, areas, origins, targets, unit['tables'],
-            coef, ipow, jpow, degree, g, edges, settings, np.zeros(len(ids)))
+            coef, ipow, jpow, degree, g, edges, settings, np.zeros(len(ids)),**options)
         q[:] += qp; bins[:] += bp; omissions[:] += metadata.get('order1_batch_omission', 0.)
         account(unit, 'charge_pe_per_om', qp)
         return qp, {key: value.tolist() if isinstance(value, np.ndarray) else value
@@ -223,6 +230,11 @@ def _skipping_units(kernel, full_source, packets, ids, positions, areas, tables,
     cost = np.zeros((n_unit, n_packet))
     touched = np.zeros((n_packet, n_receiver), bool)
     constants = bound_constants(kernel)
+    receiver_radius=(kernel._receiver_contract()['radius_m'] if kernel.config.scattered_receiver=='first-entry' else None)
+    if units[0]['fused']:
+        bound_pools=[([0],units[0]['valid']),
+                     (list(range(1,n_unit)),common_valid & ~units[0]['valid'])]
+    else:bound_pools=[(list(range(n_unit)),common_valid)]
     plan_cpu = process_time()
     for k, number in enumerate(secondary):
         packet = packets[number]
@@ -235,16 +247,22 @@ def _skipping_units(kernel, full_source, packets, ids, positions, areas, tables,
             reach[u, k, work] = True
             cost[u, k] = len(selected)
             account(unit, 'secondary_elements', len(selected))
-        targets = np.flatnonzero(reach[:, k].any(0))
-        if len(targets):
-            # One bound evaluation per packet: the kernel applies each band's
-            # own threshold to the common-threshold elements, which contain
-            # every unit's elements, so each unit's band sum stays an upper bound.
-            common = np.sort(np.asarray(packet.indices)[common_valid[packet.indices]])
-            part = SourcePacket(packet.kind, common).source(full_source)
-            per_band = packet_first_bounds(part, positions[targets], areas[targets], tables, constants)
-            for u, unit in enumerate(units):
-                bounds[u, k, targets] = per_band[unit['bands']].sum(0)
+        for unit_ids,pool in bound_pools:
+            targets = np.flatnonzero(reach[unit_ids,k].any(0))
+            if not len(targets):continue
+            # A remainder unit excludes the bright all-band elements. Their
+            # bounds cannot help certify its small charge: including them
+            # prevents almost every otherwise valid weak-packet omission.
+            # The common remainder pool is safe for every single-band unit;
+            # packet_first_bounds applies that band's threshold itself.
+            selected = np.sort(np.asarray(packet.indices)[pool[packet.indices]])
+            part = SourcePacket(packet.kind, selected).source(full_source)
+            if units[unit_ids[0]]['fused']:
+                part=replace(part,cone_model='frozen',reference_phase_index=float(units[unit_ids[0]]['cone']))
+            per_band = packet_first_bounds(part, positions[targets], areas[targets], tables, constants,
+                                           receiver_radius_m=receiver_radius)
+            for u in unit_ids:
+                bounds[u, k, targets] = per_band[units[u]['bands']].sum(0)
     bounds[~reach] = 0.
     plan_cpu = process_time() - plan_cpu
 
@@ -281,7 +299,7 @@ def _skipping_units(kernel, full_source, packets, ids, positions, areas, tables,
         rest = reach[u] & ~seed & ~skip
         for k in np.flatnonzero(rest.any(1)):
             run(k, u, np.flatnonzero(rest[k]), 'rest')
-        omitted = (bounds[u]*skip).sum(0)
+        omitted = np.where(skip,bounds[u],0.).sum(0)
         ratio = np.divide(omitted, seed_charge, out=np.zeros(n_receiver), where=seed_charge > 0)
         if np.any((omitted > 0) & ~(seed_charge > 0)) or ratio.max(initial=0.) > epsilon*(1+1e-9):
             raise RuntimeError('packet omission certificate violated')
