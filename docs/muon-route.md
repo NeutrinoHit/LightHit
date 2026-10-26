@@ -1,5 +1,10 @@
 # Muon route (`lighthit.muon`)
 
+Build the optical cache before the first event with the
+[unified model-to-cache command](build-receiver-bundle.md). It prepares the
+primary, beta, time and preview tables together and publishes the route
+manifest only after component validation.
+
 `MuonTransport(kernel, data=None, *, config=None, screen=None, threads=None)`
 returns the response of one muon with all its descendants:
 `muon(steps, ancestry, primary_uid=0)`. Exported from `lighthit`: `MuonTransport`,

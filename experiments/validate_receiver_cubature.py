@@ -18,8 +18,9 @@ def main(argv=None):
     p.add_argument('--betas',nargs='+',type=float,default=[1.,.999])
     p.add_argument('--cuts',nargs='+',choices=['wide','root','edge','back'],default=['root','edge'])
     p.add_argument('--waveform',action='store_true',help='also validate the time-bin L1 error on the same physical segments')
+    p.add_argument('--resume',action='store_true',help='reuse a complete rule with matching validation inputs')
     args=p.parse_args(argv)
-    if args.output.exists():p.error('output already exists; choose a new path')
+    if args.output.exists() and not args.resume:p.error('output already exists; choose a new path')
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools/tables'))
     from build_track_first_atlas import optical_kernel
     from build_response_cubature import scenario_kernel,source_for
@@ -29,6 +30,18 @@ def main(argv=None):
     from lighthit.muon.first_charge_only import first_scattering_charge_only
     from lighthit.muon.muon_integral import order1_integrals
     model=ResponseCubature.load(args.rule);kernel=optical_kernel(args.model,args.first_entry_tables)
+    if args.output.exists():
+        existing=ResponseCubature.load(args.output);existing.validate_optics(kernel)
+        report=json.loads(args.output.with_suffix('.json').read_text())
+        checks=report['checks']
+        domain={(c['radius_m'],c['beta'],c['cut']) for c in checks}
+        expected={(r,b,c) for r in args.radii for b in args.betas for c in args.cuts}
+        if (not report['passed'] or domain!=expected
+                or report['source_rule_sha256']!=hashlib.sha256(args.rule.read_bytes()).hexdigest()
+                or report['model_sha256']!=hashlib.sha256(args.model.read_bytes()).hexdigest()
+                or (args.waveform and not existing.metadata.get('first_entry_waveform_validation',{}).get('passed'))):
+            raise ValueError('completed cubature has different validation inputs')
+        print('REUSED',args.output,flush=True);return 0
     native=primary_spectral_quadrature(kernel.medium,kernel.detector,order=2)
     if not np.allclose(native.wavelength_nm[model.selected_indices],model.quadrature.wavelength_nm,rtol=1e-12,atol=0):
         raise ValueError('original rule nodes differ from the current native quadrature')
@@ -74,8 +87,10 @@ def main(argv=None):
         error_certified=False)
     if args.waveform:metadata['first_entry_waveform_validation']=dict(passed=passed,max_relative_l1=waveform_max,
         criterion_relative=.01,radii_m=args.radii,betas=args.betas,cuts=args.cuts)
-    np.savez_compressed(args.output,wavelength_nm=model.quadrature.wavelength_nm,weight_nm=model.quadrature.weight_nm,
+    temporary=args.output.with_suffix('.tmp.npz')
+    np.savez_compressed(temporary,wavelength_nm=model.quadrature.wavelength_nm,weight_nm=model.quadrature.weight_nm,
         selected_indices=model.selected_indices,modes=model.modes,singular_values=model.singular_values,metadata=json.dumps(metadata))
+    temporary.replace(args.output)
     return 0
 
 

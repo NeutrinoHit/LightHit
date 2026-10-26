@@ -141,6 +141,28 @@ command-line tool.
 
 ## 2. Baikal-GVD, stand-alone
 
+### First step: prepare the optical cache
+
+Before calculating events with Q1 and >=2 referenced to the glass, build
+and verify their cache once from the serialized model:
+
+```sh
+PYTHONPATH=src python tools/tables/build_receiver_bundle.py \
+  --model data/lighthit-bgvd-data/model/bgvd-model.npz \
+  --output data/lighthit-glass-data --jobs 8
+PYTHONPATH=src python tools/tables/build_receiver_bundle.py \
+  --output data/lighthit-glass-data --check
+export LIGHTHIT_SHOWER_DATA="$PWD/data/lighthit-glass-data/tables/shower-data.json"
+export LIGHTHIT_MUON_DATA="$PWD/data/lighthit-glass-data/tables/muon-data.json"
+```
+
+Run this from the checkout with `.[accelerate]` installed. The command
+preserves the existing data bundle and resumes completed preparation stages.
+See [build the receiver cache](docs/build-receiver-bundle.md) for planning,
+resources, validation scope and transferring the result to another machine.
+The existing bundle remains usable with first-entry Q0 and centre-reference
+Q1 / >=2 when these new manifests are not selected.
+
 ### Inputs
 
 * **Medium and detector.** `lh.load_model("bgvd-model.npz")` reads a stored
@@ -179,14 +201,9 @@ config = lh.KernelConfig(
     cache_directory=DATA / "tables" / "rte-cache", cache_policy="require")
 kernel = model.kernel(config)
 
-# Tables for another medium or OM response (tens of minutes, once; with
-# `import json` and `from dataclasses import replace`):
-#   kernel = model.kernel(replace(config, cache_directory="tables/rte-cache",
-#                                 cache_policy="build"))
-#   kernel.build(source=some_shower)                      # RTE tables + >=2 pack
-#   kernel.ge2_kernel_store().save("tables/ge2-pack")
-#   json.dump({"rte_cache": "rte-cache", "ge2_pack": "ge2-pack"},
-#             open("tables/shower-data.json", "w"))
+# For changed water or OM response, save a new model and rerun the cache
+# builder above into a new output directory. Event calculations require
+# prepared tables; they do not build the full shower/muon cache implicitly.
 ```
 
 ### A shower from Geant4

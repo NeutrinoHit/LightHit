@@ -125,8 +125,13 @@ def check_geometry(kernel,query,radius,root,*,full=True,beta=1.):
             u_edges_m=[lo,hi],tau_edges_ns=edges)
         q,bins=query(radius,look,lo,hi,edges)
         qr,br=direct.charge_cells[0],direct.bins_cells[0]
+        # A distant interval may have no support in this finite time window.
+        # Keep that exact zero check instead of reporting an undefined 0/0.
+        if (qr==0 and q!=0) or (not np.any(br) and np.any(bins)):
+            raise ValueError('nonzero prediction outside the reference support')
         result.append(dict(rho_m=radius,interval_x=[a,b],orientation=look.tolist(),charge=q,reference_charge=qr,
-            charge_relative_error=float(abs(q-qr)/qr),bins_l1_relative=float(abs(bins-br).sum()/br.sum()),
+            charge_relative_error=float(abs(q-qr)/qr) if qr else 0.,
+            bins_l1_relative=float(abs(bins-br).sum()/br.sum()) if np.any(br) else 0.,
             reference_cpu_s=direct.metadata['build_cpu_s']))
     return result
 

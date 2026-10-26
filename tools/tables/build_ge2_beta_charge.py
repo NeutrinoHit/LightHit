@@ -8,6 +8,7 @@ import argparse,json,hashlib
 from pathlib import Path
 from time import perf_counter,process_time
 import numpy as np
+from _atomic import savez
 from numpy.polynomial.legendre import leggauss
 
 
@@ -58,7 +59,7 @@ def main():
             norm=base.manifest['rows'][i]['normalization']
             cc.append(row.integrated_coefficients.real/norm);pp.append(row.prefix.real/norm)
         elapsed=process_time()-row_cpu;timings.append(elapsed)
-        np.savez_compressed(path,coefficients=np.array(cc),prefix=np.array(pp),base_manifest_sha256=digest,cpu_seconds=elapsed)
+        savez(path,coefficients=np.array(cc),prefix=np.array(pp),base_manifest_sha256=digest,cpu_seconds=elapsed)
         for mode in range(2):coefficients[mode].append(cc[mode]);prefix[mode].append(pp[mode])
         print('ROW',json.dumps(dict(index=i,rho_m=float(rho),cpu_s=elapsed,wall_s=perf_counter()-row_wall)),flush=True)
     metadata=dict(optics_fingerprint=optics['optics_fingerprint'],base_manifest_sha256=digest,beta_min=args.beta_min,
@@ -72,7 +73,7 @@ def main():
         edges_m=np.concatenate([r.edges_m for r in base._charge]),
         coefficients=np.stack([np.concatenate(c) for c in coefficients]),prefix=np.stack([np.concatenate(p) for p in prefix]),
         lognorm=np.log([r['normalization'] for r in base.manifest['rows']]))
-    path=args.output/'beta-charge.npz';np.savez_compressed(path,**payload)
+    path=args.output/'beta-charge.npz';savez(path,**payload)
     model=Ge2ChargeBetaAtlas(path,base,require_validated=False)
     # Independent quadrature at radii not used to build correction rows.
     test_looks=np.array([[0.,0.,1.],[.6,0.,.8],[-.5,np.sqrt(.5),.5]])
@@ -110,7 +111,7 @@ def main():
     passed=max(r['max_taylor_scaled_error'] for r in summary if r['beta']>=args.beta_min)<=.002
     passed &= max(r['max_atlas_scaled_error'] for r in summary if r['beta']>=args.beta_min)<=.01
     metadata['synthetic_validation_passed']=bool(passed)
-    payload['metadata']=json.dumps(metadata);np.savez_compressed(path,**payload)
+    payload['metadata']=json.dumps(metadata);savez(path,**payload)
     report=dict(metadata=metadata,summary=summary,details=details,build_cpu_seconds=sum(timings),
         elapsed_seconds=perf_counter()-begin,process_cpu_seconds=process_time()-cpu,
         disk_bytes=path.stat().st_size,resident_bytes=model.resident_bytes)

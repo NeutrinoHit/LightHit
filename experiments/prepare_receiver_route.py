@@ -24,7 +24,10 @@ def main(argv=None):
     p.add_argument('--first-entry-tables',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--fold-template',type=Path,required=True)
     p.add_argument('--stationary-only',action='store_true',help='prepare a zero-frequency reference pack without a shower manifest')
+    p.add_argument('--manifest-name',default='shower-data.json',help='candidate manifest name for an outer bundle builder')
     args=p.parse_args(argv)
+    if Path(args.manifest_name).name!=args.manifest_name or args.manifest_name in ('','.','..'):
+        p.error('--manifest-name must be a filename in the output directory')
     from lighthit.bgvd import load_model
     from lighthit.directional import DirectionalCache
     from lighthit.transport import KernelConfig
@@ -94,7 +97,7 @@ def main(argv=None):
     save_folded(folded,args.output/'ge2-band-fold')
     manifest=dict(rte_cache='rte-cache',ge2_pack='ge2-pack',ge2_band_fold='ge2-band-fold',
                   kernel_settings=encode_settings(settings,args.output))
-    (args.output/'shower-data.json').write_text(json.dumps(manifest,indent=2)+'\n')
+    (args.output/args.manifest_name).write_text(json.dumps(manifest,indent=2)+'\n')
     report=dict(model_sha256=digest(args.model),bank_manifest_sha256=digest(args.bank/'manifest.json'),
         receiver_contract=kernel._receiver_contract(),ge2_pack_bytes=store.nbytes,folded_bytes=folded['coefficients'].nbytes,
         band_nodes=list(nodes),event_validation_complete=False)

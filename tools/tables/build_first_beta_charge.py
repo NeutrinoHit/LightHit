@@ -5,6 +5,7 @@ from pathlib import Path
 from copy import copy
 from time import process_time,perf_counter
 import numpy as np
+from _atomic import savez
 
 
 def main():
@@ -76,7 +77,7 @@ def main():
         l=np.vstack((np.zeros((1,10)),np.cumsum(coefficients,axis=0)))
         r=np.vstack((np.cumsum(coefficients[::-1],axis=0)[::-1],np.zeros((1,10))))
         elapsed=process_time()-cpu;timings.append(elapsed);left.append(l);right.append(r)
-        np.savez_compressed(path,left=l,right=r,cpu_s=elapsed,anchor=args.anchor,base_hash=digest,rule_hash=rule_digest)
+        savez(path,left=l,right=r,cpu_s=elapsed,anchor=args.anchor,base_hash=digest,rule_hash=rule_digest)
         print('ROW',json.dumps(dict(rho_m=float(rho),cpu_s=elapsed,wall_s=perf_counter()-wall)),flush=True)
     metadata=dict(beta_min=args.anchor,anchor=args.anchor,parameter='s=beta^-2-1',yield_slope=yield_slope,
         base_manifest_sha256=digest,cubature_sha256=rule_digest,optics_fingerprint=base.metadata['optical_fingerprint'],
@@ -85,7 +86,7 @@ def main():
         radial_interpolation='three-node quadratic log of positive segment charge',
         longitudinal_interpolation='componentwise PCHIP of angular charge prefixes')
     payload=dict(schema='lighthit/first-charge-beta/1',metadata=json.dumps(metadata),left=np.array(left),right=np.array(right))
-    path=args.output/'first-beta-charge.npz';np.savez_compressed(path,**payload)
+    path=args.output/'first-beta-charge.npz';savez(path,**payload)
     model=FirstChargeBetaAtlas(path,base,require_validated=False)
     test_looks=np.array([[.8,0.,.6],[-.3,.4,np.sqrt(.75)],[0.,0.,-1.]])
     tests=[]
@@ -114,7 +115,7 @@ def main():
     # Narrow-root cuts also diagnose the existing beta-one endpoint grid.
     regular=[t for t in tests if t['cut']!=4]
     passed=all(np.isfinite(t['scaled_error']) for t in regular) and max(t['scaled_error'] for t in regular)<=.01
-    metadata['synthetic_validation_passed']=bool(passed);payload['metadata']=json.dumps(metadata);np.savez_compressed(path,**payload)
+    metadata['synthetic_validation_passed']=bool(passed);payload['metadata']=json.dumps(metadata);savez(path,**payload)
     report=dict(metadata=metadata,build_cpu_s=sum(timings),elapsed_s=perf_counter()-begin,disk_bytes=path.stat().st_size,
         tests=tests,max_regular_error=max(t['relative_error'] for t in regular),max_regular_scaled_error=max(t['scaled_error'] for t in regular),
         max_narrow_error=max((t['relative_error'] for t in tests if t['cut']==4),default=None))

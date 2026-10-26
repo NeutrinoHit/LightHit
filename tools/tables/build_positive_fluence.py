@@ -20,9 +20,11 @@ def main():
     parser.add_argument('--extent-m', type=float, default=500.)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--template', type=Path, help='reuse axes and optical tables of this atlas')
+    parser.add_argument('--model', type=Path, help='serialized model; no NTSim import is needed')
+    parser.add_argument('--resume',action='store_true',help='reuse a complete output only when its inputs match')
     parser.add_argument('--scalar-only', action='store_true', help='omit arrival-direction moments')
     args = parser.parse_args()
-    if args.output.exists():
+    if args.output.exists() and not args.resume:
         parser.error('choose a new output path')
     if args.count < 100 or min(args.rho_bins, args.z_bins) < 8 or args.extent_m < 10:
         parser.error('invalid sampling/grid size')
@@ -38,15 +40,28 @@ def main():
         rho, z, beta = template.rho_edges_m, template.z_edges_m, template.beta_nodes
     else:
         import lighthit as lh
-        import ntsim
-        from ntsim.LightTransport import bgvd_model_from_ntsim
         from lighthit.prompt import _spectral_tables
-        model = bgvd_model_from_ntsim(ntsim.bgvd.Telescope(n_clusters=(1,2,3,4,5)), ntsim.bgvd.Water())
+        if args.model is not None:
+            model=lh.load_model(args.model)
+        else:
+            import ntsim
+            from ntsim.LightTransport import bgvd_model_from_ntsim
+            model = bgvd_model_from_ntsim(ntsim.bgvd.Telescope(n_clusters=(1,2,3,4,5)), ntsim.bgvd.Water())
         tables = _spectral_tables(model.kernel(lh.KernelConfig()))
         g, fingerprint = float(model.medium.g), model.fingerprint
         rho = np.r_[0., np.geomspace(.1, args.extent_m, args.rho_bins)]
         z = np.sinh(np.linspace(-np.arcsinh(args.extent_m), np.arcsinh(args.extent_m), args.z_bins+1))
         beta = np.array([.735, .745, .76, .8, .9, .97, 1.])
+    if args.output.exists():
+        old=PositiveFluenceAtlas.load(args.output)
+        expected_angular=not args.scalar_only
+        if (old.metadata['count_per_order']!=args.count or old.metadata['seed']!=args.seed
+                or old.metadata['model_fingerprint']!=fingerprint or old.metadata['g']!=g
+                or (old.angular_moments is not None)!=expected_angular
+                or not all(np.array_equal(a,b) for a,b in [(old.rho_edges_m,rho),(old.z_edges_m,z),(old.beta_nodes,beta)])
+                or any(not np.array_equal(np.asarray(old.metadata['tables'][key]),value) for key,value in tables.items())):
+            raise ValueError('completed preview has different inputs')
+        print('REUSED',args.output,flush=True);return
     volume = np.pi*np.diff(rho**2)[:, None]*np.diff(z)[None, :]
     density = np.zeros((len(beta), 2, len(rho)-1, len(z)-1))
     sigma = np.zeros_like(density)
@@ -98,7 +113,10 @@ def main():
                     checks=rows)
     metadata['angular_moments'] = None if angular is None else '1 x z xx xz zz xxx xxz xzz zzz; meridian frame; mirror-symmetric'
     atlas = PositiveFluenceAtlas(rho, z, beta, density, sigma, metadata, angular_moments=angular)
-    atlas.save(args.output)
+    from tempfile import TemporaryDirectory
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    with TemporaryDirectory(prefix='fluence-',dir=args.output.parent) as directory:
+        temporary=Path(directory)/'atlas.npz';atlas.save(temporary);temporary.replace(args.output)
     args.output.with_suffix('.json').write_text(json.dumps(metadata, indent=2))
     print(json.dumps({key: metadata[key] for key in ['wall_seconds','cpu_seconds','count_per_order']}, indent=2))
 

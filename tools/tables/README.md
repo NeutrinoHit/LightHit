@@ -8,6 +8,25 @@ fixed local path. Run them from the repository root with `PYTHONPATH=src`; the
 scripts that read the BGVD water and OM tables directly need the `bgvd_model`
 package installed (`pip install -e $LIGHTHIT_DATA/bgvd-model`).
 
+## One command for the glass-reference cache
+
+From the checkout, build the complete first-entry route inputs before running
+events:
+
+```sh
+PYTHONPATH=src python tools/tables/build_receiver_bundle.py \
+  --model data/lighthit-bgvd-data/model/bgvd-model.npz \
+  --output data/lighthit-glass-data --jobs 8
+```
+
+This orchestrates the Q1 geometry/CDFs, RTE packs, preview, primary/beta/time
+atlases and checks. It consumes the serialized model without private optical
+provider imports. Repeat the same command to resume, use `--plan` to inspect
+it, or `--output ... --check` to verify a finished bundle. The final manifests
+use relative paths. See [the complete recipe and validation scope](../../docs/build-receiver-bundle.md).
+The individual builders below remain useful for centre-reference bundles
+and addressed component preparation.
+
 ## Build order
 
 | Step | Command | Produces (bundle file) | Needs |

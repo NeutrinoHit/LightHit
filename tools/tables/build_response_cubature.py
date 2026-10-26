@@ -10,6 +10,7 @@ from dataclasses import replace
 from copy import copy
 from time import perf_counter,process_time
 import numpy as np
+from _atomic import savez,write_json
 
 C=.299792458
 TRAIN_LOOKS=np.array([[-.68,np.sqrt(1-.68**2),0.],[.23,.61,np.sqrt(1-.23**2-.61**2)],[0.,0.,1.]])
@@ -53,7 +54,7 @@ def snapshots(kernel,reference,states,looks,directory):
         if json.loads(contract.read_text())!=signature:raise ValueError('snapshot optical/quadrature/orientation contract differs')
     else:
         if any(directory.glob('*.npz')):raise ValueError('old snapshots have no input contract; choose a fresh output')
-        contract.write_text(json.dumps(signature,indent=2))
+        write_json(contract,signature)
     for index,state in enumerate(states):
         path=directory/f'{index:03d}.npz'
         if path.exists():
@@ -68,7 +69,7 @@ def snapshots(kernel,reference,states,looks,directory):
         for j,wavelength in enumerate(reference.wavelength_nm):
             local.wavelength=WavelengthQuadrature(np.array([wavelength]),np.array([1.]))
             response[:,j]=first_scattering_charge_only(local,source)[0]
-        np.savez_compressed(path,response=response,state=json.dumps(state))
+        savez(path,response=response,state=json.dumps(state))
         values.append(response)
         print('SNAPSHOT',json.dumps(dict(index=index,total=len(states),**state,cpu_s=process_time()-cpu,wall_s=perf_counter()-wall)),flush=True)
     return np.array(values)
@@ -77,6 +78,7 @@ def snapshots(kernel,reference,states,looks,directory):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--model',type=Path,help='serialized model; avoids installed optical-provider dependencies')
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
     import numba
     from build_track_first_atlas import optical_kernel
@@ -87,7 +89,7 @@ def main():
     from lighthit.experimental.muon_integral import order1_integrals
     from lighthit.prompt import PromptConfig
     if numba.get_num_threads()!=1:parser.error('one Numba thread required')
-    kernel=optical_kernel();reference=primary_spectral_quadrature(kernel.medium,kernel.detector,order=2)
+    kernel=optical_kernel(args.model);reference=primary_spectral_quadrature(kernel.medium,kernel.detector,order=2)
     _,fingerprint=track_first_optical_contract(kernel)
     kernel.wavelength=reference
     first_scattering_charge_only(scenario_kernel(kernel,10.,TRAIN_LOOKS[:1]),source_for(kernel,10.,1.,'root'))
@@ -110,7 +112,7 @@ def main():
             p95_relative_charge_error=float(np.quantile(error,.95)),max_absolute_charge_error=float(abs(predicted-expected).max()),
             worst_state=held[np.unravel_index(error.argmax(),error.shape)[0]],metadata=model.metadata)
         summaries.append(summary)
-        np.savez_compressed(args.output/f'basis-rank{rank}.npz',wavelength_nm=model.quadrature.wavelength_nm,
+        savez(args.output/f'basis-rank{rank}.npz',wavelength_nm=model.quadrature.wavelength_nm,
             weight_nm=model.quadrature.weight_nm,selected_indices=model.selected_indices,modes=model.modes,
             singular_values=model.singular_values,metadata=json.dumps(model.metadata),
             reference_wavelength_nm=reference.wavelength_nm,reference_weight_nm=reference.weight_nm)
@@ -131,7 +133,7 @@ def main():
             bins_relative_l1=(abs(b-br).sum(1)/np.maximum(abs(br).sum(1),1e-300)).tolist(),
             reference_cpu_s=rcpu,candidate_cpu_s=process_time()-cpu,reference_wall_s=rwall,candidate_wall_s=perf_counter()-wall)
         wave.append(item);print('WAVEFORM',json.dumps(item),flush=True)
-        np.savez_compressed(args.output/f'wave-{rho}-{beta}-{cut}.npz',reference_charge=qr,candidate_charge=q,reference_bins=br,candidate_bins=b)
+        savez(args.output/f'wave-{rho}-{beta}-{cut}.npz',reference_charge=qr,candidate_charge=q,reference_bins=br,candidate_bins=b)
     report=dict(optics_fingerprint=fingerprint,reference_nodes=len(reference.weight_nm),training_states=train,
         heldout_states=held,training_looks=TRAIN_LOOKS.tolist(),heldout_looks=TEST_LOOKS.tolist(),models=summaries,
         selected_rank=summaries[selected]['rank'],charge_holdout_pass=bool(passing),waveform_checks=wave,

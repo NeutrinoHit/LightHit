@@ -153,8 +153,12 @@ def main():
     meta.update(angular_source_degree=int(kernel.config.source_degree),angular_scattering_degree=int(kernel.config.scattering_degree))
     meta.update(positive_reference_cells=reference_count,positive_reference_method='unbounded collision-prefix Neumann series with analytic first-entry Q1 tail')
     meta['observer_positivity']='Bernstein subdivision certificate over the complete propagation-look unit disk'
-    PositiveFluenceAtlas(template.rho_edges_m,template.z_edges_m,template.beta_nodes,
-        moments[...,0].copy(),uncertainty,meta,moments).save(args.output/'surface-preview.npz')
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory(prefix='preview-',dir=args.output) as directory:
+        temporary=Path(directory)/'surface-preview.npz'
+        PositiveFluenceAtlas(template.rho_edges_m,template.z_edges_m,template.beta_nodes,
+            moments[...,0].copy(),uncertainty,meta,moments).save(temporary)
+        temporary.replace(final_path)
     print(json.dumps(dict(complete=True,fingerprint=fingerprint)),flush=True)
 
 

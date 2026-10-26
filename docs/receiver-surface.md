@@ -12,6 +12,9 @@ packs and folded kernels rather than silently mixing receiver conventions.
 The route manifests record the boundary and solver settings in
 `kernel_settings`; response metadata records `receiver_reference_by_order`.
 
+For one-command preparation from a serialized model, start with
+[build the optical cache](build-receiver-bundle.md).
+
 ## Orders and preparation
 
 | Order | Surface calculation | Fast event calculation |

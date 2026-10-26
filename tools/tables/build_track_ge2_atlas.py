@@ -9,28 +9,30 @@ import argparse,json,hashlib
 from pathlib import Path
 from time import perf_counter,process_time,thread_time
 import numpy as np
+from _atomic import savez
 from numpy.polynomial.legendre import leggauss
 
 
 def load_optics(pack,cache,model_path=None,*,frequency_nodes=65):
     import lighthit as lh
-    from bgvd_model.BaikalWater import BaikalWater
-    from bgvd_model import OpticalModule
     from lighthit.shower_basis import Ge2KernelStore
     from lighthit.experimental.track_ge2_primitive import track_ge2_optics_metadata
-    water=BaikalWater();parameters=np.asarray(OpticalModule.angular_parameters,float)
-    medium=lh.SpectralMedium(np.asarray(water.wavelength),np.asarray(water.absorption_inv_length),
-        np.asarray(water.scattering_inv_length),np.asarray(water.phase_refraction_index),
-        np.asarray(water.group_refraction_index),g=.9,provenance='installed optical provider only')
-    def angular(x):return np.maximum(sum(parameters[k]*(-np.asarray(x))**k for k in range(len(parameters))),0.)
-    def efficiency(w):return OpticalModule.efficiency(w)*OpticalModule.transmission_gel_glass(w)
-    # A dummy one-point detector satisfies the optical interface; its position
-    # and orientation are not used in or included in the cache signature.
-    detector=lh.DetectorArray(np.zeros((1,3)),np.array([[0.,0.,1.]]),np.pi*OpticalModule.radius**2,angular,efficiency)
-    kernel=lh.TransportKernel(medium,detector,lh.KernelConfig(omega_per_ns=np.linspace(0,1.2,frequency_nodes),cache_policy='require'))
+    config=lh.KernelConfig(omega_per_ns=np.linspace(0,1.2,frequency_nodes),cache_policy='require')
+    if model_path is not None:
+        kernel=lh.load_model(model_path).kernel(config)
+    else:
+        from bgvd_model.BaikalWater import BaikalWater
+        from bgvd_model import OpticalModule
+        water=BaikalWater();parameters=np.asarray(OpticalModule.angular_parameters,float)
+        medium=lh.SpectralMedium(np.asarray(water.wavelength),np.asarray(water.absorption_inv_length),
+            np.asarray(water.scattering_inv_length),np.asarray(water.phase_refraction_index),
+            np.asarray(water.group_refraction_index),g=.9,provenance='installed optical provider only')
+        def angular(x):return np.maximum(sum(parameters[k]*(-np.asarray(x))**k for k in range(len(parameters))),0.)
+        def efficiency(w):return OpticalModule.efficiency(w)*OpticalModule.transmission_gel_glass(w)
+        detector=lh.DetectorArray(np.zeros((1,3)),np.array([[0.,0.,1.]]),np.pi*OpticalModule.radius**2,angular,efficiency)
+        kernel=lh.TransportKernel(medium,detector,config)
     store=Ge2KernelStore.load(pack)
     key,bundle=next((key,b) for key,b in store._bundles.items() if len(b['omega'])==frequency_nodes)
-    if model_path is not None:kernel=lh.load_model(model_path).kernel(kernel.config)
     if bundle.get('receiver_contract'):
         from dataclasses import replace
         from lighthit.receiver import SphereSurface
@@ -136,8 +138,8 @@ def main():
         row,norm,build_cpu,build_wall=result;edges=row.edges_m
         cpu=thread_time();wall=perf_counter()
         stem=f'rows/rho-{rho:.9f}'
-        np.savez_compressed(args.output/(stem+'.npz'),edges_m=row.edges_m,integrated_coefficients=row.integrated_coefficients,prefix=row.prefix)
-        np.savez_compressed(args.output/(stem+'-charge.npz'),edges_m=row.edges_m,
+        savez(args.output/(stem+'.npz'),edges_m=row.edges_m,integrated_coefficients=row.integrated_coefficients,prefix=row.prefix)
+        savez(args.output/(stem+'-charge.npz'),edges_m=row.edges_m,
             integrated_coefficients=row.integrated_coefficients.reshape(len(edges)-1,args.order+1,10,len(omega))[...,0].real.copy(),
             prefix=row.prefix.reshape(len(edges),10,len(omega))[...,0].real.copy())
         item=dict(impact_m=rho,file=stem+'.npz',charge_file=stem+'-charge.npz',normalization=norm,
@@ -174,7 +176,7 @@ def main():
             row=SegmentPrimitive.build(lambda x:values[i],edges,omega,order=14,clock_ns_per_m=clock)
             spectra.append(row.segment(cuts[:,0],cuts[:,1],closest_time_ns=-rho*front,coefficient0_per_m=c0))
         data=dict(spectra=np.asarray(spectra),looks=looks,cuts=cuts,rho=np.array(rho),cpu_seconds=np.array(process_time()-cpu))
-        np.savez_compressed(path,**data)
+        savez(path,**data)
         return data
     def validate(rho,atlas):
         ref=reference(rho);details=[];passed=True;front_ok=True;charge_ok=True;back_ok=True
