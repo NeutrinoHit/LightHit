@@ -1,0 +1,97 @@
+{
+  "project": "lighthit",
+  "source": "https://pypi.org/pypi/lighthit/json",
+  "versions": [
+    {
+      "version": "0.3.0a5",
+      "uploaded_at": "2026-10-27T04:12:31.062287Z",
+      "url": "https://pypi.org/project/lighthit/0.3.0a5/"
+    },
+    {
+      "version": "0.3.0a4",
+      "uploaded_at": "2026-10-16T05:50:51.579154Z",
+      "url": "https://pypi.org/project/lighthit/0.3.0a4/"
+    },
+    {
+      "version": "0.3.0a3",
+      "uploaded_at": "2026-10-14T12:21:19.041686Z",
+      "url": "https://pypi.org/project/lighthit/0.3.0a3/"
+    },
+    {
+      "version": "0.3.0a2",
+      "uploaded_at": "2026-10-14T11:32:29.594370Z",
+      "url": "https://pypi.org/project/lighthit/0.3.0a2/"
+    },
+    {
+      "version": "0.3.0a1",
+      "uploaded_at": "2026-10-14T10:15:03.413802Z",
+      "url": "https://pypi.org/project/lighthit/0.3.0a1/"
+    },
+    {
+      "version": "0.2.0a13",
+      "uploaded_at": "2026-09-30T21:33:18.001220Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a13/"
+    },
+    {
+      "version": "0.2.0a12",
+      "uploaded_at": "2026-09-29T08:59:02.234903Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a12/"
+    },
+    {
+      "version": "0.2.0a11",
+      "uploaded_at": "2026-09-27T10:44:22.135262Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a11/"
+    },
+    {
+      "version": "0.2.0a10",
+      "uploaded_at": "2026-09-26T17:39:23.882976Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a10/"
+    },
+    {
+      "version": "0.2.0a9",
+      "uploaded_at": "2026-09-26T11:29:30.103782Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a9/"
+    },
+    {
+      "version": "0.2.0a8",
+      "uploaded_at": "2026-09-24T06:52:04.684056Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a8/"
+    },
+    {
+      "version": "0.2.0a7",
+      "uploaded_at": "2026-09-22T09:45:38.056606Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a7/"
+    },
+    {
+      "version": "0.2.0a6",
+      "uploaded_at": "2026-09-21T12:24:47.896854Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a6/"
+    },
+    {
+      "version": "0.2.0a5",
+      "uploaded_at": "2026-09-20T18:54:35.859117Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a5/"
+    },
+    {
+      "version": "0.2.0a4",
+      "uploaded_at": "2026-09-20T18:42:23.743365Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a4/"
+    },
+    {
+      "version": "0.2.0a3",
+      "uploaded_at": "2026-09-20T18:27:06.992319Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a3/"
+    },
+    {
+      "version": "0.2.0a2",
+      "uploaded_at": "2026-09-20T16:52:10.214071Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a2/"
+    },
+    {
+      "version": "0.2.0a1",
+      "uploaded_at": "2026-09-20T13:05:57.086490Z",
+      "url": "https://pypi.org/project/lighthit/0.2.0a1/"
+    }
+  ],
+  "latest": "0.3.0a5"
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="LightHit research results: expected optical-module responses, reference comparisons, scientific checks and the idea registry.">
+<meta name="robots" content="noindex,nofollow">
+<meta name="color-scheme" content="light dark">
+<title>LightHit — Results</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script id="lr-d3-library" async src="vendor/d3.min.js"></script>
+<script defer src="vendor/lucide.min.js"></script>
+<script defer src="app.js"></script>
+</head>
+<body>
+<div id="lh-results" lang="en">
+
+<header class="lr-header">
+  <div class="lr-brandrow"><div class="lr-brand"><span class="lr-symbol"><i data-lucide="orbit" aria-hidden="true"></i></span><div><h1>LightHit</h1><p class="lr-sub">Radiative transfer · expected detector response</p></div></div><div class="lr-links"><a href="https://github.com/NeutrinoHit/LightHit/tree/main/docs" target="_blank" rel="noopener">Documentation ↗</a><a href="https://github.com/NeutrinoHit/LightHit" target="_blank" rel="noopener">Code ↗</a></div></div>
+  <div class="lr-versionbar"><label class="lr-field" for="lr-report">Recorded result set<select id="lr-report"><option value="examples">Detector examples</option><option value="mc">Photon MC comparisons</option><option value="r6">Time atlas R6</option></select></label><div class="lr-context" id="lr-context"></div></div>
+  <nav class="lr-tabs" role="tablist" aria-label="LightHit results"><button type="button" class="lr-tab" id="lr-tab-responses" data-tab="responses" role="tab" aria-controls="lr-main" aria-selected="true">Responses</button><button type="button" class="lr-tab" id="lr-tab-accuracy" data-tab="accuracy" role="tab" aria-controls="lr-main" aria-selected="false">Accuracy</button><button type="button" class="lr-tab" id="lr-tab-ideas" data-tab="ideas" role="tab" aria-controls="lr-main" aria-selected="false">Ideas <span class="lr-count" id="lr-idea-count"></span></button><button type="button" class="lr-tab" id="lr-tab-tests" data-tab="tests" role="tab" aria-controls="lr-main" aria-selected="false">Tests</button><button type="button" class="lr-tab" id="lr-tab-files" data-tab="files" role="tab" aria-controls="lr-main" aria-selected="false">Files</button><button type="button" class="lr-tab" id="lr-tab-versions" data-tab="versions" role="tab" aria-controls="lr-main" aria-selected="false">Versions</button></nav>
+</header>
+<main id="lr-main" class="lr-main" role="tabpanel" aria-labelledby="lr-tab-responses"><p>Loading archived results…</p></main>
+<footer class="lr-footer"><span>Research preview · <span id="lr-publication"></span></span><button type="button" class="lr-textbutton" data-tab="files">Data &amp; provenance →</button></footer>
+<span id="lr-live" role="status" aria-live="polite" style="position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden"></span>
+</div>
+<noscript><p>This results page needs JavaScript. The archived numerical data are available in <a href="results.json">results.json</a>.</p></noscript>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "schema": "lighthit/report-index/1",
+  "latest": "v1",
+  "snapshots": [
+    {
+      "id": "v1",
+      "title": "First research preview",
+      "date": "2026-11-03",
+      "file": "v1.json",
+      "sha256": "40ee7168382ae9aaa0282b4d46cfbb7d6a54fb22d808b12ba849a542726426a2"
+    }
+  ]
+}
