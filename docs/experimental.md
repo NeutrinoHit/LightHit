@@ -40,6 +40,7 @@ Many tests still import through these names.
 | `effective_segments` | a shower fitted by N straight segments; also the numpy reference `vectorised_ballistic` | optional, tested | test_effective_segments |
 | `segment_reference` | coordinate-space single-scattering reference for flashes and segments (quadrature and MC) | reference, tested | test_segment_reference |
 | `crossing_mc` | surface-crossing Monte Carlo of fluence and current per order for a flash | reference, tested | test_crossing_mc |
+| `halfspace`, `halfspace_boundary`, `halfspace_mc` | half-space volume RTE, true collimated boundary beams, Fresnel input/output, external aperture, reciprocal ports, frequency/time readout and absorption sensitivity; [mathematics and scope](halfspace.md) | synthetic reference, tested; independent full-HG MC and local path-length checks | test_halfspace, test_halfspace_boundary, test_halfspace_mc |
 | `shell_mc` | track-length Monte Carlo of shell-averaged fluence (Numba) | reference, tested | test_shell_mc |
 | `stationary_modes` | stationary P_N eigenmode check of charge and current for a flash | reference, tested | test_stationary_modes |
 | `directional_reference` | slow independent references of the directional kernel | reference, tested | test_directional |

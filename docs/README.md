@@ -15,6 +15,7 @@ documentation is not part of the PyPI package.
 | `receiver-first-entry.md` | geometry-only first-scattering profiles at the glass, for building finite-receiver tables; not yet used by default transport |
 | `direct-first-entry.md` | default direct-light integration to the first glass entry, its error budgets and measured event cost |
 | [pencil-validation.md](pencil-validation.md) | student laboratory: a directed photon, independent Monte Carlo, RTE, analytic limits, convergence and time diagnostics |
+| [halfspace.md](halfspace.md) | half-space volume reference: normal pencil beam, tissue-air Fresnel optics, external aperture, reciprocal ports, frequency/time readout, absorption sensitivity and independent validation |
 | `shower-route.md` | `lighthit.shower.ShowerTransport`, end to end |
 | `muon-route.md` | `lighthit.muon.MuonTransport`, end to end, and `muon-data.json` |
 | `event-and-laser.md` | `lighthit.event.EventTransport`: several sources on one clock, completion, fallbacks, the laser kernel |

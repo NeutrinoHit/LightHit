@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "outside_phase_index": 1.0,
+  "outside_status": "air treated as n=1",
+  "mode": "stationary laterally integrated normal pencil; whole exterior hemisphere",
+  "profiles": [
+    {
+      "id": "ptfe_dn",
+      "name": "PTFE",
+      "g": 0.0,
+      "scattering_per_cm": 20.0,
+      "supplied_by": "DN; scattering units confirmed cm^-1",
+      "phase_index_inside": 1.35,
+      "phase_index_status": "working scalar bulk approximation; not measured on the supplied sample",
+      "wavelength_nm": 633.15,
+      "wavelength_status": "index-reference wavelength; supplied scattering has no specified spectrum",
+      "absorption_per_cm": null,
+      "absorption_scan_per_cm": [
+        0.001,
+        0.01,
+        0.1
+      ],
+      "absorption_status": "illustrative independent scan; not measured absorption of PTFE",
+      "sources": [
+        {
+          "url": "https://onlinelibrary.wiley.com/doi/full/10.1002/mame.202400332",
+          "location": "Table 5; PTFE film i mean index 1.350 at 633.15 nm; thin-film result is not a bulk-sample calibration"
+        },
+        {
+          "url": "https://doi.org/10.1016/j.triboint.2025.111611",
+          "location": "bulk 1 mm PTFE sheet index 1.35 measured with a prism coupler; wavelength not verified from accessible text"
+        }
+      ]
+    },
+    {
+      "id": "milk_dn",
+      "name": "Milk",
+      "g": 0.9,
+      "scattering_per_cm": 250.0,
+      "supplied_by": "DN; scattering units confirmed cm^-1",
+      "phase_index_inside": 1.35,
+      "phase_index_status": "rounded working bulk-medium index; milk composition and dispersion unspecified",
+      "wavelength_nm": 633.0,
+      "wavelength_status": "nominal red-light model label; no scattering or index spectrum supplied",
+      "absorption_per_cm": null,
+      "absorption_scan_per_cm": [
+        0.001,
+        0.01,
+        0.1
+      ],
+      "absorption_status": "illustrative independent scan; not measured absorption of milk",
+      "sources": [
+        {
+          "url": "https://www.mdpi.com/2076-3417/14/11/4529",
+          "location": "Table 2; cow-milk effective real indices 1.34655-1.36462 for different sample types; no claim these are measured at 633 nm"
+        },
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11675773/",
+          "location": "Sections 2.5/3.2; human milk serum 1.3466-1.3474, measured at 589.3 nm; separate from fat-globule index"
+        }
+      ]
+    },
+    {
+      "id": "skin_dermis_660_hg",
+      "name": "Effective human dermis in vivo, pure-HG option",
+      "g": 0.91,
+      "g_status": "HG model parameter, not a separately measured anisotropy of DN skin",
+      "phase_index_inside": 1.4,
+      "phase_index_status": "index used in the published dermis model",
+      "wavelength_nm": 660.0,
+      "wavelength_status": "published in-vivo fit range",
+      "reduced_scattering_per_cm": 11.0,
+      "scattering_per_cm": 122.22222222222227,
+      "scattering_status": "midpoint of 9-13 cm^-1 reduced-scattering range; mu_s=mu_s_prime/(1-g)",
+      "absorption_per_cm": 0.135,
+      "absorption_range_per_cm": [
+        0.07,
+        0.2
+      ],
+      "absorption_status": "midpoint of published 660 nm range, not an individual measurement",
+      "model_status": "homogeneous effective dermis, pure HG beta=0 row; epidermis and individual pigmentation are not resolved",
+      "sources": [
+        {
+          "url": "https://opg.optica.org/ao/abstract.cfm?uri=ao-32-4-435",
+          "location": "Graaff et al. 1993, Table 8 beta=0: 660 nm mu_a=0.007-0.020 mm^-1 and mu_s_prime=0.9-1.3 mm^-1; model g_HG=0.91 and n=1.4. Selected values are midpoint assumptions, not a unique fitted sample."
+        }
+      ]
+    }
+  ],
+  "group_index_status": "phase index used as an explicit nondispersive placeholder in Medium; all calculations omega=0, so no group-velocity or time-profile claim"
+}
