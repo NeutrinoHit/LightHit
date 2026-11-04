@@ -8,6 +8,8 @@ from numba import njit
 @njit(cache=True)
 def _elliptic(m, complementary_m):
     """Complete elliptic K and E by the arithmetic-geometric mean."""
+    if not math.isfinite(m) or not math.isfinite(complementary_m) or not 0<complementary_m<=1:
+        raise FloatingPointError('elliptic integral needs a finite positive complementary parameter')
     a, b = 1., math.sqrt(complementary_m)
     weighted, power = m/2, 1.
     while True:
@@ -36,6 +38,8 @@ def _hg_azimuth(gap, b):
     """Integrals cos(phi)^k/(a-b*cos(phi))^1.5, a=gap+|b|, k=0..3."""
     # Retain the positive minimum denominator separately: a-|b| may round
     # to zero for a narrowly forward-peaked phase function.
+    if not math.isfinite(gap) or gap<=0 or not math.isfinite(b):
+        raise FloatingPointError('HG azimuth needs a finite positive minimum denominator')
     a = gap+abs(b)
     eta = abs(b/a)
     out = np.zeros(4)
@@ -109,6 +113,8 @@ def _density(r, cosine, path, g, gx, gw):
         return result
     if last_hi <= last_lo:
         return result
+    if last_lo<=0:
+        raise FloatingPointError('path quadrature sampled the direct-entry singularity')
     qa, qb = math.log(last_lo), math.log(last_hi)
     panels = max(1, int(math.ceil(qb-qa)))
     for p in range(panels):
@@ -155,20 +161,30 @@ def _density(r, cosine, path, g, gx, gw):
 def cumulative(r, cosine, paths, g, sx, sw, ex, ew):
     """Positive path integration between topology-aware grid endpoints."""
     output = np.zeros((len(paths), 10))
+    rho=r*math.sqrt((1-cosine)*(1+cosine))
+    hit=cosine>0 and rho<=1
+    entry=r*cosine-math.sqrt(max(0.,(1-rho)*(1+rho))) if hit else -1.
     for k in range(1, len(paths)):
         lo, hi = paths[k-1], paths[k]
         value = np.zeros(10)
-        for j in range(len(sx)):
-            angle = math.pi/2*sx[j]
-            path = (lo+hi)/2+(hi-lo)/2*math.sin(angle)
-            if path <= lo:
-                path = np.nextafter(lo, hi)
-            elif path >= hi:
-                path = np.nextafter(hi, lo)
-            if path <= lo or path >= hi:
-                # There is no representable interior quadrature node.
-                continue
-            weight = (hi-lo)/2*math.pi/2*math.cos(angle)*sw[j]
-            value += weight*_density(r, cosine, path, g, ex, ew)
+        # Python's mesh and the compiled density can place the logarithmic
+        # entry cut on adjacent floats. Split again using the same compiled
+        # arithmetic as _density, so no interior sample lands on that cut.
+        split=hit and lo<entry<hi
+        for part in range(2 if split else 1):
+            left=entry if split and part==1 else lo
+            right=entry if split and part==0 else hi
+            for j in range(len(sx)):
+                angle = math.pi/2*sx[j]
+                path = (left+right)/2+(right-left)/2*math.sin(angle)
+                if path <= left:
+                    path = np.nextafter(left, right)
+                elif path >= right:
+                    path = np.nextafter(right, left)
+                if path <= left or path >= right:
+                    # There is no representable interior quadrature node.
+                    continue
+                weight = (right-left)/2*math.pi/2*math.cos(angle)*sw[j]
+                value += weight*_density(r, cosine, path, g, ex, ew)
         output[k] = output[k-1]+value
     return output

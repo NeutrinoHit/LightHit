@@ -74,6 +74,15 @@ unbounded order with importance weights; photons stop at an earlier glass
 entry. The per-cell sampling error is retained. This replaces the local
 calculation, without clipping a predicted charge or fitting event responses.
 
+The table integrator also resolves a floating-point entry-cut case at a
+large grazing geometry. A mesh created in Python and the compiled density
+can put the direct-entry singularity on adjacent floats. The compiled
+quadrature splits at its own entry value before choosing interior nodes;
+it never substitutes an iteration cap or a physical path cutoff. Invalid
+HG denominators fail explicitly instead of entering a nonterminating
+elliptic iteration. A regression checks all ten moments against a refined
+path mesh at the critical geometry.
+
 ## Numerical checks
 
 The time interpolator has a shared absolute L1 budget across common-spectrum

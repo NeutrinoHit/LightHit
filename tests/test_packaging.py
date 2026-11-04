@@ -265,6 +265,7 @@ def test_python_m_build_produces_clean_archives(tmp_path):
     assert "lighthit/assets/vendor/three.min.js" in names
     assert "lighthit/assets/vendor/three.LICENSE" in names
     assert "lighthit/tests/test_public_smoke.py" in names
+    assert "lighthit/experimental/spectral_response_basis.py" in names
     assert "lighthit-demo = lighthit.examples.synthetic:main" in entry_points
     assert "lighthit-selftest = lighthit.selftest:main" in entry_points
 

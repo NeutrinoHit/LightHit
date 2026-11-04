@@ -80,8 +80,8 @@ def main(argv=None):
         source_rule_sha256=hashlib.sha256(args.rule.read_bytes()).hexdigest(),model_sha256=hashlib.sha256(args.model.read_bytes()).hexdigest())
     args.output.with_suffix('.json').write_text(json.dumps(report,indent=2)+'\n')
     if not passed:return 2
-    _,identity=track_first_optical_contract(kernel)
-    metadata=dict(model.metadata,original_optics_fingerprint=model.metadata['optics_fingerprint'],optics_fingerprint=identity,
+    optical_contract,identity=track_first_optical_contract(kernel)
+    metadata=dict(model.metadata,original_optics_fingerprint=model.metadata['optics_fingerprint'],optics_fingerprint=identity,optical_contract=optical_contract,
         source_rule_sha256=report['source_rule_sha256'],receiver_transfer='unchanged positive rule checked on first-entry responses',
         first_entry_validation=dict(max_relative_error=maximum,radii_m=args.radii,betas=args.betas,cuts=args.cuts,criterion_relative=.01),
         error_certified=False)

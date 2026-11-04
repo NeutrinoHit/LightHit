@@ -215,7 +215,7 @@ class SpectralFirstEntry:
             quadratic_time=bool(has_quadratic),exact_groups=int(np.sum(fine&~quadratic))+guards,guard_refinements=int(guards))
 
     @classmethod
-    def build_parallel(cls,*,geometry_directory,radius_m,tables,output,jobs=1,config=None,geometry_indices=None,progress=None):
+    def build_parallel(cls,*,geometry_directory,radius_m,tables,output,jobs=1,config=None,geometry_indices=None,progress=None,overwrite=False,keep_blocks=True):
         from concurrent.futures import ProcessPoolExecutor,as_completed
         from multiprocessing import get_context
         geometry=ReceiverGeometry.load(geometry_directory);config=config or SpectralFirstEntryConfig();tables=_optics(tables)
@@ -223,34 +223,51 @@ class SpectralFirstEntry:
         if indices.ndim!=1 or len(indices)<2 or np.any(np.diff(indices)<=0) or indices[0]<0 or indices[-1]>=len(geometry.radii_unit):raise ValueError('increasing geometry rows required')
         if isinstance(jobs,(bool,np.bool_)) or not isinstance(jobs,(int,np.integer)) or jobs<1:raise ValueError('positive integer jobs required')
         output=Path(output);output.mkdir(parents=True,exist_ok=True)
-        if (output/'manifest.json').exists():raise FileExistsError('completed spectral Q1 atlas exists')
-        workers=min(jobs,len(indices)//2);blocks=np.array_split(indices,workers)
+        if (output/'manifest.json').exists():
+            if not overwrite:raise FileExistsError('completed spectral Q1 atlas exists')
+            old=cls.load(output)
+            from ._portable import same_values
+            if (old.metadata['geometry_signature']!=_signature(geometry) or old.config!=config
+                    or old.radius_m!=radius_m or not np.array_equal(old.geometry_indices,indices)
+                    or not same_values(old.tables,tables)):
+                raise ValueError('completed spectral Q1 has different inputs')
+            return old
+        from ._table_checkpoint import JoinedArrays,radial_blocks
+        blocks=[indices[b] for b in radial_blocks(len(indices))];workers=min(jobs,len(blocks))
         arguments=[dict(geometry_directory=str(geometry_directory),radius_m=radius_m,tables=tables,
             geometry_indices=block,config=asdict(config),output=str(output/'blocks'/f'{i:04d}')) for i,block in enumerate(blocks)]
-        arrays={}
+        shapes={}
         for branch,count in [('hit',geometry.config.hit_nodes),('miss',geometry.config.miss_nodes)]:
             shape=(len(tables['mut']),len(indices),count)
-            for suffix,tail in [('charge',(10,)),('error',(10,)),('cdf',(config.time_nodes,10))]:
-                name=branch+'_'+suffix
-                arrays[name]=np.lib.format.open_memmap(output/(name+'.npy'),mode='w+',dtype=float,shape=shape+tail)
-        completed=0;reference=None
+            for suffix,tail in [('charge',(10,)),('error',(10,)),('cdf',(config.time_nodes,10))]:shapes[branch+'_'+suffix]=shape+tail
+        from . import _receiver_band_first
+        builder=hashlib.sha256(Path(__file__).read_bytes()+Path(_receiver_band_first.__file__).read_bytes()).hexdigest()
+        joined=JoinedArrays(output,shapes,dict(geometry=_signature(geometry),indices=indices.tolist(),radius=radius_m,
+            config=asdict(config),tables={k:v.tolist() for k,v in tables.items()},builder=builder),axis=1)
+        arrays=joined.arrays;completed=0;reference=None
         def merge(i):
             nonlocal completed,reference
             part=cls.load(arguments[i]['output']);locations=np.searchsorted(indices,part.geometry_indices)
-            for name,array in arrays.items():
-                for band in range(len(tables['mut'])):array[band,locations]=getattr(part,name)[band]
-            reference=part;completed+=len(locations)
+            joined.merge(i,locations,{name:getattr(part,name) for name in arrays},metadata=part.metadata)
+            reference=part.metadata;completed+=len(locations)
+            if not keep_blocks:joined.discard(arguments[i]['output'])
             if progress is not None:progress(completed,len(indices))
-        if workers==1:_spectral_block(arguments[0]);merge(0)
+        pending=[]
+        for i,b in enumerate(blocks):
+            locations=np.searchsorted(indices,b)
+            if joined.contains(i,locations):reference=joined.metadata(i);completed+=len(b)
+            else:pending.append(i)
+        if workers==1:
+            for i in pending:_spectral_block(arguments[i]);merge(i)
         else:
             with ProcessPoolExecutor(max_workers=workers,mp_context=get_context('spawn')) as pool:
-                futures={pool.submit(_spectral_block,arg):i for i,arg in enumerate(arguments)}
+                futures={pool.submit(_spectral_block,arguments[i]):i for i in pending}
                 for f in as_completed(futures):f.result();merge(futures[f])
         for array in arrays.values():array.flush()
         np.save(output/'radii_m.npy',geometry.radii_unit[indices]*radius_m,allow_pickle=False)
         np.save(output/'geometry_indices.npy',indices,allow_pickle=False)
         atlas=cls(geometry.radii_unit[indices]*radius_m,indices,float(radius_m),geometry.g,tables,config,
-                  **arrays,metadata=dict(reference.metadata,parallel_workers=workers))
+                  **arrays,metadata=dict(reference,parallel_workers=workers))
         atlas._save_metadata(output)
         return cls.load(output)
 

@@ -10,7 +10,7 @@ from copy import copy
 from pathlib import Path
 from types import SimpleNamespace
 from time import perf_counter,process_time
-import hashlib,json,os
+import hashlib,json,os,subprocess,sys,shutil
 import numpy as np
 
 
@@ -136,12 +136,82 @@ def check_geometry(kernel,query,radius,root,*,full=True,beta=1.):
     return result
 
 
+def _write_row(path,row,storage):
+    """Retain identical NPY members; choose whether ZIP inflation is needed."""
+    if storage not in ('compressed','stored'):raise ValueError('unknown row storage')
+    temporary=path.with_suffix('.tmp')
+    with temporary.open('wb') as stream:
+        (np.savez if storage=='stored' else np.savez_compressed)(stream,**row)
+    os.replace(temporary,path)
+
+
+def _parallel_rows(args,radii,selected,digest,manifest,records,manifest_path,*,script=None):
+    """Build independent radius checkpoints; only the parent joins manifests."""
+    from concurrent.futures import ThreadPoolExecutor,as_completed
+    script=Path(__file__).resolve() if script is None else Path(script)
+    missing=[float(r) for r in selected if float(r) not in records]
+    def build(radius):
+        index=int(np.flatnonzero(radii==radius)[0])
+        directory=args.output/'blocks'/f'radius-{index:04d}';directory.mkdir(parents=True,exist_ok=True)
+        command=[sys.executable,str(script),'--output',str(directory),'--radii',*map(str,radii),
+            '--build-radii',str(radius),'--beta',str(args.beta),'--cells',str(args.cells),
+            '--time-step',str(args.time_step),'--max-time-ns',str(args.max_time_ns),'--workers',str(args.workers),
+            '--row-storage',getattr(args,'row_storage','compressed')]
+        for flag,value in [('--model',args.model),('--first-entry-tables',args.first_entry_tables)]:
+            if value is not None:command.extend([flag,str(value)])
+        if args.check_rows:command.append('--check-rows')
+        log=directory/'build.log'
+        with log.open('ab') as stream:
+            result=subprocess.run(command,stdout=stream,stderr=subprocess.STDOUT)
+        if result.returncode:raise RuntimeError(f'radius {radius} build failed; see {log}')
+        part=json.loads((directory/'manifest.json').read_text())
+        if part['optics_grid_hash']!=digest or part['radii_m']!=radii.tolist():
+            raise ValueError('parallel row has a different optics/grid contract')
+        rows=[r for r in part['rows'] if float(r['rho_m'])==radius]
+        if len(rows)!=1:raise ValueError('parallel radius checkpoint is incomplete')
+        record=rows[0];name=record['file']
+        if Path(name).name!=name:raise ValueError('parallel row path must be local')
+        source=directory/name
+        if hashlib.sha256(source.read_bytes()).hexdigest()!=record['sha256']:
+            raise ValueError('parallel row checksum differs')
+        checks=part.get('row_checks',{}).get(str(radius))
+        if args.check_rows and checks is None:raise ValueError('parallel row checks are missing')
+        return source,record,checks
+    with ThreadPoolExecutor(max_workers=min(args.radius_workers,max(1,len(missing)))) as pool:
+        futures=[pool.submit(build,r) for r in missing]
+        errors=[]
+        for future in as_completed(futures):
+            try:source,record,checks=future.result()
+            except Exception as error:
+                errors.append(error);continue
+            target=args.output/record['file']
+            if target.exists():
+                if hashlib.sha256(target.read_bytes()).hexdigest()!=record['sha256']:
+                    raise FileExistsError('different parallel row already exists')
+            else:
+                temporary=target.with_suffix('.join.tmp')
+                if temporary.exists():temporary.unlink()
+                try:os.link(source,temporary)
+                except OSError:shutil.copyfile(source,temporary)
+                if hashlib.sha256(temporary.read_bytes()).hexdigest()!=record['sha256']:
+                    raise ValueError('joined parallel row checksum differs')
+                os.replace(temporary,target)
+            radius=float(record['rho_m']);records[radius]=record
+            if checks is not None:manifest['row_checks'][str(radius)]=checks
+            manifest['rows']=[records[r] for r in sorted(records)];atomic_json(manifest_path,manifest)
+            print(json.dumps(dict(radius_completed=record,checks=checks)),flush=True)
+        if errors:raise errors[0]
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--model',type=Path,help='serialized optics and actual glass radius; positions are not used')
     p.add_argument('--first-entry-tables',type=Path,help='geometry CDF for first glass entry')
     p.add_argument('--workers',type=int,default=1,help='independent source cells; each keeps its complete wavelength sum')
+    p.add_argument('--radius-workers',type=int,default=1,help='independent radius processes; each uses --workers source-cell threads')
+    p.add_argument('--row-storage',choices=['compressed','stored'],default='compressed',
+        help='stored ZIP members avoid repeated time-row inflation; numerical arrays are unchanged')
     p.add_argument('--beta',type=float,default=1.,help='actual source cone and emission-clock speed')
     p.add_argument('--radii',type=float,nargs='+',default=[3,5,8,12,18,25,35,50,70,100,150,220,300])
     p.add_argument('--build-radii',type=float,nargs='+',help='Build only this subset, leaving a resumable incomplete store')
@@ -152,7 +222,7 @@ def main():
     p.add_argument('--reuse-rows-from',type=Path)
     p.add_argument('--validate-midpoints',type=float,nargs='*')
     args=p.parse_args()
-    if args.workers<1:p.error('positive worker count required')
+    if args.workers<1 or args.radius_workers<1:p.error('positive worker counts required')
     import numba
     from lighthit.experimental.track_first_primitive import orientation_nodes,TrackFirstAtlasStore
     if numba.get_num_threads()!=1:p.error('NUMBA_NUM_THREADS=1 required')
@@ -168,12 +238,13 @@ def main():
     settings,digest=contract(kernel,args.cells,args.time_step,30.,radii[0],args.max_time_ns,args.beta)
     x=np.asarray(settings['x_edges']);t=np.asarray(settings['time_over_rho_edges'])
     _,powers,matrix=orientation_nodes()
-    settings.update(radii_m=radii.tolist(),powers=powers.tolist(),optics_grid_hash=digest,
+    settings.update(radii_m=radii.tolist(),powers=powers.tolist(),optics_grid_hash=digest,row_storage=args.row_storage,
         orientation_condition_number=float(np.linalg.cond(matrix)))
     args.output.mkdir(parents=True,exist_ok=True);manifest_path=args.output/'manifest.json'
     if manifest_path.exists():
         manifest=json.loads(manifest_path.read_text())
-        if manifest['optics_grid_hash']!=digest or manifest['radii_m']!=radii.tolist():
+        if (manifest['optics_grid_hash']!=digest or manifest['radii_m']!=radii.tolist()
+                or manifest.get('row_storage','compressed')!=args.row_storage):
             p.error('frozen cache contract differs; choose a new directory')
     else:
         manifest={**settings,'status':'building','rows':[], 'row_checks':{}}
@@ -183,6 +254,7 @@ def main():
         import shutil
         old=json.loads((args.reuse_rows_from/'manifest.json').read_text())
         if old['optics_grid_hash']!=digest:p.error('reused rows have a different optics/grid contract')
+        if old.get('row_storage','compressed')!=args.row_storage:p.error('reused rows have a different storage layout')
         for record in old['rows']:
             radius=float(record['rho_m'])
             if radius not in records and np.any(radii==radius):
@@ -201,6 +273,8 @@ def main():
         manifest['rows']=[records[r] for r in sorted(records)];atomic_json(manifest_path,manifest)
     print(json.dumps(dict(contract_hash=digest,source_cells=len(x)-1,time_edges=len(t),radii=radii.tolist(),
                          event_inputs=False,geometry_inputs=settings['physics']['geometry_input'])),flush=True)
+    if args.radius_workers>1:
+        _parallel_rows(args,radii,selected,digest,manifest,records,manifest_path)
     root=float(np.mean(1/np.sqrt((args.beta*kernel.medium.phase_index)**2-1)))
     for radius in selected:
         radius=float(radius)
@@ -221,8 +295,7 @@ def main():
                     elapsed_seconds=perf_counter()-start)),flush=True)
         row,info=build_row(kernel,radius,x,t,settings['physics'],progress=progress,workers=args.workers)
         filename=f'rho-{radius:010.6f}.npz';path=args.output/filename
-        with path.with_suffix('.tmp').open('wb') as stream:np.savez_compressed(stream,**row)
-        os.replace(path.with_suffix('.tmp'),path)
+        _write_row(path,row,args.row_storage)
         record=dict(rho_m=radius,file=filename,sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
             build_cpu_s=process_time()-cpu,build_wall_s=perf_counter()-start,
             direct_cpu_s=info['build_cpu_s'],bytes_arrays=sum(v.nbytes for v in row.values()),bytes_file=path.stat().st_size)

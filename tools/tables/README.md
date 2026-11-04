@@ -79,8 +79,13 @@ What each bundle file records about its own build (read from its metadata):
 * **first-beta-charge.npz**: anchor beta 0.999, `base_manifest_sha256` of the
   q1-atlas, `cubature_sha256` 441c53f7... of `basis-rank16.npz` (49cefe0b... before the water grid fix), 17 spectral
   nodes. A rebuilt cubature can be checked against that hash before step 6.
-* **ge2-beta-charge.npz**: `beta_min` 0.99, Taylor order 2,
-  `base_manifest_sha256` of the ge2-atlas.
+* **ge2-beta-charge.npz**: `beta_min` 0.99 and
+  `base_manifest_sha256` of the ge2-atlas. Existing files contain Taylor
+  order 2. New builds retain the same two signed payloads and event query,
+  using quadratic interpolation of exact cone harmonics at delta 0,
+  half the maximum and the maximum (`delta = 1/beta - 1`). Metadata records
+  the approximation, anchors and mode hash; resumed rows must match that
+  hash. Independent beta checks retain the 0.2% cone and 1% atlas targets.
 * **preview-atlas.npz**: 6,000,000 samples per order, seed 81, HG g 0.9; the
   bins follow from its edges: `--count 6000000 --seed 81 --rho-bins 96
   --z-bins 384 --extent-m 500` (the script defaults differ). It also stores

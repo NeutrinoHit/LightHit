@@ -37,7 +37,7 @@ exists.
 | `primary_first_atlas` | finite-track order-1 atlas (beta = 1), `TrackFirstAtlasStore` | primary order 1 |
 | `primary_ge2_atlas` | finite-track order >=2 atlas (beta = 1), `DiskTrackGe2Atlas` | primary order >=2 |
 | `primary_first_beta` | beta < 1 correction of the order-1 atlas | primary order 1, slow pieces |
-| `primary_ge2_beta` | beta < 1 Taylor modes of the order >=2 charge | primary order >=2, slow pieces |
+| `primary_ge2_beta` | beta < 1 polynomial modes of the order >=2 charge | primary order >=2, slow pieces |
 | `preview_atlas` | Monte-Carlo positive fluence atlas | OM preselection |
 | `ge2_band_fold` (optional) | the >=2 pack folded onto 3 node bands (the shower route's fold) | direct >=2 fallback of the primary, nearly relativistic pieces |
 

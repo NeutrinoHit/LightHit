@@ -40,7 +40,7 @@ def test_plan_is_read_only_and_keeps_all_fast_components(model_path,tmp_path,cap
             assert '--model' in command
     axes=bundle._grids(.216,1000.)
     assert len(axes)==308 and axes[0]>.216 and axes[-1]==1000.
-    assert len(bundle.TIME_RADII)==25 and 5.75 in bundle.TIME_RADII and 6.5 in bundle.TIME_RADII
+    assert len(bundle.TIME_RADII)==30 and 5.75 in bundle.TIME_RADII and 6.5 in bundle.TIME_RADII
 
 
 def test_real_subprocess_resume_and_failed_stage_do_not_publish(tmp_path):
@@ -69,10 +69,11 @@ def test_resume_refuses_changed_model_and_preserves_existing_files(tmp_path):
         bundle.Builder(root,{'model':'one'}).run([stage])
 
 
-def test_worker_count_can_change_without_rebuilding_completed_science(tmp_path):
+@pytest.mark.parametrize('worker_flag',['--jobs','--workers','--radius-workers'])
+def test_worker_count_can_change_without_rebuilding_completed_science(tmp_path,worker_flag):
     root=tmp_path/'out';p=root/'science';calls=[]
     def run(command,log):calls.append(command);p.write_text('result')
-    stage=lambda jobs:bundle.Stage('same',(p,),[['program','--jobs',str(jobs)]])
+    stage=lambda jobs:bundle.Stage('same',(p,),[['program',worker_flag,str(jobs)]])
     engine=bundle.Builder(root,{},runner=run);engine.run([stage(1)]);engine.run([stage(3)])
     assert len(calls)==1
 

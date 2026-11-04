@@ -19,6 +19,7 @@ include src/lighthit/experimental/event_moments.py
 include src/lighthit/experimental/g4_source.py
 include src/lighthit/experimental/hdf5_minimal.py
 include src/lighthit/experimental/muon_components.py
+include src/lighthit/experimental/spectral_response_basis.py
 prune docs
 prune research
 prune examples

@@ -21,12 +21,12 @@ def main():
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--model',type=Path)
     p.add_argument('--check-radii',type=float,nargs='+',default=[3.5,14.,40.,80.,200.,290.])
-    p.add_argument('--check-betas',type=float,nargs='+',default=[1.,.9999,.999,.995,.99,.98,.95])
+    p.add_argument('--check-betas',type=float,nargs='+',default=[1.,.9999,.999,.9975,.995,.9925,.99,.98,.95])
     p.add_argument('--check-cuts',type=int,nargs='+',choices=range(5),default=list(range(5)))
     args=p.parse_args();args.output.mkdir(parents=True,exist_ok=True)
     import numba
     from build_track_ge2_atlas import load_optics
-    from lighthit.experimental.ge2_beta_response import cone_beta_taylor
+    from lighthit.experimental.ge2_beta_response import cone_beta_quadratic
     from lighthit.experimental.track_ge2_primitive import (DiskTrackGe2Atlas,cone_point_evaluator,
         orientation_basis_looks,build_track_ge2_orientation_row)
     from lighthit.experimental.ge2_charge_beta_atlas import Ge2ChargeBetaAtlas
@@ -37,7 +37,8 @@ def main():
     bundle=dict(bundle,omega=bundle['omega'][:1],coefficients=bundle['coefficients'][...,:1])
     base=DiskTrackGe2Atlas(args.base);base.validate_kernel(kernel)
     digest=hashlib.sha256((args.base/'manifest.json').read_bytes()).hexdigest()
-    harmonics=cone_beta_taylor(optics['wavelength_nm'],optics['phase_index'],bundle['degree'])
+    harmonics=cone_beta_quadratic(optics['wavelength_nm'],optics['phase_index'],bundle['degree'],args.beta_min)
+    cone_digest=hashlib.sha256(np.ascontiguousarray(harmonics).tobytes()).hexdigest()
     looks=orientation_basis_looks()
     common={k:optics[k] for k in ('alpha','wavelength_nm','wavelength_weight_nm','phase_index','efficiency','effective_area_m2')}
     begin,cpu=perf_counter(),process_time();coefficients=[[],[]];prefix=[[],[]];timings=[]
@@ -47,6 +48,8 @@ def main():
         if path.exists():
             with np.load(path) as data:
                 if str(data['base_manifest_sha256'])!=digest:raise ValueError('resume base differs')
+                if 'cone_modes_sha256' not in data or str(data['cone_modes_sha256'])!=cone_digest:
+                    raise ValueError('resume cone approximation differs; choose a new output directory')
                 for mode in range(2):coefficients[mode].append(data['coefficients'][mode].copy());prefix[mode].append(data['prefix'][mode].copy())
                 timings.append(float(data['cpu_seconds']))
             continue
@@ -59,11 +62,14 @@ def main():
             norm=base.manifest['rows'][i]['normalization']
             cc.append(row.integrated_coefficients.real/norm);pp.append(row.prefix.real/norm)
         elapsed=process_time()-row_cpu;timings.append(elapsed)
-        savez(path,coefficients=np.array(cc),prefix=np.array(pp),base_manifest_sha256=digest,cpu_seconds=elapsed)
+        savez(path,coefficients=np.array(cc),prefix=np.array(pp),base_manifest_sha256=digest,
+              cone_modes_sha256=cone_digest,cpu_seconds=elapsed)
         for mode in range(2):coefficients[mode].append(cc[mode]);prefix[mode].append(pp[mode])
         print('ROW',json.dumps(dict(index=i,rho_m=float(rho),cpu_s=elapsed,wall_s=perf_counter()-row_wall)),flush=True)
     metadata=dict(optics_fingerprint=optics['optics_fingerprint'],base_manifest_sha256=digest,beta_min=args.beta_min,
-        parameter='delta=1/beta-1',taylor_order=2,charge_only=True,scattering_order='>=2',event_input=False,
+        parameter='delta=1/beta-1',polynomial_order=2,cone_approximation='quadratic exact-cone interpolation',
+        cone_delta_nodes=[0.,(1/args.beta_min-1)/2,1/args.beta_min-1],charge_only=True,scattering_order='>=2',event_input=False,
+        cone_modes_sha256=cone_digest,
         source_degree=int(bundle['degree']),wavelength_nodes=len(optics['wavelength_nm']),
         threshold_crossings_supported=False,source_clock_used=False,error_certified=False,
         interpolation='signed modes normalized by frozen base amplitude; same scaled quadratic radial interpolation')
@@ -100,15 +106,15 @@ def main():
                 for look in range(3):
                     floor=max(abs(qref[look]),1e-5)
                     details.append(dict(rho_m=rho,beta=beta,cut=cut,look=look,reference_pe=float(qref[look]),
-                        taylor_scaled_error=float(abs(qt[look]-qref[look])/floor),
+                        cone_scaled_error=float(abs(qt[look]-qref[look])/floor),
                         atlas_scaled_error=None if beta<args.beta_min else float(abs(qa[look]-qref[look])/floor)))
             print('VALIDATION',json.dumps(dict(rho_m=rho,beta=beta)),flush=True)
     summary=[]
     for beta in validation_betas:
         rows=[r for r in details if r['beta']==beta]
-        summary.append(dict(beta=beta,max_taylor_scaled_error=max(r['taylor_scaled_error'] for r in rows),
+        summary.append(dict(beta=beta,max_cone_scaled_error=max(r['cone_scaled_error'] for r in rows),
             max_atlas_scaled_error=None if beta<args.beta_min else max(r['atlas_scaled_error'] for r in rows)))
-    passed=max(r['max_taylor_scaled_error'] for r in summary if r['beta']>=args.beta_min)<=.002
+    passed=max(r['max_cone_scaled_error'] for r in summary if r['beta']>=args.beta_min)<=.002
     passed &= max(r['max_atlas_scaled_error'] for r in summary if r['beta']>=args.beta_min)<=.01
     metadata['synthetic_validation_passed']=bool(passed)
     payload['metadata']=json.dumps(metadata);savez(path,**payload)

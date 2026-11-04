@@ -56,6 +56,7 @@ def main(argv=None):
     parser.add_argument('--fine-atlas',type=Path,help='fine Q1 table for a controlled coarse time level')
     parser.add_argument('--geometry',type=Path,help='unit-sphere geometry atlas for one-band CDF preparation')
     parser.add_argument('--force',action='store_true')
+    parser.add_argument('--discard-blocks',action='store_true',help='discard merged radial job files after joined-array checkpoints are saved')
     args=parser.parse_args(argv)
     from lighthit.bgvd import load_model
     from lighthit.model import WavelengthQuadrature
@@ -141,7 +142,7 @@ def main(argv=None):
             if args.geometry is None:raise ValueError('--geometry is required for q1-bands')
             config=SpectralFirstEntryConfig(args.time_nodes)
             atlas=SpectralFirstEntry.build_parallel(geometry_directory=args.geometry,radius_m=radius,tables=tables,
-                output=args.output,jobs=args.jobs,config=config,
+                output=args.output,jobs=args.jobs,config=config,overwrite=args.force,keep_blocks=not args.discard_blocks,
                 progress=lambda i,n:print(json.dumps(dict(radii=i,total=n,seconds=perf_counter()-began)),flush=True))
             record.update(numerics=asdict(config),metadata=atlas.metadata);sidecar=args.output/'run.json'
             record['seconds']=perf_counter()-began
@@ -155,7 +156,7 @@ def main(argv=None):
                 path_grid_nodes=args.path_grid_nodes,path_nodes=args.path_nodes)
             excess=max(_path_extent(r,radius,model.medium.g,tables,1e-8)-r for r in radii)/radius
             atlas=ReceiverGeometry.build_parallel(radii_unit=radii/radius,g=model.medium.g,max_excess_unit=excess,
-                config=config,output=args.output,jobs=args.jobs,overwrite=args.force,
+                config=config,output=args.output,jobs=args.jobs,overwrite=args.force,keep_blocks=not args.discard_blocks,
                 progress=lambda i,n:print(json.dumps(dict(radii=i,total=n,seconds=perf_counter()-began)),flush=True))
             record.update(numerics=asdict(config));sidecar=args.output/'run.json'
             record['seconds']=perf_counter()-began
@@ -164,10 +165,10 @@ def main(argv=None):
             return 0
         config=FirstEntryAtlasConfig(hit_nodes=args.hit_nodes,miss_nodes=args.miss_nodes,
             time_nodes=args.time_nodes,path_nodes=args.path_nodes)
-        if args.jobs>1:
+        if args.jobs>1 or args.discard_blocks:
             atlas=FirstEntryAtlas.build_parallel(radii_m=radii,surface=surface,g=model.medium.g,
                 tables=tables,config=config,output=args.output,jobs=args.jobs,
-                overwrite=args.force,
+                overwrite=args.force,keep_blocks=not args.discard_blocks,
                 progress=lambda i,n:print(json.dumps(dict(radii=i,total=n,seconds=perf_counter()-began)),flush=True))
         else:
             atlas=FirstEntryAtlas.build(radii_m=radii,surface=surface,g=model.medium.g,tables=tables,config=config,

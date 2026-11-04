@@ -140,7 +140,7 @@ def test_reduced_charge_preserves_beta_and_requires_separate_time_validation(mon
         np.array([50.,50.]),np.array([1e8,1e8]),-np.array([1e8/.99**2,1e8/.9**2]),
         np.array([.99,.9]),np.array([0.,50/.299792458]),np.array([50/.299792458,100/.299792458]),
         np.arange(2),np.zeros(2,int),cone_model='spectral')
-    cube=SimpleNamespace(metadata={'beta_min':.95},quadrature=WavelengthQuadrature([480.],[260.]),validate_optics=lambda k:True)
+    cube=SimpleNamespace(metadata={'beta_min':.95},quadrature=WavelengthQuadrature([480.],[260.]),validate_optics=lambda k,**options:True)
     if time_validated:cube.metadata['first_entry_waveform_validation']={'passed':True,'betas':[.95,1.]}
     calls=[];time_calls=[]
     def zero(k,s,**kw):return SimpleNamespace(charge_pe=np.zeros(1),bins_pe=np.zeros((1,len(k.config.relative_time_edges_ns)-1)))

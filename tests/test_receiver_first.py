@@ -142,3 +142,30 @@ def test_invalid_profile_geometry_or_quadrature_is_rejected(changes):
     options.update(changes)
     with pytest.raises(ValueError):
         first_entry_profile(SphereSurface(1.), **options)
+
+
+def test_compiled_entry_cut_cannot_be_sampled_as_an_interior_singularity():
+    # At this grazing geometry Python and compiled sqrt place the entry on
+    # adjacent floats. A path node used to hit log(0) inside the density.
+    arguments=dict(distance_m=11886.974144877562,direction_cosine=.9999999964614334,
+        g=.9,max_path_m=11886.974102814715)
+    coarse=first_entry_profile(SphereSurface(1.),**arguments,path_nodes=256)
+    fine=first_entry_profile(SphereSurface(1.),**arguments,path_nodes=512)
+    assert np.isfinite(coarse.cumulative_m_inv).all()
+    assert np.all(np.diff(coarse.cumulative_m_inv[:,0])>=0)
+    np.testing.assert_allclose(coarse.cumulative_m_inv[-1],fine.cumulative_m_inv[-1],rtol=1e-9,atol=1e-12)
+
+
+@pytest.mark.parametrize('gap,b',[(np.nan,1.),(0.,1.),(1.,np.nan),(1.,np.inf)])
+def test_invalid_hg_denominator_fails_instead_of_iterating_forever(gap,b):
+    from lighthit._receiver_first_numba import _hg_azimuth
+    with pytest.raises(FloatingPointError,match='finite positive'):_hg_azimuth(gap,b)
+
+
+def test_grazing_entry_fix_matches_independent_scattering_cap_integral():
+    r=11886.974144877562;cosine=.9999999964614334
+    theta=np.arctan2(np.sqrt((1-cosine)*(1+cosine)),cosine)
+    profile=first_entry_profile(SphereSurface(1.),distance_m=r,direction_cosine=cosine,
+        g=.9,max_path_m=11886.974102814715)
+    reference=_cap_moments(r,theta,.9,0.,order=128)
+    np.testing.assert_allclose(profile.cumulative_m_inv[-1],reference,rtol=1e-7,atol=1e-9*reference[0])

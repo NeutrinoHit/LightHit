@@ -44,6 +44,36 @@ def cone_beta_taylor(wavelength_nm,phase_index,degree,order=2):
     return np.stack(values)*factor[None,:,:]
 
 
+def cone_beta_quadratic(wavelength_nm,phase_index,degree,beta_min):
+    """Two correction modes interpolating exact cones over the declared beta span.
+
+    The base at beta=1 is unchanged. Interpolation in delta=1/beta-1 uses
+    the midpoint and endpoint of the optics-only interval, retaining the
+    same quadratic payload and event query as the Taylor representation.
+    """
+    wavelength=np.asarray(wavelength_nm,float);n=np.asarray(phase_index,float)
+    if (wavelength.ndim!=1 or wavelength.shape!=n.shape or not len(wavelength)
+            or not np.isfinite(wavelength).all() or np.any(wavelength<=0)
+            or not np.isfinite(n).all() or np.any(n<=1)
+            or not np.isfinite(beta_min) or not 0<beta_min<=1
+            or np.any(beta_min*n<=1)):
+        raise ValueError('finite above-threshold beta interval and optical arrays required')
+    delta=1/float(beta_min)-1
+    # At a vanishing interval, divided differences would amplify roundoff.
+    # The local Taylor coefficients give its continuous limiting polynomial.
+    if delta<=np.sqrt(np.finfo(float).eps):
+        return cone_beta_taylor(wavelength,n,degree)
+    ell=np.arange(degree+1)
+    factor=np.sqrt((2*ell+1)/(4*np.pi))[None,:]/wavelength[:,None]**2
+    def exact(d):
+        x=(1+d)/n[:,None]
+        return (1-x*x)*eval_legendre(ell[None,:],x)*factor
+    base=exact(0.);mid=(exact(delta/2)-base)/(delta/2)
+    end=(exact(delta)-base)/delta
+    second=(end-mid)/(delta/2)
+    return np.stack((base,mid-delta/2*second,second))
+
+
 def primary_tail_mask(pieces,*,beta_tolerance=1e-5,clock_tolerance_ns=1e-3):
     """Conservative source-wide split; independent of which OM sees a piece."""
     clock=(pieces.end_ns-pieces.start_ns)/pieces.length_m

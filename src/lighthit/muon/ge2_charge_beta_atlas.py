@@ -1,7 +1,7 @@
 """Signed beta-response modes for stationary finite-track >=2 transport.
 
 Base beta-one charges come from an existing frozen universal atlas. Two small
-optics-only payloads supply Taylor corrections in delta=1/beta-1. Source clocks
+optics-only payloads supply polynomial corrections in delta=1/beta-1. Source clocks
 do not enter omega=0. Threshold regions and unvalidated beta are rejected.
 """
 from pathlib import Path

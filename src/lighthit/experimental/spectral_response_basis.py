@@ -33,10 +33,12 @@ class ResponseCubature:
             raise ValueError('response basis file dimensions differ')
         return model
 
-    def validate_optics(self, kernel):
+    def validate_optics(self, kernel, *, recorded_contract=None):
         from ..muon.track_first_primitive import track_first_optical_contract
-        _,digest=track_first_optical_contract(kernel)
-        if digest!=self.metadata['optics_fingerprint']:
+        from ..muon.optics_contract import contract_matches
+        actual,_=track_first_optical_contract(kernel)
+        stored=self.metadata.get('optical_contract',recorded_contract)
+        if not contract_matches(actual,stored,self.metadata['optics_fingerprint'],allow_nan=False):
             raise ValueError('spectral response basis optical contract differs')
 
 

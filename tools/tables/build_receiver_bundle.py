@@ -24,9 +24,11 @@ import numpy as np
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 RECIPE = 'lighthit/first-entry-bundle/1'
-PRIMARY_RADII = [3,5,8,12,15,18,21.5,25,30,35,42.5,50,60,70,85,100,150,220,300]
-TIME_RADII = [3,4,5,5.75,6.5,8,9,10,11,12,15,18,21.5,25,30,35,42.5,50,60,70,85,100,150,220,300]
-TIME_CHECK_RADII = [3.5,6.,10.,13.5,27.5,55.,80.,180.]
+# Resolve the finite-glass radial curvature between the first two far-field rows.
+PRIMARY_RADII = [3,4,5,8,12,15,18,21.5,25,30,35,42.5,50,60,70,85,100,150,220,300]
+TIME_RADII = [3,4,5,5.75,6.5,8,9,10,11,12,13.5,15,18,21.5,25,27.5,30,35,42.5,50,52.5,55,57.5,60,70,85,100,150,220,300]
+TIME_CELLS = 192
+TIME_CHECK_RADII = [3.5,6.,10.,12.75,13.5,14.25,26.25,27.5,28.75,51.25,53.75,55.,56.25,58.75,80.,180.]
 
 
 def digest(path):
@@ -131,7 +133,7 @@ class Builder:
                 for command in stage.commands:
                     command=list(command)
                     for i,value in enumerate(command[:-1]):
-                        if value in ('--workers','--jobs'):command[i+1]='{workers}'
+                        if value in ('--workers','--jobs','--radius-workers'):command[i+1]='{workers}'
                     normalized.append(command)
                 signature=hashlib.sha256(json.dumps(normalized,sort_keys=True).replace(str(self.root),'{bundle}').encode()).hexdigest()
                 if stage.name in state['completed']:
@@ -181,6 +183,13 @@ def _recover_bank(directory,degree):
     return True
 
 
+def _finish_bank(directory,degree):
+    """Keep completed directional tables, discard only verified build blocks."""
+    if not _recover_bank(directory,degree):raise ValueError('directional bank is incomplete')
+    blocks=Path(directory)/'blocks'
+    if blocks.exists():shutil.rmtree(blocks)
+
+
 def _time_manifest(root,base,anchor,report):
     validation=json.loads(Path(report).read_text())
     if not validation['passed']:raise ValueError('physical beta-time interpolation failed validation')
@@ -209,10 +218,11 @@ def preparation(model,root,jobs):
     def command(script,*args):return [sys.executable,str(script),*map(str,args)]
     def receiver(kind,output,*args):
         return command(experiments/'receiver_surface.py',kind,'--model',model_out,'--output',output,
-                       '--jobs',jobs,'--path-nodes',256,'--radial-nodes',400,*args,'--force')
-    def track(output,beta,axis,*args):
+                       '--jobs',jobs,'--path-nodes',256,'--radial-nodes',400,*args,'--force','--discard-blocks')
+    def track(output,beta,axis,*args,cells=96,row_storage='compressed'):
         return command(scripts/'build_track_first_atlas.py','--model',model_out,'--first-entry-tables',first,
-            '--output',output,'--workers',jobs,'--beta',beta,'--radii',*axis,'--check-rows',*args)
+            '--output',output,'--workers',1,'--radius-workers',jobs,'--beta',beta,'--cells',cells,
+            '--row-storage',row_storage,'--radii',*axis,'--check-rows',*args)
     def bootstrap():
         model_out.parent.mkdir(parents=True,exist_ok=True);work.mkdir(exist_ok=True)
         if Path(model).resolve()!=model_out:shutil.copyfile(model,model_out)
@@ -234,14 +244,14 @@ def preparation(model,root,jobs):
             receiver('q1-bands',first/'q1-bands','--geometry',first/'geometry','--time-nodes',65),
             receiver('q1-band-time',first/'q1-bands','--geometry',first/'geometry')])]
     stages += [Stage('rte-bank',(work/'bank',),[receiver('bank',work/'bank')],
-        recover=lambda:_recover_bank(work/'bank',32)),
+        validate=lambda:_finish_bank(work/'bank',32),recover=lambda:_recover_bank(work/'bank',32)),
         Stage('fast-packs',(tables/'rte-cache',tables/'ge2-pack',tables/'ge2-band-fold',tables/'shower-data.pending.json'),[
             command(experiments/'prepare_receiver_route.py','--model',model_out,'--bank',work/'bank',
                 '--first-entry-tables',first,'--output',tables,'--fold-template',work/'fold-template.json',
                 '--manifest-name','shower-data.pending.json')]),
         Stage('point-reference-bank',(work/'point-bank',),[
             receiver('bank',work/'point-bank','--source-degree',128,'--frequencies',0)],
-            recover=lambda:_recover_bank(work/'point-bank',128)),
+            validate=lambda:_finish_bank(work/'point-bank',128),recover=lambda:_recover_bank(work/'point-bank',128)),
         Stage('point-reference-pack',(work/'point-route/kernel-data.json',work/'point-route/ge2-pack',work/'point-route/rte-cache'),[
             command(experiments/'prepare_receiver_route.py','--model',model_out,'--bank',work/'point-bank',
                 '--first-entry-tables',first,'--output',work/'point-route','--fold-template',work/'fold-template.json','--stationary-only')])]
@@ -270,8 +280,8 @@ def preparation(model,root,jobs):
             command(scripts/'build_ge2_beta_charge.py','--model',model_out,'--base',muon/'ge2-atlas',
                 '--pack',tables/'ge2-pack','--cache',tables/'rte-cache','--output',muon/'ge2-beta')],
             validate=lambda:_check_beta(muon/'ge2-beta/beta-charge.npz')),
-        Stage('time-beta1',(muon/'time-beta1',),[track(muon/'time-beta1',1.,TIME_RADII,'--reuse-rows-from',muon/'q1-atlas')]),
-        Stage('time-beta0999',(muon/'time-beta0999',),[track(muon/'time-beta0999',.999,TIME_RADII)]),
+        Stage('time-beta1',(muon/'time-beta1',),[track(muon/'time-beta1',1.,TIME_RADII,cells=TIME_CELLS,row_storage='stored')]),
+        Stage('time-beta0999',(muon/'time-beta0999',),[track(muon/'time-beta0999',.999,TIME_RADII,cells=TIME_CELLS,row_storage='stored')]),
         Stage('time-validation',(muon/'time-validation.json',),[
             command(experiments/'validate_receiver_time_beta.py','--model',model_out,'--first-entry-tables',first,
                 '--base',muon/'time-beta1','--anchor',muon/'time-beta0999','--output',muon/'time-validation.json',

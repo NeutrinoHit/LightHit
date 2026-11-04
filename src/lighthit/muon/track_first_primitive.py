@@ -197,8 +197,11 @@ def build_track_first_rows(kernel, *, rho_m, orientations, beta, speed_m_per_ns,
     bounds=list(zip(u[:-1],u[1:]))
     if workers==1:collect(map(cell,bounds))
     else:
+        # Compile all kernels on one real cell before concurrent first calls.
+        # The cell's result is retained in its original accumulation order.
+        collect([cell(bounds[0])])
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=workers) as pool:collect(pool.map(cell,bounds))
+        with ThreadPoolExecutor(max_workers=workers) as pool:collect(pool.map(cell,bounds[1:]))
     metadata = dict(rho_m=rho,beta=beta,batch_orientations=count,
         spectral_nodes=len(local.wavelength.wavelength_nm),spectral_order=spectral_order,
         build_wall_s=perf_counter()-started,build_cpu_s=process_time()-cpu,

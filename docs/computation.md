@@ -234,7 +234,7 @@ selection batches. `direct-first-entry.md` describes the controls and timing.
 | `muon/q1-atlas/` | `TrackFirstAtlasStore`: order 1 of a beta = 1 track per unit `C0`, 19 impact radii 3-300 m, axial range `|u| <= 8.5 rho`, charge prefixes and time CDFs (SHA-256 per file) | muon primary order 1 |
 | `muon/ge2-atlas/` | `DiskTrackGe2Atlas`: order >=2 of beta = 1 track pieces, 44 impact rows from 3.01 to 299 m, 65 frequencies, validated intervals in `manifest.json` (other impacts go to the direct fallback) | muon primary order >=2 |
 | `muon/first-beta-charge.npz` | correction of the q1 atlas charge for `beta >= 0.999` | muon primary order 1 |
-| `muon/ge2-beta-charge.npz` | Taylor modes (order 2 in `1/beta - 1`) of the >=2 charge for `beta >= 0.99` | muon primary order >=2 |
+| `muon/ge2-beta-charge.npz` | two quadratic modes in `1/beta - 1` of the >=2 charge for `beta >= 0.99` (legacy Taylor files remain readable) | muon primary order >=2 |
 | `muon/preview-atlas.npz` | Monte-Carlo positive fluence and ten arrival-direction moments of orders 1 and >=2 (6e6 samples per order, seed 81), `rho` up to 479 m, `z` in +-500 m, 7 beta nodes | scalar OM selection and angular charge estimates for unselected OMs |
 | `muon-data.json` | manifest of relative paths (`rte_cache`, `ge2_pack`, five muon tables, `ge2_band_fold`) | `MuonData`, `ShowerData` |
 | `laser-cache/transport-<key>.npz` | multipole table (`cache.py: ResponseCache`) at 532 nm, 321 frequencies, radial range 3-488.4 m (from the bundle detector) | laser |

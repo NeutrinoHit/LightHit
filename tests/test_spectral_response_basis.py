@@ -44,3 +44,27 @@ def test_optical_contract_is_independent_of_geometry_but_rejects_changed_water()
     other=replace(medium,absorption_per_m=medium.absorption_per_m*1.1)
     with pytest.raises(ValueError,match='optical contract'):
         model.validate_optics(lh.TransportKernel(other,detector,kernel.config))
+
+
+def test_legacy_cubature_accepts_only_verified_portable_contract():
+    import copy
+    import lighthit as lh
+    from lighthit.muon.track_first_primitive import track_first_optical_contract
+    from lighthit._portable import fingerprint
+    from test_model_file import model as fixture_model
+    kernel=fixture_model().kernel(lh.KernelConfig(omega_per_ns=np.array([0.])))
+    actual,_=track_first_optical_contract(kernel);recorded=copy.deepcopy(actual)
+    recorded['spectral_tables']['mut'][0]*=1+1e-12
+    reference=WavelengthQuadrature.gauss_legendre(400.,500.,9);x=reference.wavelength_nm
+    cube=fit_response_cubature(reference,np.stack([np.ones(9)+a*x for a in [.1,.2,.3,.4]]),2,
+        metadata=dict(optics_fingerprint=fingerprint(recorded,allow_nan=False)))
+    with pytest.raises(ValueError,match='optical contract'):cube.validate_optics(kernel)
+    cube.validate_optics(kernel,recorded_contract=recorded)
+    corrupted=copy.deepcopy(recorded);corrupted['spectral_tables']['mut'][0]*=1.01
+    with pytest.raises(ValueError,match='optical contract'):cube.validate_optics(kernel,recorded_contract=corrupted)
+    other=copy.deepcopy(cube.metadata);other['optical_contract']=recorded
+    from dataclasses import replace
+    portable=replace(cube,metadata=other);portable.validate_optics(kernel)
+    changed=replace(kernel.medium,absorption_per_m=kernel.medium.absorption_per_m*1.01)
+    with pytest.raises(ValueError,match='optical contract'):
+        portable.validate_optics(lh.TransportKernel(changed,kernel.detector,kernel.config))

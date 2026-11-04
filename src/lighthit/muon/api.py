@@ -91,7 +91,7 @@ class MuonTransport:
             time_beta=None if data.primary_first_time_beta is None else FirstTimeBetaAtlas(data.primary_first_time_beta)
             from ..experimental.spectral_response_basis import ResponseCubature
             cubature=None if data.primary_first_cubature is None else ResponseCubature.load(data.primary_first_cubature)
-            if cubature is not None:cubature.validate_optics(self.kernel)
+            if cubature is not None:cubature.validate_optics(self.kernel,recorded_contract=first.metadata)
             self._tables = dict(
                 first=first, ge2=ge2, preview=preview,preview_proposal=proposal,first_time_beta=time_beta,first_cubature=cubature,
                 first_beta=FirstChargeBetaAtlas(data.primary_first_beta, first),

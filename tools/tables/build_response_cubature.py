@@ -90,7 +90,7 @@ def main():
     from lighthit.prompt import PromptConfig
     if numba.get_num_threads()!=1:parser.error('one Numba thread required')
     kernel=optical_kernel(args.model);reference=primary_spectral_quadrature(kernel.medium,kernel.detector,order=2)
-    _,fingerprint=track_first_optical_contract(kernel)
+    optical_contract,fingerprint=track_first_optical_contract(kernel)
     kernel.wavelength=reference
     first_scattering_charge_only(scenario_kernel(kernel,10.,TRAIN_LOOKS[:1]),source_for(kernel,10.,1.,'root'))
     train=[dict(rho_m=r,beta=b,cut=c) for r in [5.,40.,150.] for b in [1.,.999,.97,.95] for c in ['wide','root','edge','back']]
@@ -102,7 +102,7 @@ def main():
     features=flat/totals[:,None]
     models=[];summaries=[];expected=check@reference.weight_nm
     for rank in [4,6,8,12,16,24]:
-        model=fit_response_cubature(reference,features,rank,metadata=dict(optics_fingerprint=fingerprint,beta_min=.95,
+        model=fit_response_cubature(reference,features,rank,metadata=dict(optics_fingerprint=fingerprint,optical_contract=optical_contract,beta_min=.95,
             training_source='synthetic unit uniform segments only; no G4 inputs',target='stationary first-scattering charge',
             training_radii_m=[5.,40.,150.],validated_radii_m=[10.,80.,250.]))
         model.validate_optics(kernel);models.append(model)

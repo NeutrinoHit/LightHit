@@ -141,10 +141,12 @@ command-line tool.
 
 ## 2. Baikal-GVD, stand-alone
 
-### First step: prepare the optical cache
+### First step: obtain and verify the optical cache
 
-Before calculating events with Q1 and >=2 referenced to the glass, build
-and verify their cache once from the serialized model:
+Before calculating events with Q1 and >=2 referenced to the glass, obtain a
+checked runtime bundle or build its cache once from the serialized model.
+A supplied bundle runs without Geant4 or VM access; use its included
+`check.py` and pinned LightHit version. To build tables:
 
 ```sh
 PYTHONPATH=src python tools/tables/build_receiver_bundle.py \
@@ -158,6 +160,8 @@ export LIGHTHIT_MUON_DATA="$PWD/data/lighthit-glass-data/tables/muon-data.json"
 
 Run this from the checkout with `.[accelerate]` installed. The command
 preserves the existing data bundle and resumes completed preparation stages.
+The complete numerical recipe and fixed-event checks are described in the
+validation scope below; use the supplied version and checksums for a delivery.
 See [build the receiver cache](docs/build-receiver-bundle.md) for planning,
 resources, validation scope and transferring the result to another machine.
 The existing bundle remains usable with first-entry Q0 and centre-reference

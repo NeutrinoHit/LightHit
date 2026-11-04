@@ -435,7 +435,7 @@ class FirstEntryAtlas:
                    metadata=metadata,**arrays)
 
     @classmethod
-    def build_parallel(cls,*,radii_m,surface,g,tables,output,config=None,jobs=1,progress=None,overwrite=False):
+    def build_parallel(cls,*,radii_m,surface,g,tables,output,config=None,jobs=1,progress=None,overwrite=False,keep_blocks=True):
         """Independent radial blocks, joined into mmap-compatible tables.
 
         All workers use the same physical-time coordinate. Completed blocks
@@ -458,11 +458,12 @@ class FirstEntryAtlas:
         manifest=output/'manifest.json'
         if manifest.exists():
             if not overwrite:raise FileExistsError(f'{manifest} already exists')
-            manifest.unlink()
-        began=perf_counter();workers=min(jobs,len(radii)//2)
+            if not (output/'build-progress.json').exists():
+                raise ValueError('legacy completed atlas needs a new output directory')
+        from ._table_checkpoint import JoinedArrays,radial_blocks
+        began=perf_counter();blocks=radial_blocks(len(radii));workers=min(jobs,len(blocks))
         extent=max(_path_extent(r,R,g,tables,config.tail_relative_bound) for r in radii)
         maximum=float(np.arcsinh(extent/np.min(tables['speed'])*np.max(tables['speed'])/R))
-        blocks=np.array_split(np.arange(len(radii)),workers)
         arguments=[dict(radii=radii[block],radius=R,g=g,tables=tables,config=asdict(config),
             maximum=maximum,output=str(output/'blocks'/f'{i:04d}')) for i,block in enumerate(blocks)]
         shapes=dict(hit_charge=(len(radii),config.hit_nodes,2,10),
@@ -471,25 +472,31 @@ class FirstEntryAtlas:
             miss_charge=(len(radii),config.miss_nodes,2,10),
             miss_cdf=(len(radii),config.miss_nodes,config.time_nodes,2,10),
             miss_integral=(len(radii),config.miss_nodes,config.time_nodes,2,10))
-        arrays={name:np.lib.format.open_memmap(output/(name+'.npy'),mode='w+',dtype=float,shape=shape)
-                for name,shape in shapes.items()}
+        joined=JoinedArrays(output,shapes,dict(radii=radii.tolist(),radius=R,g=g,config=asdict(config),
+            maximum=maximum,tables={k:v.tolist() for k,v in tables.items()},builder=_radial_fingerprint()))
+        arrays=joined.arrays
+        if manifest.exists():manifest.unlink()
         maximum_tail=0.;completed=0;builder_signatures=set()
-        def merge(index,metadata):
+        def account(index,metadata):
             nonlocal maximum_tail,completed
+            maximum_tail=max(maximum_tail,metadata['maximum_scaled_tail_bound'])
+            builder_signatures.add(metadata['builder_sha256']);completed+=len(blocks[index])
+            if len(builder_signatures)!=1:raise ValueError('radial blocks were built by different numerical sources')
+        def merge(index,metadata):
             part=FirstEntryAtlas.load(arguments[index]['output'])
-            block=blocks[index]
-            for name in arrays:arrays[name][block]=getattr(part,name)
-            maximum_tail=max(maximum_tail,part.metadata['maximum_scaled_tail_bound'])
-            builder_signatures.add(metadata['builder_sha256'])
-            if len(builder_signatures)!=1:
-                raise ValueError('radial blocks were built by different numerical sources')
-            completed+=len(block)
+            joined.merge(index,blocks[index],{name:getattr(part,name) for name in arrays},metadata=metadata)
+            account(index,metadata)
+            if not keep_blocks:joined.discard(arguments[index]['output'])
             if progress is not None:progress(completed,len(radii))
+        pending=[]
+        for i in range(len(blocks)):
+            if joined.contains(i,blocks[i]):account(i,joined.metadata(i))
+            else:pending.append(i)
         if workers==1:
-            merge(0,_build_radial_block(arguments[0]))
+            for i in pending:merge(i,_build_radial_block(arguments[i]))
         else:
             with ProcessPoolExecutor(max_workers=workers,mp_context=get_context('spawn')) as pool:
-                futures={pool.submit(_build_radial_block,arg):i for i,arg in enumerate(arguments)}
+                futures={pool.submit(_build_radial_block,arguments[i]):i for i in pending}
                 for future in as_completed(futures):merge(futures[future],future.result())
         for array in arrays.values():array.flush()
         np.save(output/'radii_m.npy',radii,allow_pickle=False)
@@ -503,7 +510,7 @@ class FirstEntryAtlas:
         return cls.load(output)
 
 
-def _build_radial_block(arguments):
+def _radial_fingerprint():
     from . import receiver_first,receiver_first_fold,_receiver_first_numba
     import inspect
     digest=hashlib.sha256()
@@ -512,7 +519,11 @@ def _build_radial_block(arguments):
     for function in (FirstEntryAtlas.build,_geometry,_time_map,_path_extent,_scale):
         digest.update(inspect.getsource(function).encode())
     digest.update(np.__version__.encode())
-    fingerprint=digest.hexdigest();output=Path(arguments['output'])
+    return digest.hexdigest()
+
+
+def _build_radial_block(arguments):
+    fingerprint=_radial_fingerprint();output=Path(arguments['output'])
     config=FirstEntryAtlasConfig(**arguments['config'])
     if (output/'manifest.json').exists():
         stored=FirstEntryAtlas.load(output)

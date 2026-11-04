@@ -172,3 +172,21 @@ def test_cone_intersection_is_unsupported_by_far_bound_instead_of_pruned():
     bound,meta=first_scattering_segment_bounds(kernel,source,np.array([30.,0.,0.]))
     assert np.isinf(bound[0])
     assert meta['unsupported_pieces']==1
+
+
+def test_parallel_preparation_compiles_first_real_cell_before_worker_calls(monkeypatch):
+    import threading
+    import lighthit as lh
+    from test_model_file import model
+    from lighthit.muon import muon_integral
+    from lighthit.muon.track_first_primitive import build_track_first_rows
+    main=threading.get_ident();calls=[]
+    def integrate(kernel,source,**options):
+        calls.append(threading.get_ident());count=len(kernel.detector);n=len(kernel.config.relative_time_edges_ns)-1
+        q=np.repeat(source.coefficient0.sum(),count)
+        return q,np.repeat((q/(n+1))[:,None],n,axis=1),{}
+    monkeypatch.setattr(muon_integral,'order1_integrals',integrate)
+    result=build_track_first_rows(model().kernel(lh.KernelConfig()),rho_m=3.,orientations=[[0.,0.,1.]],beta=1.,
+        speed_m_per_ns=.299792458,u_edges_m=[-3.,-1.,1.,3.],tau_edges_ns=[-1.,0.,1.],workers=3)
+    assert calls[0]==main and all(t!=main for t in calls[1:]) and len(calls)==3
+    np.testing.assert_array_equal(result[0].charge_cells,[2.,2.,2.])

@@ -182,7 +182,7 @@ class ReceiverGeometry:
             t['mut'],t['mus'],t['speed'],t['s0w'],t['s2w'])
 
     @classmethod
-    def build_parallel(cls,*,radii_unit,g,max_excess_unit,output,config=None,jobs=1,overwrite=False,progress=None):
+    def build_parallel(cls,*,radii_unit,g,max_excess_unit,output,config=None,jobs=1,overwrite=False,progress=None,keep_blocks=True):
         """Build independent radial blocks on a common declared path grid."""
         from concurrent.futures import ProcessPoolExecutor,as_completed
         from multiprocessing import get_context
@@ -195,29 +195,35 @@ class ReceiverGeometry:
         manifest=output/'manifest.json'
         if manifest.exists():
             if not overwrite:raise FileExistsError(str(manifest))
-            manifest.unlink()
-        maximum=float(np.arcsinh(r[-1]+max_excess_unit));workers=min(jobs,len(r)//2)
-        blocks=np.array_split(np.arange(len(r)),workers)
-        arrays={}
+            if not (output/'build-progress.json').exists():
+                raise ValueError('legacy completed atlas needs a new output directory')
+        from ._table_checkpoint import JoinedArrays,radial_blocks
+        maximum=float(np.arcsinh(r[-1]+max_excess_unit));blocks=radial_blocks(len(r));workers=min(jobs,len(blocks))
+        shapes={}
         for branch,count in [('hit',config.hit_nodes),('miss',config.miss_nodes)]:
-            for suffix,shape in [('cdf',(len(r),count,config.path_grid_nodes,10)),('total',(len(r),count,10))]:
-                name=branch+'_'+suffix
-                arrays[name]=np.lib.format.open_memmap(output/(name+'.npy'),mode='w+',dtype=float,shape=shape)
-        arrays['hit_entry']=np.lib.format.open_memmap(output/'hit_entry.npy',mode='w+',dtype=float,
-            shape=(len(r),config.hit_nodes,10))
+            shapes[branch+'_cdf']=(len(r),count,config.path_grid_nodes,10)
+            shapes[branch+'_total']=(len(r),count,10)
+        shapes['hit_entry']=(len(r),config.hit_nodes,10)
+        joined=JoinedArrays(output,shapes,dict(radii=r.tolist(),g=g,excess=max_excess_unit,
+            config=asdict(config),maximum=maximum,builder=_fingerprint()))
+        arrays=joined.arrays
+        if manifest.exists():manifest.unlink()
         arguments=[dict(radii_unit=r[b],g=g,max_excess_unit=max_excess_unit,config=asdict(config),
             path_u_max=maximum,output=str(output/'blocks'/f'{i:04d}')) for i,b in enumerate(blocks)]
-        complete=0
+        complete=sum(len(blocks[i]) for i in range(len(blocks)) if joined.contains(i,blocks[i]))
         def merge(i):
             nonlocal complete
             block=cls.load(arguments[i]['output'])
-            for name,a in arrays.items():a[blocks[i]]=getattr(block,name)
+            joined.merge(i,blocks[i],{name:getattr(block,name) for name in arrays})
+            if not keep_blocks:joined.discard(arguments[i]['output'])
             complete+=len(block.radii_unit)
             if progress is not None:progress(complete,len(r))
-        if workers==1:_geometry_block(arguments[0]);merge(0)
+        pending=[i for i in range(len(blocks)) if not joined.contains(i,blocks[i])]
+        if workers==1:
+            for i in pending:_geometry_block(arguments[i]);merge(i)
         else:
             with ProcessPoolExecutor(max_workers=workers,mp_context=get_context('spawn')) as pool:
-                futures={pool.submit(_geometry_block,arg):i for i,arg in enumerate(arguments)}
+                futures={pool.submit(_geometry_block,arguments[i]):i for i in pending}
                 for f in as_completed(futures):f.result();merge(futures[f])
         for a in arrays.values():a.flush()
         # save() writes arrays too; only the owner writes the joined manifest.

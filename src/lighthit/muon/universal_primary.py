@@ -276,7 +276,7 @@ def transport_universal_primary(kernel, source, first_store, ge2_store, *, prima
         wavelength_range_nm=kernel.config.wavelength_range_nm)
     reduced=None
     if first_cubature is not None:
-        first_cubature.validate_optics(kernel)
+        first_cubature.validate_optics(kernel,recorded_contract=first_store.metadata)
         reduced=copy(local);reduced.wavelength=first_cubature.quadrature
     waveform_cubature=(None if first_cubature is None else first_cubature.metadata.get('first_entry_waveform_validation'))
     def direct_first_time(om,part):
