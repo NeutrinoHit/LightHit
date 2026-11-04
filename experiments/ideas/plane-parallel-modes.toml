@@ -1,0 +1,24 @@
+id = "plane-parallel-modes"
+title = "Stationary P_N eigenmodes of a collimated plane source (sunlight into an infinite medium)"
+area = "core"
+question = """
+Does the eigenproblem of stationary_modes give the plane-parallel field of a collimated beam (irradiances, radiance, K_d, K_inf) mode by mode, to 1e-15 relative and far below the surface value?
+"""
+kind = "reference"
+status = "tool"
+verdict = "Tests only: energy balance to 1e-13, local balance and K_d to 1e-7, K_inf identical to StationaryModes.leading_attenuation_per_m, degree 127 vs 255 to 2e-7 below 1 m, weak scattering equal to the exact single scattering to 1e-4."
+cases = []
+how-to-run = "PYTHONPATH=src python -m pytest tests/test_plane_parallel.py"
+inputs = ["synthetic media built by the tests (no bundle input)"]
+notes = [
+  """
+No boundary at z = 0: light scattered above the entry plane stays in the same medium (integrated_scalar reports the part absorbed there).
+""",
+]
+
+[code]
+modules = ["lighthit.experimental.plane_parallel"]
+functions = []
+options = []
+scripts = []
+tests = ["tests/test_plane_parallel.py"]

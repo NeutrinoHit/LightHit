@@ -43,6 +43,7 @@ Many tests still import through these names.
 | `halfspace`, `halfspace_boundary`, `halfspace_mc` | half-space volume RTE, true collimated boundary beams, Fresnel input/output, external aperture, reciprocal ports, frequency/time readout and absorption sensitivity; [mathematics and scope](halfspace.md) | synthetic reference, tested; independent full-HG MC and local path-length checks | test_halfspace, test_halfspace_boundary, test_halfspace_mc |
 | `shell_mc` | track-length Monte Carlo of shell-averaged fluence (Numba) | reference, tested | test_shell_mc |
 | `stationary_modes` | stationary P_N eigenmode check of charge and current for a flash | reference, tested | test_stationary_modes |
+| `plane_parallel` | the same P_N eigenmodes for a collimated plane source in an infinite medium: unscattered beam, E_d, E_u, E_0, radiance, K_d, K_inf (below) | reference, tested | test_plane_parallel |
 | `directional_reference` | slow independent references of the directional kernel | reference, tested | test_directional |
 | `detector_tree` | conservative cluster/string/OM bounding-box queries | optional, tested; used only by `charge_preview` | test_detector_tree |
 | `signal_screen` | isotropic absorption-only receiver pre-screen | optional, tested; no caller | test_signal_screen |
@@ -57,6 +58,35 @@ Many tests still import through these names.
 | `spectral_response_basis` | positive empirical wavelength cubature | used to build the beta < 1 order-1 table of the muon route (the learned cubature behind `primary_first_beta`); no runtime caller | test_spectral_response_basis |
 | `stationary_pencils` | all-time first-scattering charge of grouped pencils | unused | test_stationary_pencils |
 | `axial_blocked` | numpy reordered axial apply | unused, untested | none |
+
+## `plane_parallel`: a collimated beam in an infinite medium
+
+`PlaneParallelModes.build(medium, degree=255)` diagonalizes the tridiagonal
+matrix of `stationary_modes` (`A_l = mu_t - mu_s g^l`) and projects the
+first-collision source of a beam crossing `z = 0` along `+z` onto its modes.
+In plane geometry every mode is an explicit exponential, so the field is a sum
+of non-negative terms per mode (the docstring derives the P_N equations, the
+projection and the closed forms, with references). Per unit injected flux:
+
+* `unscattered(z)`: `exp(-mu_t z)`, exact;
+* `irradiance(z)`: `Irradiance` with `downward`, `upward`, `scalar`, `net`
+  (beam included) and the `*_scattered` parts;
+* `radiance(z, mu)`: scattered radiance in sr^-1 (the beam is a delta along
+  `mu = 1`); `angular_basis(mu)` can be reused for many depths;
+* `diffuse_attenuation(z)`: `K_d = -d ln E_d/dz`, analytic derivative;
+* `leading_attenuation_per_m` (`K_inf`, identical to
+  `StationaryModes.leading_attenuation_per_m` at the same degree),
+  `asymptotic_radiance(mu)`, `asymptotic_mean_cosine`;
+* `integrated_scalar()`: analytic `int E_0 dz` over all z and the part at
+  `z < 0`; `mu_a` times the first is 1 (energy balance);
+* `cancellation(z)`: `sum|term| / |sum|` of the mode sums;
+* `single_scattered_radiance(z, mu, medium)`: exact once-scattered radiance,
+  independent of the modes.
+
+There is no boundary at `z = 0`: the medium continues above the entry plane
+and light scattered there is absorbed there (`integrated_scalar`). Use odd
+degrees. Convergence in the degree is slowest within a few metres of the entry
+plane and for the radiance near `mu = 1`; tests: `test_plane_parallel.py`.
 
 ## Registry and measurements
 
