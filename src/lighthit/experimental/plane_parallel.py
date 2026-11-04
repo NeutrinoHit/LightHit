@@ -53,17 +53,19 @@ over all z gives mu_a int E_0 dz = 1 (beam included): every injected photon is
 absorbed somewhere. Use odd N (an even number of moments, no lambda = 0 local
 term) and check convergence in N.
 
-Method, primary sources: the spherical-harmonics (P_N) method in plane
-geometry (J. C. Mark, The Spherical Harmonics Method I and II, National Research
-Council of Canada, Chalk River reports CRT-340 and CRT-338, 1944-45; B. Davison,
-Neutron Transport Theory, Clarendon Press, Oxford 1957); eigenvalues of the P_N
-tridiagonal system as the discrete spectrum (R. D. M. Garcia, C. E. Siewert,
-J. Quant. Spectrosc. Radiat. Transfer 42, 385-394, 1989); particular solution
-of the P_N equations for an inhomogeneous (beam) source (C. E. Siewert,
-J. R. Thomas, JQSRT 43, 433-436, 1990); discrete eigenvalue and asymptotic
-solution (K. M. Case, P. F. Zweifel, Linear Transport Theory, Addison-Wesley
-1967); asymptotic underwater radiance (R. W. Preisendorfer, J. Mar. Res. 18,
-1-9, 1959).
+Sources. The P_N eigenvalues are the zeros of the Chandrasekhar polynomial
+g_{N+1}, obtained as the eigenvalues of a tridiagonal matrix, and those outside
+[-1, 1] approach the discrete eigenvalues of the transport equation as N grows:
+R. D. M. Garcia, C. E. Siewert, On discrete spectrum calculations in radiative
+transfer, J. Quant. Spectrosc. Radiat. Transfer 42, 385-394 (1989), Secs. 2-3.
+A particular solution of the P_N equations for a general inhomogeneous source
+that is isotropic (thermal emission): C. E. Siewert, J. R. Thomas, Jr.,
+A particular solution for the P_N method in radiative transfer, J. Quant.
+Spectrosc. Radiat. Transfer 43, 433-436 (1990); the anisotropic beam source
+above is instead projected onto the modes. Existence of an asymptotic radiance
+distribution at depth in homogeneous water: R. W. Preisendorfer, Theoretical
+proof of the existence of characteristic diffuse light in natural waters,
+J. Mar. Res. 18(1) (1959) (abstract read, full text not read).
 """
 from dataclasses import dataclass
 from time import perf_counter
