@@ -195,7 +195,7 @@ def _accuracy(record, results, case=None):
     """Metrics vs the reference, recomputed from saved responses when possible."""
     from harness import metrics
     from harness.record import RESULTS, load_response
-    ref = record.get("reference") or (case.reference if case is not None else None)
+    ref = _reference(record, case)
     if not ref or record.get("kind") != "response" or record.get("status") != "ok":
         return record.get("accuracy")
     mine = RESULTS / f"{record['idea']}/{record['case']}.npz"
@@ -210,6 +210,15 @@ def _accuracy(record, results, case=None):
             out["orders_compared"] = [metrics.ORDERS[k] for k in orders]
         return out
     return record.get("accuracy")
+
+
+def _reference(record, case=None):
+    """The record's accuracy reference. A record on a glass-referenced bundle keeps
+    the centre-referenced case reference apart (``centre_reference``): their
+    difference is the receiver definition, not an error of the route."""
+    if record.get("centre_reference") or record.get("receiver", "centre") != "centre":
+        return record.get("reference")
+    return record.get("reference") or (case.reference if case is not None else None)
 
 
 def _computed(response, k):
@@ -251,7 +260,10 @@ def gather(ideas):
                          threads=record.get("threads"), inputs=record.get("inputs"),
                          timing=record.get("timing"), summary=record.get("summary"),
                          error=_error_text(record.get("error")),
-                         reference=record.get("reference") or getattr(cases.get(case_key.split("@")[0]), "reference", None))
+                         reference=_reference(record, cases.get(case_key.split("@")[0])))
+            if record.get("centre_reference"):
+                entry["receiver"] = record.get("receiver")
+                entry["centre_reference"] = record["centre_reference"]
             accuracy = _accuracy(record, results, cases.get(case_key.split("@")[0]))
             if accuracy:
                 entry["accuracy"] = accuracy
@@ -357,6 +369,9 @@ def _compact(entry):
                               charge_pe_by_order=[round(x, 5) for x in s.get("charge_pe_by_order", [])])
     if entry.get("reference"):
         out["reference"] = entry["reference"]
+    if entry.get("centre_reference"):
+        out["receiver"] = entry.get("receiver")
+        out["centre_reference"] = entry["centre_reference"]
     acc = entry.get("accuracy")
     if acc:
         for order, m in acc.get("orders", {}).items():

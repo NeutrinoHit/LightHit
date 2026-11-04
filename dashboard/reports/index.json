@@ -1,6 +1,6 @@
 {
   "schema": "lighthit/report-index/1",
-  "latest": "v1",
+  "latest": "v2",
   "snapshots": [
     {
       "id": "v1",
@@ -8,6 +8,13 @@
       "date": "2026-11-03",
       "file": "v1.json",
       "sha256": "40ee7168382ae9aaa0282b4d46cfbb7d6a54fb22d808b12ba849a542726426a2"
+    },
+    {
+      "id": "v2",
+      "title": "Second research preview",
+      "date": "2026-11-04",
+      "file": "v2.json",
+      "sha256": "d5f1f1a65c1b471569fb879e284452a0970fc60608b4ccca0aa1d712b0a409cf"
     }
   ]
 }

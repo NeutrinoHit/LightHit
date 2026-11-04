@@ -126,6 +126,23 @@ leaves them unset; such results are stored as `<case>@threads-default`). Run
 one case at a time on an otherwise idle machine: every result records the load
 average at its start.
 
+`--variant glass` reruns the same cases on a bundle whose route tables count
+light at the first entry into the OM glass (`scattered_receiver =
+"first-entry"` in its `tables/shower-data.json`), for example the 0.3.0a6 glass
+kit with its laser table and the bundle events linked into one directory as
+`$LIGHTHIT_DATA`. Results are stored as `<case>@glass`; the centre-referenced
+record of the case is kept. The stored references (`reference-*`) count light
+at the OM centre, so a glass result is not scored against them: their
+difference is stored as `centre_reference_difference`, a change of receiver
+definition rather than an error. Photon Monte Carlo counts light at the glass.
+
+`time_routes.py` measures the cold, JIT and warm time of the electron, muon
+and laser examples in fresh processes with fixed thread settings (empty and
+filled Numba cache; every warm call on a new source object).
+`photon_mc_laser.py` is the photon Monte Carlo of the laser flash; its chunk
+times give the Monte-Carlo time to the precision reached
+(`photon-mc-matrix/laser-532nm`).
+
 Order among the research scripts where one reads another's output:
 `muon-secondary-structure/capture-electron-*` before
 `muon-secondary-physics-basis/*` and `charge-preview/first-collision-pack`;

@@ -26,10 +26,21 @@ documented exception to regenerating build outputs; the original calculation
 may require inputs that do not belong in this repository. Existing reports
 are not rewritten. Add a new ID and checksum for a new publication.
 
-The first report contains historical measurements and an idea-registry snapshot.
+The first report (v1) contains historical measurements and an idea-registry snapshot.
 Many source records retain only a base commit and a dirty flag, so the page
 does not assign them to the newest package release or certify reproducibility
 of that release. Missing references or missing test reports are shown explicitly.
+
+The second report (v2) shows the detector examples on the glass tables of the
+0.3.0a6 kit (`<case>@glass` records; light counted at the first entry into the
+OM glass). The centre-referenced records stay in the registry; where a stored
+reference counts light at the OM centre, the difference is shown as a change of
+receiver definition, not as an error. The laser table is the same file in both
+data sets, so the laser example is identical to v1. v2 adds the kit acceptance
+(`check.py`: numerical reproduction and photon MC by distance, with the
+remaining flags), the half-space reference of `docs/halfspace.md`, matched
+cold/JIT/warm timing and the laser photon Monte Carlo with its time to the
+precision reached.
 
 Raw detector/calibration inputs, full response bundles, runtime caches, build
 checkpoints and videos stay outside the repository. The report includes no
@@ -44,7 +55,17 @@ python dashboard/export_results.py --output new-report.json
 # Optional separate atlas-component report:
 python dashboard/export_results.py --output another-report.json \
   --atlas-report path/to/atlas-checks.json
+# The second report: kit check, half-space run, timing
+python dashboard/export_results.py --output dashboard/reports/v2.json --publication v2 \
+  --kit-check KIT-CHECK.json --kit-bundle KIT/runtime/lighthit-glass-data \
+  --halfspace HALFSPACE-RESULTS --timing TIMING.json
 ```
+
+`KIT-CHECK.json` is the report of the kit's `check.py`, `HALFSPACE-RESULTS` an
+output directory of `experiments/reproduce_halfspace.py` whose source
+checksums match the checkout, and `TIMING.json` an output of
+`experiments/time_routes.py`. Only reduced numbers enter the report: per
+distance-group ratios, totals, checksums and timings.
 
 The exporter reads all idea files and stored case records, keeps collision
 orders separate, reduces representative response arrays and uses the existing
@@ -57,10 +78,11 @@ that a scientific criterion passed.
 Download both into one directory to inspect the saved arrays in Jupyter.
 The notebook is an alternative reader, not a second transport implementation.
 
-Automatic measurement-run ingestion and matched LightHit/MC timing benchmarks
-are separate follow-up work. Cold setup, JIT compilation, warm event response,
-reused results, machine/thread settings, observables and MC precision must be
-recorded before comparing runtimes.
+Automatic measurement-run ingestion is separate follow-up work. Timing
+comparisons are taken only from `time_routes.py` (cold setup, JIT compilation
+and warm event response separately, fixed threads, one machine) and, for the
+laser, from the photon Monte Carlo of the same flash with its achieved
+precision; registry wall times are not a matched benchmark.
 
 The site serves D3 7.9.0 and Lucide 0.468.0 from `vendor/`, with their respective
 licenses. It does not need an external script CDN to display the archived plots.

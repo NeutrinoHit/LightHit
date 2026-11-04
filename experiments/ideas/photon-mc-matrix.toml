@@ -6,7 +6,7 @@ Do the default routes agree with NTSim's photon Monte Carlo for electrons, pions
 """
 kind = "validation"
 status = "tool"
-verdict = "On 14 Geant4 events (e 10 GeV-10 TeV, pi+ 10 GeV-1 TeV, mu 100 GeV-10 TeV, nu_e CC, nu_mu CC, two geometries; 4-32 MC runs each) the default routes give 0.965-1.035 of the photon-MC total charge; three events fail a distance bin: pion 100 GeV at 50-100 m (0.964 +- 0.015), the 1 TeV muon at 100-150 m (1.118 +- 0.021, 0.4 % of its charge) and the 10 TeV muon at 0-20 m and 50-100 m, where its order 0 is 0.93-0.95 of the MC near the track."
+verdict = "On 14 Geant4 events (e 10 GeV-10 TeV, pi+ 10 GeV-1 TeV, mu 100 GeV-10 TeV, nu_e CC, nu_mu CC, two geometries; 4-32 MC runs each) the default routes give 0.965-1.035 of the photon-MC total charge; three events fail a distance bin: pion 100 GeV at 50-100 m (0.964 +- 0.015), the 1 TeV muon at 100-150 m (1.118 +- 0.021, 0.4 % of its charge) and the 10 TeV muon at 0-20 m and 50-100 m, where its order 0 is 0.93-0.95 of the MC near the track. The 532 nm laser flash (laser-532nm@glass; its laser table is the centre-referenced one) gives 0.967 +- 0.018 of a 1e8-photon MC, with orders 0/1 at 0.952/0.949 and the 150-200 m bin failing (0.956 +- 0.018, 1.2 % of the charge)."
 cases = [
   "photon-mc-matrix/electron-10GeV",
   "photon-mc-matrix/electron-100GeV",
@@ -22,9 +22,11 @@ cases = [
   "photon-mc-matrix/numu-cc",
   "photon-mc-matrix/electron-100GeV-outside",
   "photon-mc-matrix/electron-100GeV-down",
+  "photon-mc-matrix/laser-532nm",
 ]
 how-to-run = """
 python experiments/photon_mc.py NAME --orders --run N [--suppression K] for N = 0..R-1 (NTSim environment; runs are independent and may run in parallel), then PYTHONPATH=src python experiments/run.py run 'photon-mc-matrix/*'
+Laser: python experiments/photon_mc_laser.py --photons 1e8 --seed 1, then run.py run 'photon-mc-matrix/laser-532nm'; --variant glass with a glass bundle as $LIGHTHIT_DATA stores <case>@glass
 """
 inputs = [
   "the events of experiments/regenerate_inputs.py listed in harness/cases_mcmatrix.py MATRIX (runs and photon_suppression per event)",
@@ -34,6 +36,9 @@ NTSim: CherenkovGenerator (photon yield per true step length, band 350-600 nm) -
 ]
 notes = [
   "OM distance: to the nearest start, middle or end point of the emitting steps.",
+  """
+laser-532nm: the flash of default-laser-route; OM distance to the flash; one MC run of 1e8 photons whose error is the square root of the summed squared hit weights; its chunk times are kept.
+""",
   "The Monte-Carlo error of a bin is the run-to-run spread of its charge divided by sqrt(runs).",
   "The 10 TeV events use photon_suppression 10 (Poisson 1/10 of the photons, weight 10): unbiased, larger statistical error.",
 ]
@@ -112,6 +117,16 @@ machine = { cpu_count = 64, python = "3.12.15", numba = "0.67.0", numpy = "2.5.3
 inputs_sha256 = { "electron-1TeV-run0-steps.npz" = "13c8fce73c77e7ab", "electron-1TeV-run1-steps.npz" = "b656d3ccd1b89ed1", "electron-1TeV-run2-steps.npz" = "47aa972031d3646b", "electron-1TeV-run3-steps.npz" = "7a89e3fc7bee360b", "electron-1TeV-run4-steps.npz" = "9b6c392e14cf2d69", "electron-1TeV-run5-steps.npz" = "4252e1b7ce045979", "electron-1TeV-run6-steps.npz" = "2ebf31cefd4606de", "electron-1TeV-run7-steps.npz" = "b9a8612c8d8c00a9", "electron-1TeV-run0-hits.npz" = "a4b6a09fc9d1fca8", "electron-1TeV-run1-hits.npz" = "0856cf7f9a617034", "electron-1TeV-run2-hits.npz" = "535431b06aab2c26", "electron-1TeV-run3-hits.npz" = "12d81fc70ca22b0a", "electron-1TeV-run4-hits.npz" = "7f50e0af648e68b5", "electron-1TeV-run5-hits.npz" = "e936d9eb9a690dd3", "electron-1TeV-run6-hits.npz" = "a89315f1ec2afb7a", "electron-1TeV-run7-hits.npz" = "256aae904fe1b878", "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg" }
 timing = { wall_s = 171.85, cpu_s = 171.831, peak_rss_mib = 2242.09 }
 metrics = { lighthit_pe = 63.7213, mc_pe = 64.499, ratio = 0.987942, ratio_sigma = 0.00372132, order0_ratio = 0.983141, order1_ratio = 0.98918, order2_ratio = 0.998568, runs = 8, bins_failed = "none" }
+
+[result."laser-532nm@glass"]
+status = "ok"
+date = "2026-11-04T12:21:30Z"
+commit = "3988d30f50d2"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [3.96533, 4.7085, 5.25391], numba_threads = 1 }
+inputs_sha256 = { "laser-532nm-seed1-hits.npz" = "51544c5c94231460", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal", "cache-manifest.json" = "8c2901a228facb76", "laser-cache/files" = "transport-ee9a99" }
+timing = { wall_s = 0.112, cpu_s = 0.112, peak_rss_mib = 613.484 }
+metrics = { lighthit_pe = 14907000.0, mc_pe = 15422600.0, ratio = 0.966569, ratio_sigma = 0.0182115, order0_ratio = 0.951991, order1_ratio = 0.948796, order2_ratio = 1.00275, runs = 1, bins_failed = "150-200 m" }
 
 [result.muon-100GeV]
 status = "ok"

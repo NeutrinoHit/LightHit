@@ -3,7 +3,7 @@
 
     python experiments/run.py list [PATTERN]          # cases, their idea and saved result
     python experiments/run.py run CASE [CASE ...]      # each in its own process, one after another
-          [--threads N | --threads default] [--force]
+          [--threads N | --threads default] [--variant NAME] [--force]
 
 CASE is ``idea/case`` or a glob over it (``'shower-*/*'``). Every case runs in a
 fresh process with the thread count fixed through NUMBA_NUM_THREADS,
@@ -13,6 +13,12 @@ OMP_NUM_THREADS, OPENBLAS_NUM_THREADS and VECLIB_MAXIMUM_THREADS (default 1;
 is saved to experiments/results/<idea>/<case>.npz and compared with its
 reference case's saved response. Results: experiments/results/<idea>/<case>.json.
 Cases run strictly one at a time; nothing heavy runs in parallel.
+
+``--variant glass`` records the same case on a data bundle whose responses are
+referenced to the first entry into the OM glass (``$LIGHTHIT_DATA`` must name
+such a bundle) under ``<case>@glass``; the stored centre-referenced record of
+the case is kept. A centre-referenced reference is then not used as an accuracy
+reference: the difference is stored separately as a receiver-definition change.
 """
 from __future__ import annotations
 
@@ -41,17 +47,55 @@ def _select(cases, patterns):
     return keys
 
 
-def _suffix(key, threads):
+def _suffix(key, threads, variant=None):
     """References are stored under their plain name at any thread count: their
     timing is not compared, only their response is used."""
-    return "" if threads == "1" or key.startswith("reference-") else f"@threads-{threads}"
+    variant = f"@{variant}" if variant else ""
+    return variant + ("" if threads == "1" or key.startswith("reference-") else f"@threads-{threads}")
 
 
-def _result_path(key, threads):
+def _result_path(key, threads, variant=None):
     from harness.record import RESULTS
     idea, name = key.split("/", 1)
-    suffix = _suffix(key, threads)
+    suffix = _suffix(key, threads, variant)
     return RESULTS / idea / f"{name}{suffix}.json"
+
+
+#: variant name -> receiver definition its data bundle must declare
+VARIANT_RECEIVER = {"glass": "first-entry"}
+
+
+def _receiver():
+    """Receiver definition of the bundle's route tables: 'first-entry' (glass) or 'centre'."""
+    if not os.environ.get("LIGHTHIT_DATA"):
+        return "centre"
+    from harness.inputs import bundle_path
+    for name in ("shower-data.json", "muon-data.json"):
+        path = bundle_path("tables", name)
+        if path.is_file():
+            settings = json.loads(path.read_text()).get("kernel_settings") or {}
+            return settings.get("scattered_receiver") or "centre"
+    return "centre"
+
+
+def _laser_receiver():
+    """Receiver of the bundle's laser table (its manifest names none: centre)."""
+    from harness.inputs import bundle_path
+    path = bundle_path("tables", "laser-cache", "cache-manifest.json")
+    if not path.is_file():
+        return "centre"
+    return json.loads(path.read_text()).get("scattered_receiver") or "centre"
+
+
+def _bundle_identity():
+    """Model and manifest checksums declared by the bundle (no paths)."""
+    from harness.inputs import bundle_path
+    path = bundle_path("bundle.json")
+    if not path.is_file():
+        return None
+    data = json.loads(path.read_text())
+    return dict(schema=data.get("schema"), complete=data.get("complete"),
+                identity=data.get("identity"), files=len(data.get("files") or {}))
 
 
 def cmd_list(args):
@@ -71,7 +115,7 @@ def cmd_run(args):
     cases = load_all()
     keys = _select(cases, args.cases)
     for key in keys:
-        path = _result_path(key, args.threads)
+        path = _result_path(key, args.threads, args.variant)
         if not args.force and path.is_file() and json.loads(path.read_text()).get("status") == "ok":
             print(f"skip {key} (result exists; --force to rerun)")
             continue
@@ -81,8 +125,10 @@ def cmd_run(args):
             if args.threads != "default":
                 env[name] = args.threads
         print(f"== {key} threads={args.threads}", flush=True)
-        status = subprocess.run([sys.executable, __file__, "_one", key, "--threads", args.threads],
-                                env=env).returncode
+        command = [sys.executable, __file__, "_one", key, "--threads", args.threads]
+        if args.variant:
+            command += ["--variant", args.variant]
+        status = subprocess.run(command, env=env).returncode
         if status:
             print(f"   FAILED ({status})", flush=True)
             if not args.keep_going:
@@ -100,7 +146,23 @@ def cmd_one(args):
     ctx = Context(case)
     payload = dict(threads=args.threads, kind=case.kind, reference=case.reference,
                    notes=case.notes, warmup=case.warmup)
-    suffix = _suffix(args.case, args.threads)
+    suffix = _suffix(args.case, args.threads, args.variant)
+    receiver = _receiver()
+    if args.variant:
+        expected = VARIANT_RECEIVER.get(args.variant)
+        if expected is not None and receiver != expected:
+            raise SystemExit(f"variant {args.variant!r} needs a {expected} bundle; "
+                             f"LIGHTHIT_DATA declares {receiver!r}")
+        payload.update(variant=args.variant, receiver=receiver, data_bundle=_bundle_identity())
+        if "laser" in args.case:
+            # the flash uses the laser table only: its receiver is that table's
+            receiver = payload["receiver"] = _laser_receiver()
+            payload["bundle_receiver"] = expected
+    centre_reference = None
+    if receiver != "centre" and case.reference:
+        # stored references are centre-referenced: a difference is the receiver change
+        centre_reference, payload["reference"] = case.reference, None
+        payload["centre_reference"] = centre_reference
     try:
         if case.warmup:
             with timed(payload, "warmup"):
@@ -119,7 +181,11 @@ def cmd_one(args):
             path = save_response(result, RESULTS / case.idea / f"{case.name}{suffix}.npz")
             payload["response"] = str(path.relative_to(RESULTS))
             payload["summary"] = _summary(result)
-            if case.reference:
+            if centre_reference:
+                ref = RESULTS / f"{centre_reference}.npz"
+                if ref.is_file():
+                    payload["centre_reference_difference"] = centre_difference(result, load_response(ref))
+            elif case.reference:
                 ref = RESULTS / f"{case.reference}.npz"
                 if ref.is_file():
                     payload["accuracy"] = metrics.compare(result, load_response(ref))
@@ -145,7 +211,25 @@ def cmd_one(args):
           + (f" {payload.get('error')}" if payload["status"] != "ok" else ""), flush=True)
     if payload.get("accuracy"):
         print("   accuracy:", json.dumps(metrics.headline(payload["accuracy"])), flush=True)
+    if payload.get("centre_reference_difference"):
+        difference = payload["centre_reference_difference"]
+        print("   glass - centre reference (receiver change, not an error):",
+              json.dumps({k: v.get("charge_bias") for k, v in difference["orders"].items()}), flush=True)
     raise SystemExit(0 if payload["status"] == "ok" else 1)
+
+
+def centre_difference(response, reference):
+    """Metrics against a centre-referenced reference on the orders the reference computed
+    (a reference without order >=2 leaves the total and the active sets out)."""
+    from harness import metrics
+    computed = [str(x) for x in reference.get("orders_computed", ["0", "1", "2"])]
+    orders = tuple(k for k in (0, 1, 2) if str(k) in computed or (k == 2 and ">=2" in computed))
+    out = metrics.compare(response, reference, orders=orders)
+    if 2 not in orders:
+        out.pop("active", None)
+        out["orders"].pop("total", None)
+        out["orders_compared"] = [metrics.ORDERS[k] for k in orders]
+    return out
 
 
 def _summary(response):
@@ -171,10 +255,12 @@ def main():
     p.add_argument("--threads", default="1")
     p.add_argument("--force", action="store_true")
     p.add_argument("--keep-going", action="store_true")
+    p.add_argument("--variant", choices=sorted(VARIANT_RECEIVER))
     p.set_defaults(func=cmd_run)
     p = sub.add_parser("_one")
     p.add_argument("case")
     p.add_argument("--threads", default="1")
+    p.add_argument("--variant", choices=sorted(VARIANT_RECEIVER))
     p.set_defaults(func=cmd_one)
     args = parser.parse_args()
     args.func(args)

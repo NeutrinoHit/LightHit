@@ -166,3 +166,93 @@ for _name in MATRIX:
     case("photon-mc-matrix", _name, kind="metrics",
          notes="EventTransport defaults vs all photon_mc.py --orders runs, by OM distance and scattering order")(
         lambda ctx, n=_name: _matrix(ctx, n))
+
+
+# ------------------------------------------------------------ calibration laser
+#: (seed, photons) of the photon_mc_laser.py runs compared with the laser route
+LASER_RUNS = "laser-532nm-seed*-hits.npz"
+
+
+def _laser_matrix(ctx):
+    """default-laser-route against photon_mc_laser.py: the same 532 nm flash, OMs grouped
+    by the distance of the OM centre to the flash, orders 0, 1, >=2 and their total. The
+    Monte-Carlo record keeps the wall time of every chunk, so the time to a stated
+    precision is part of the result."""
+    from lighthit.event import EventTransport
+    from .inputs import LASER, laser_flash
+    paths = sorted((inputs_dir() / "mc").glob(LASER_RUNS))
+    if not paths:
+        raise FileNotFoundError("no laser Monte-Carlo run: run experiments/photon_mc_laser.py")
+    ctx._note(*paths)
+    kernel = ctx.kernel()
+    response = EventTransport(kernel, laser_kernel=ctx.laser_kernel())(laser_flash())
+    lh = np.asarray(response.charge_components_pe, float)
+    lh = np.c_[lh, lh.sum(1)]
+    uids = np.asarray(kernel.detector.identifiers["uid"]).astype(np.int64)
+    row = {int(u): i for i, u in enumerate(uids)}
+    n = len(uids)
+    per, var, meta = np.zeros((n, 4)), np.zeros((n, 4)), []
+    photons = 0
+    for path in paths:
+        with np.load(path, allow_pickle=False) as data:
+            m = json.loads(str(data["metadata"]))
+            index = np.array([row[int(u)] for u in data["uid"]], int)
+            order = np.minimum(np.asarray(data["order"], int), 2)
+            phe = np.asarray(data["phe"], float)
+        meta.append(m)
+        photons += m["photons"]
+        for k in range(3):
+            sel = order == k
+            per[:, k] += np.bincount(index[sel], phe[sel], n)
+            var[:, k] += np.bincount(index[sel], phe[sel] ** 2, n)
+    scale = LASER["photons"] / photons
+    mc, w2 = per * scale, var * scale ** 2
+    mc[:, 3], w2[:, 3] = mc[:, :3].sum(1), w2[:, :3].sum(1)
+    distance = np.linalg.norm(kernel.detector.positions_m - np.asarray(LASER["position_m"]), axis=1)
+    total_mc, total_lh = mc[:, 3].sum(), lh[:, 3].sum()
+    rows, failed = [], []
+    for lo, hi in zip(BINS_M[:-1], BINS_M[1:]):
+        sel = (distance >= lo) & (distance < hi)
+        entry = dict(distance_m=[lo, None if np.isinf(hi) else hi], oms=int(sel.sum()),
+                     oms_with_mc_hits=int((mc[sel, 3] > 0).sum()))
+        for k, label in enumerate(ORDERS):
+            q_mc, q_lh = mc[sel, k].sum(), lh[sel, k].sum()
+            sigma_mc = np.sqrt(w2[sel, k].sum())
+            ratio = q_lh / q_mc if q_mc > 0 else None
+            entry[label] = dict(lighthit_pe=float(q_lh), mc_pe=float(q_mc), mc_sigma_pe=float(sigma_mc),
+                                ratio=ratio, ratio_sigma=sigma_mc / q_mc * ratio if ratio else None,
+                                mc_share=float(q_mc / total_mc) if total_mc else None,
+                                lighthit_share=float(q_lh / total_lh) if total_lh else None)
+        tot = entry["total"]
+        entry["tested"] = bool(tot["mc_share"] is not None and tot["mc_share"] > SHARE_MIN
+                               and tot["ratio"] is not None)
+        if entry["tested"]:
+            entry["passed"] = bool(abs(tot["ratio"] - 1) <= max(2 * tot["ratio_sigma"], TOLERANCE))
+            if not entry["passed"]:
+                failed.append(f"{lo:g}-{hi:g} m")
+        rows.append(entry)
+    totals = {}
+    for k, label in enumerate(ORDERS):
+        q_mc, s = mc[:, k].sum(), np.sqrt(w2[:, k].sum())
+        totals[label] = dict(lighthit_pe=float(lh[:, k].sum()), mc_pe=float(q_mc), mc_sigma_pe=float(s),
+                             ratio=float(lh[:, k].sum() / q_mc) if q_mc > 0 else None)
+    tot = totals["total"]
+    chunks = [c for m in meta for c in m["chunks"]]
+    return dict(
+        headline=dict(lighthit_pe=float(total_lh), mc_pe=float(total_mc), ratio=tot["ratio"],
+                      ratio_sigma=tot["mc_sigma_pe"] / total_mc * tot["ratio"] if total_mc else None,
+                      order0_ratio=totals["0"]["ratio"], order1_ratio=totals["1"]["ratio"],
+                      order2_ratio=totals[">=2"]["ratio"], runs=len(paths),
+                      bins_failed=", ".join(failed) or "none"),
+        totals=totals, by_distance=rows, route=response.metadata.get("route"),
+        same_steps_in_all_runs=True,
+        mc=dict(runs=len(paths), photons=photons, flash_photons=LASER["photons"],
+                seeds=[m.get("seed") for m in meta], n_scatterings=sorted({m.get("n_scatterings") for m in meta}),
+                wall_s=[m.get("wall_s") for m in meta], cpu_s=[m.get("cpu_s") for m in meta],
+                chunk_photons=[c["photons"] for c in chunks], chunk_wall_s=[c["wall_s"] for c in chunks],
+                threads=[m.get("threads") for m in meta], load_average=[m.get("load_average") for m in meta]))
+
+
+case("photon-mc-matrix", "laser-532nm", kind="metrics",
+     notes="EventTransport(laser_kernel=...) vs photon_mc_laser.py, by distance to the flash and scattering order")(
+    _laser_matrix)

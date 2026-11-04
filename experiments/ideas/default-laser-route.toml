@@ -4,7 +4,7 @@ area = "routes"
 question = "Cost and result of the isotropic calibration flash on the bundle laser table."
 kind = "route"
 status = "default"
-verdict = "The 532 nm calibration flash on the bundle laser table takes 0.100 s at 1 thread with 1002 active OMs; no reference is attached to this case (independent flash references are separate ideas)."
+verdict = "The 532 nm calibration flash on the bundle laser table takes 0.100 s at 1 thread with 1002 active OMs; no reference is attached to this case (independent flash references are separate ideas). The 0.3.0a6 glass kit ships the same laser table file; the @glass response is identical to the centre-referenced one. Against a photon MC of the same flash (1e8 photons) the total is 0.967 +- 0.018 (laser-532nm@glass in photon-mc-matrix)."
 cases = ["default-laser-route/laser-532nm"]
 how-to-run = "PYTHONPATH=src python experiments/run.py run default-laser-route/laser-532nm"
 inputs = [
@@ -35,6 +35,16 @@ src_modified = true
 machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [5.4248, 5.31348, 5.18506], numba_threads = 1 }
 inputs_sha256 = { "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "8c2901a228facb76", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg", "laser-cache/files" = "transport-ee9a99" }
 timing = { wall_s = 0.11, cpu_s = 0.109, peak_rss_mib = 572.016 }
+summary = { active = 935, charge_pe_by_order = [4849220.0, 5265680.0, 4792120.0] }
+
+[result."laser-532nm@glass"]
+status = "ok"
+date = "2026-11-04T11:38:41Z"
+commit = "3988d30f50d2"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [6.83447, 5.58936, 4.49707], numba_threads = 1 }
+inputs_sha256 = { "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal", "cache-manifest.json" = "8c2901a228facb76", "laser-cache/files" = "transport-ee9a99" }
+timing = { wall_s = 0.12, cpu_s = 0.118, peak_rss_mib = 646.156 }
 summary = { active = 935, charge_pe_by_order = [4849220.0, 5265680.0, 4792120.0] }
 
 [result."laser-532nm@threads-default"]
