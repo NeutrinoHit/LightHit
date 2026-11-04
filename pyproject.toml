@@ -35,6 +35,7 @@ lighthit = "lighthit.cli:main"
 lighthit-demo = "lighthit.examples.synthetic:main"
 lighthit-selftest = "lighthit.selftest:main"
 lighthit-pencil-check = "lighthit.examples.pencil_validation:main"
+lighthit-tables = "lighthit.compact:main"
 
 [project.urls]
 Repository = "https://github.com/NeutrinoHit/LightHit"

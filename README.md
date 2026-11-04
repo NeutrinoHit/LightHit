@@ -145,8 +145,19 @@ command-line tool.
 
 Before calculating events with Q1 and >=2 referenced to the glass, obtain a
 checked runtime bundle or build its cache once from the serialized model.
-A supplied bundle runs without Geant4 or VM access; use its included
-`check.py` and pinned LightHit version. To build tables:
+A supplied bundle runs without Geant4 or VM access. It comes in full form
+or in two compact forms that `lighthit-tables unpack` turns into the same
+directory; `lighthit-tables verify` checks its files and its included
+`check.py` recomputes two fixed events (see
+[build the receiver cache](docs/build-receiver-bundle.md#a-supplied-runtime-bundle)):
+
+```sh
+lighthit-tables unpack --input reduced --output data/lighthit-glass-data --jobs 8
+lighthit-tables verify --bundle data/lighthit-glass-data
+python data/lighthit-glass-data/check.py --bundle data/lighthit-glass-data --report cache-check.json
+```
+
+To build tables:
 
 ```sh
 PYTHONPATH=src python tools/tables/build_receiver_bundle.py \

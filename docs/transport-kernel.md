@@ -263,4 +263,5 @@ to within one basis cell (0.12-0.25 m) for shower basis points.
 | `cli.py`, `__main__.py` | `lighthit` CLI: single-band point Green calculation from a TOML file (not `TransportKernel`) | standalone, untested |
 | `providers.py` | one wavelength of a private `BaikalWater.py` (CLI only) | standalone |
 | `selftest.py` | `lighthit-selftest`: two-OM flash on a two-band medium | standalone |
+| `compact.py` | `lighthit-tables`: SHA256 check of a runtime bundle, its exact and reduced transports, unpack and array comparison ([build-receiver-bundle.md](build-receiver-bundle.md#a-supplied-runtime-bundle)) | standalone, tested |
 | `examples/synthetic.py` | `lighthit-demo`: artificial 48-OM array, laser, track, shower | standalone |

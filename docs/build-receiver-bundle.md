@@ -31,18 +31,59 @@ The previously measured event times are not build-time estimates.
 ## A supplied runtime bundle
 
 Colleagues who receive a checked runtime bundle do not need to build tables
-or install Geant4. Use its pinned LightHit version and run the included
-`check.py` on the two fixed charged-event fixtures:
+or install Geant4. It comes in three forms; all three give the same runtime
+directory and are read by the same loaders:
+
+| Form | Size (glass, 0.3.0a6) | Installation | Event answers against the full form |
+|---|---:|---|---|
+| full | 27.0 GB | none | identical |
+| exact | 9.3 GB | `lighthit-tables unpack`, a few minutes | floating-point round-off (<= 1.5e-11 relative per OM) |
+| reduced | 4.2 GB | `lighthit-tables unpack`, about 5 minutes | order sums <= 1.5e-9 relative; one faint OM 3.5e-5 relative (8e-10 pe) |
+
+The exact form ships the primary arrays and leaves out every array that
+LightHit rebuilds from them with its own builders (the Q1 time integrals, the
+coarse Q1 atlas, the spectral Q1 bands, the order >=2 pack and its band
+fold). The reduced form also stores the large primary arrays with a maximum
+row error of 1e-7 relative to the row's largest value: smooth CDFs as POD
+factors along time, the other CDFs and the RTE coefficients as row-scaled
+single precision; CDF rows keep their exact end values and their
+monotonicity and sign. It omits the order-1 RTE moments, which the glass
+route never reads at event time (Q1 comes from the first-entry tables); the
+unpacked tables hold NaN there, so any other use fails visibly. The muon
+atlases pin every row file by SHA256 and travel exactly in all forms.
 
 ```sh
+python -m pip install 'lighthit[accelerate]>=0.3.0a7'
+lighthit-tables unpack --input reduced --output lighthit-glass-data --jobs 8
+lighthit-tables verify --bundle lighthit-glass-data
 python lighthit-glass-data/check.py \
   --bundle lighthit-glass-data --report cache-check.json
 ```
 
-The published 0.3.0a5 wheel omits `spectral_response_basis`, although the
-muon route needs it. Use a software artifact containing the packaging fix,
-pinned by its checksum, rather than assuming that any installation labelled
-0.3.0a5 is sufficient. The working source includes the required module.
+`unpack` first checks the SHA256 of every transport file and refuses to
+finish if an exactly transported file differs; it writes
+`unpack-report.json` (form, tolerance, timings, peak memory, which files
+were rebuilt or reduced). `verify` checks every file of a runtime against
+`bundle.json`; for an unpacked runtime the exact files must match and the
+rebuilt or reduced ones are listed. Unpacking needs the disk space of the
+full runtime and up to about 9 GB of memory with 12 workers. `check.py`
+recomputes the two fixed charged-event fixtures (electron and muon,
+100 GeV) against stored answers; it does not check file hashes.
+
+A transport is made from a complete runtime with
+
+```sh
+lighthit-tables pack --bundle lighthit-glass-data --output exact --deflate
+lighthit-tables pack --bundle lighthit-glass-data --output reduced --deflate \
+  --tolerance 1e-7 --drop-rte-order1
+```
+
+and `lighthit-tables compare --reference A --candidate B --report r.json`
+lists the largest array differences between two runtimes.
+
+LightHit 0.3.0a5 omits `spectral_response_basis`, which the muon route
+needs; use 0.3.0a6 or later for the full form and 0.3.0a7 or later for the
+compact forms.
 
 Legacy cubature files may contain only an exact optical fingerprint. Across
 platforms, last-bit quadrature/interpolation differences can change that
