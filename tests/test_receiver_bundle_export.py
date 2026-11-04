@@ -1,14 +1,20 @@
 """Runtime dependency closure, relocation and numerical/MC check separation."""
 from pathlib import Path
 from types import SimpleNamespace
-import json,sys
+import json,os,sys
 import numpy as np
 import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/tables'));sys.path.insert(0,str(ROOT/'experiments'))
 import export_receiver_bundle as export
+# The checker pins one thread for its own command line; importing it must not
+# change the thread settings of the test session after Numba has started.
+_THREADS={name:os.environ.get(name) for name in ('NUMBA_NUM_THREADS','OPENBLAS_NUM_THREADS','OMP_NUM_THREADS')}
 import check_receiver_bundle as checker
+for _name,_value in _THREADS.items():
+    if _value is None:os.environ.pop(_name,None)
+    else:os.environ[_name]=_value
 
 
 def _write(path,value=b'data'):
