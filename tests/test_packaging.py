@@ -65,7 +65,7 @@ def test_is_shipped_only_filters_the_experimental_subpackage():
 
 def test_the_build_ships_only_the_allowed_experimental_modules(tmp_path, monkeypatch):
     shipped = sorted(REQUIRED_EXPERIMENTAL)
-    withheld = ["directional_reference", "signal_screen", "stationary_modes"]
+    withheld = ["directional_reference", "signal_screen", "shell_mc"]
     synthetic_tree(tmp_path, shipped + withheld)
     monkeypatch.chdir(tmp_path)
     build_lib = tmp_path / "build" / "lib"

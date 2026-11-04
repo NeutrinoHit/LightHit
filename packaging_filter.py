@@ -1,8 +1,10 @@
 """What goes into the distribution, in one place that both setup.py and a test import.
 
 The package ships a fixed allowlist of experimental modules and no others:
-compatibility names of modules that moved out of ``lighthit.experimental``
-and ``muon_components``, which NTSim imports. Other experimental reference,
+compatibility names of modules that moved out of ``lighthit.experimental``,
+``muon_components``, which NTSim imports, ``spectral_response_basis``, which
+the muon route needs, and the P_N eigenmode references ``stationary_modes``
+and ``plane_parallel``, used outside this repository. Other experimental reference,
 Monte-Carlo cross-check and research modules stay in the repository;
 top-level modules are not filtered.
 
@@ -29,7 +31,7 @@ FILTERED_SUBPACKAGE = "lighthit.experimental"
 REQUIRED_EXPERIMENTAL = frozenset({
     "__init__", "axial_fast", "axial_source", "ballistic_fast",
     "event_moments", "g4_source", "hdf5_minimal", "muon_components",
-    "spectral_response_basis",
+    "plane_parallel", "spectral_response_basis", "stationary_modes",
 })
 
 

@@ -11,8 +11,10 @@ module imports and every test of it passes.
 
 **Shipped in the wheel** (`packaging_filter.REQUIRED_EXPERIMENTAL`, same list in
 `MANIFEST.in`): `__init__`, the aliases `axial_fast`, `axial_source`,
-`ballistic_fast`, `event_moments`, `g4_source`, `hdf5_minimal`, and
-`muon_components` (used by NTSim). Everything else exists only in the
+`ballistic_fast`, `event_moments`, `g4_source`, `hdf5_minimal`,
+`muon_components` (used by NTSim), `spectral_response_basis` (needed by the
+muon route) and, since 0.3.0a8, the P_N eigenmode references
+`stationary_modes` and `plane_parallel`. Everything else exists only in the
 repository.
 
 ## Aliases (26 files)
@@ -42,8 +44,8 @@ Many tests still import through these names.
 | `crossing_mc` | surface-crossing Monte Carlo of fluence and current per order for a flash | reference, tested | test_crossing_mc |
 | `halfspace`, `halfspace_boundary`, `halfspace_mc` | half-space volume RTE, true collimated boundary beams, Fresnel input/output, external aperture, reciprocal ports, frequency/time readout and absorption sensitivity; [mathematics and scope](halfspace.md) | synthetic reference, tested; independent full-HG MC and local path-length checks | test_halfspace, test_halfspace_boundary, test_halfspace_mc |
 | `shell_mc` | track-length Monte Carlo of shell-averaged fluence (Numba) | reference, tested | test_shell_mc |
-| `stationary_modes` | stationary P_N eigenmode check of charge and current for a flash | reference, tested | test_stationary_modes |
-| `plane_parallel` | the same P_N eigenmodes for a collimated plane source in an infinite medium: unscattered beam, E_d, E_u, E_0, radiance, K_d, K_inf (below) | reference, tested | test_plane_parallel |
+| `stationary_modes` | stationary P_N eigenmode check of charge and current for a flash | reference, tested, shipped | test_stationary_modes |
+| `plane_parallel` | the same P_N eigenmodes for a collimated plane source in an infinite medium: unscattered beam, E_d, E_u, E_0, radiance, K_d, K_inf (below) | reference, tested, shipped | test_plane_parallel |
 | `directional_reference` | slow independent references of the directional kernel | reference, tested | test_directional |
 | `detector_tree` | conservative cluster/string/OM bounding-box queries | optional, tested; used only by `charge_preview` | test_detector_tree |
 | `signal_screen` | isotropic absorption-only receiver pre-screen | optional, tested; no caller | test_signal_screen |
