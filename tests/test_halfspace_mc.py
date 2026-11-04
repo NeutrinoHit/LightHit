@@ -54,3 +54,14 @@ def test_event_limit_is_an_error_instead_of_a_truncated_reference():
     with pytest.raises(RuntimeError, match="no truncated estimate"):
         sample_halfspace(medium, HalfSpaceBoundary(), SurfacePort.pencil(),
                          photons=50, seed=9, max_events=1)
+
+
+def test_cell_sensitivity_orders_partition_the_total():
+    medium = Medium(.2, 1., .3, 1.4)
+    cells = np.array([[[0., -.2, .1], [.4, .2, .4]], [[.6, -.2, .1], [1., .2, .4]]])
+    sample = sample_halfspace(medium, HalfSpaceBoundary(1.4), SurfacePort.pencil(), photons=20000,
+                              seed=17, source_sigma_m=.4, sensitivity_cells_m=cells)
+    total = sample.cell_absorption_sensitivity(detector_sigma_m=.4, half_angle_rad=.7)
+    orders = sample.cell_absorption_sensitivity(detector_sigma_m=.4, half_angle_rad=.7, by_order=True)
+    assert orders.mean.shape == (2, 3) and not orders.mean[:, 0].any()
+    np.testing.assert_allclose(orders.mean.sum(axis=1), total.mean, rtol=1e-12)

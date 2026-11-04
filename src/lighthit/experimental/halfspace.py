@@ -39,6 +39,32 @@ def _phase(cosine, g, degree):
     return result / (4 * np.pi)
 
 
+def _normalized_legendre(x, degree, order):
+    """Spherical-harmonic normalized associated Legendre functions.
+
+    Returns P[m, l, i] = sqrt((2l+1)/(4 pi) (l-m)!/(l+m)!) P_l^m(x_i) for
+    0 <= m <= order and m <= l <= degree (zero for l < m), without the
+    Condon-Shortley sign; only products of equal order m are used.
+    """
+    x = np.asarray(x, float)
+    sine = np.sqrt(np.maximum(0., (1 - x) * (1 + x)))
+    result = np.zeros((order + 1, degree + 1, len(x)))
+    diagonal = np.full(len(x), 1 / math.sqrt(4 * np.pi))
+    for m in range(order + 1):
+        if m:
+            diagonal = math.sqrt((2 * m + 1) / (2 * m)) * sine * diagonal
+        if m > degree:
+            break
+        result[m, m] = diagonal
+        if m + 1 <= degree:
+            result[m, m + 1] = math.sqrt(2 * m + 3) * x * diagonal
+        for ell in range(m + 2, degree + 1):
+            a = math.sqrt((4 * ell * ell - 1) / (ell * ell - m * m))
+            b = math.sqrt((4 * (ell - 1)**2 - 1) / ((ell - 1)**2 - m * m))
+            result[m, ell] = a * (x * result[m, ell - 1] - result[m, ell - 2] / b)
+    return result
+
+
 def _driven_exponential(lam, rate, z):
     """(exp(-rate*z)-exp(-lam*z))/(lam-rate), including equal rates."""
     a, b = lam[:, None, None], rate[None, :, None]
@@ -117,17 +143,35 @@ class SurfacePort:
 
 @dataclass(frozen=True)
 class HalfSpaceSettings:
+    """Angular discretization.
+
+    By default the volume field uses discrete ordinates on a uniform azimuth
+    grid. ``azimuth_harmonics=M`` instead expands the volume field in the
+    azimuthal cosine moments m=0..M about the transverse wavevector. Then
+    ``azimuth_nodes`` is only the uniform readout grid used to interpolate
+    the beam/diffuse cross terms of ``banana()``.
+    """
     polar_nodes: int = 6
     azimuth_nodes: int = 12
     phase_degree: int = 8
     mode_cache_size: int = 8
     plane_parallel: bool = False
+    azimuth_harmonics: int | None = None
 
     def __post_init__(self):
         _integer(self.polar_nodes, "polar_nodes", 2)
         _integer(self.azimuth_nodes, "azimuth_nodes", 1 if self.plane_parallel else 4)
         _integer(self.phase_degree, "phase_degree", 0)
         _integer(self.mode_cache_size, "mode_cache_size", 0)
+        if self.azimuth_harmonics is not None:
+            harmonics = _integer(self.azimuth_harmonics, "azimuth_harmonics", 0)
+            if self.plane_parallel:
+                raise ValueError("plane_parallel and azimuth_harmonics are exclusive")
+            if self.azimuth_nodes % 2 or self.azimuth_nodes < 2 * (harmonics + 1):
+                raise ValueError("azimuth_nodes must be even and at least 2*(azimuth_harmonics+1)")
+            if self.phase_degree >= 2 * self.polar_nodes:
+                raise ValueError("phase_degree must be below 2*polar_nodes")
+            return
         if self.plane_parallel and self.azimuth_nodes != 1:
             raise ValueError("plane_parallel requires azimuth_nodes=1")
         if not self.plane_parallel and self.azimuth_nodes % 2:
@@ -153,6 +197,10 @@ class HalfSpaceSolver:
             positive.extend(low + (x + 1) * (high - low) / 2)
             weight.extend(w * (high - low) / 2)
         mu = np.asarray(positive)
+        self.harmonics = self.settings.azimuth_harmonics
+        if self.harmonics is not None:
+            self._init_harmonics(mu, np.asarray(weight))
+            return
         nphi = self.settings.azimuth_nodes
         phi = 2 * np.pi * (np.arange(nphi) + .5) / nphi
         sine = np.sqrt((1 - mu) * (1 + mu))[:, None]
@@ -174,6 +222,14 @@ class HalfSpaceSolver:
         self.phase_normalization_error = float(np.max(np.abs(phase @ self.weight - 1)))
         if self.phase_normalization_error > 2e-12:
             raise ValueError("angular quadrature does not normalize the configured phase function")
+        self._check_phase_minimum()
+        self.scatter = medium.scattering_per_m * (self.sqrt_weight[:, None] * phase
+                                                  * self.sqrt_weight[None, :])
+        self.reverse_sign = np.ones(len(self.mu))
+        self._cache = OrderedDict()
+
+    def _check_phase_minimum(self):
+        medium = self.medium
         ell = np.arange(self.settings.phase_degree+1)
         polynomial = np.polynomial.legendre.Legendre((2*ell+1)*medium.g**ell/(4*np.pi))
         roots = polynomial.deriv().roots()
@@ -181,9 +237,105 @@ class HalfSpaceSolver:
         self.phase_minimum = float(np.min(polynomial(np.r_[-1., roots, 1.])))
         if medium.scattering_per_m > 0 and self.phase_minimum < -1e-13:
             raise ValueError("the finite HG phase is negative; increase phase_degree and angular quadrature")
-        self.scatter = medium.scattering_per_m * (self.sqrt_weight[:, None] * phase
-                                                  * self.sqrt_weight[None, :])
+
+    def _init_harmonics(self, mu, weight):
+        """Azimuthal cosine-moment basis about the transverse wavevector.
+
+        Unknown (u, m) is sqrt(w_u) times the coefficient of the orthonormal
+        function c_m(phi) = cos(m phi)/sqrt(pi) (c_0 = 1/sqrt(2 pi)), with
+        polar node u (downward nodes first). Scattering is diagonal in m and
+        is given by the Legendre addition theorem; streaming i q.Omega
+        couples m to m+-1. On a uniform grid of 2(M+1) or more azimuths, with
+        phase_degree <= azimuth_nodes/2, the discrete-ordinate equations for
+        a field even about the wavevector are the same equations.
+        """
+        medium, harmonics = self.medium, self.harmonics
+        degree = self.settings.phase_degree
+        polar = np.r_[mu, -mu]
+        self.polar_cosine = polar
+        self.polar_weight = np.r_[weight, weight]
+        self.polar_half = len(mu)
+        count = harmonics + 1
+        self.harmonic = np.tile(np.arange(count), len(polar))
+        self.mu = np.repeat(polar, count)
+        self.half = len(mu) * count
+        self.weight = np.repeat(self.polar_weight, count)
+        self.sqrt_weight = np.sqrt(self.weight)
+        self.direction = None
+        self.reflection = np.repeat(self.boundary.coefficients(mu).reflection, count)
+        self.transmission = np.repeat(self.boundary.coefficients(mu).transmission, count)
+        index = np.arange(self.half)
+        self.reverse = np.concatenate([index + self.half, index])
+        self.reverse_sign = np.where(self.harmonic % 2, -1., 1.)
+        self.integral_weight = np.where(self.harmonic == 0, np.sqrt(2*np.pi*self.weight), 0.)
+        self._legendre_scale = medium.g**np.arange(degree+1)
+        self._node_legendre = _normalized_legendre(polar, degree, harmonics)
+        # Kernel K[m, u, v] = 2 pi sum_l g^l P_l^m(mu_u) P_l^m(mu_v).
+        kernel = 2*np.pi*np.einsum('mlu,l,mlv->muv', self._node_legendre,
+                                   self._legendre_scale, self._node_legendre)
+        self.phase_normalization_error = float(np.max(np.abs(kernel[0] @ self.polar_weight - 1)))
+        if self.phase_normalization_error > 2e-12:
+            raise ValueError("angular quadrature does not normalize the configured phase function")
+        self._check_phase_minimum()
+        root = np.sqrt(self.polar_weight)
+        blocks = medium.scattering_per_m * root[None, :, None] * kernel * root[None, None, :]
+        size = len(self.mu)
+        scatter = np.zeros((len(polar), count, len(polar), count))
+        for m in range(count):
+            scatter[:, m, :, m] = blocks[m]
+        self.scatter = scatter.reshape(size, size)
+        # <c_m|cos(phi)|c_m+1>: 1/sqrt(2) for m=0, 1/2 otherwise.
+        coupling = np.where(np.arange(harmonics) == 0, 1/math.sqrt(2), .5)
+        stream = np.zeros((len(polar), count, count))
+        sine = np.sqrt((1 - polar) * (1 + polar))
+        stream[:, np.arange(harmonics), np.arange(1, count)] = sine[:, None] * coupling
+        stream[:, np.arange(1, count), np.arange(harmonics)] = sine[:, None] * coupling
+        self._stream = np.zeros((size, size))
+        for u in range(len(polar)):
+            block = slice(u*count, (u+1)*count)
+            self._stream[block, block] = stream[u]
         self._cache = OrderedDict()
+
+    @staticmethod
+    def _axis(q):
+        """Canonical line through q: angle in (-pi/2, pi/2] and signed |q|."""
+        if not np.any(q):
+            return 0., 0.
+        angle = math.atan2(q[1], q[0])
+        if angle <= -np.pi/2:
+            angle += np.pi
+        elif angle > np.pi/2:
+            angle -= np.pi
+        return angle, float(q[0]*math.cos(angle) + q[1]*math.sin(angle))
+
+    def _check_even(self, port, angle):
+        """A cosine-moment field needs a port even about the wavevector line."""
+        rays, weights = port.directions_external, port.flux_weights
+        c, s = math.cos(2*angle), math.sin(2*angle)
+        mirror = np.column_stack([c*rays[:, 0] + s*rays[:, 1], s*rays[:, 0] - c*rays[:, 1], rays[:, 2]])
+        distance = np.linalg.norm(mirror[:, None, :] - rays[None, :, :], axis=2)
+        partner = np.argmin(distance, axis=1)
+        if (np.max(distance[np.arange(len(rays)), partner]) > 1e-12
+                or np.max(np.abs(weights[partner] - weights)) > 1e-14):
+            raise ValueError("azimuth_harmonics requires a port mirror-symmetric about the wavevector")
+
+    def basis_phase(self, directions, axis=0.):
+        """Matrix whose product with U is the collision integral in directions.
+
+        Row d is p(Omega_d . Omega_k) sqrt(W_k) for discrete ordinates and
+        K_m(mu_d, mu_u) c_m(phi_d - axis) sqrt(w_u) for cosine moments.
+        """
+        direction = np.asarray(directions, float)
+        if self.harmonics is None:
+            return self.angular_phase(direction, self.direction) * self.sqrt_weight
+        legendre = _normalized_legendre(direction[:, 2], self.settings.phase_degree, self.harmonics)
+        kernel = 2*np.pi*np.einsum('mld,l,mlu->dum', legendre, self._legendre_scale, self._node_legendre)
+        order = np.arange(self.harmonics + 1)
+        azimuth = np.arctan2(direction[:, 1], direction[:, 0]) - axis
+        moment = np.cos(order * azimuth[:, None]) / math.sqrt(np.pi)
+        moment[:, 0] = 1 / math.sqrt(2*np.pi)
+        result = kernel * moment[:, None, :] * np.sqrt(self.polar_weight)[None, :, None]
+        return result.reshape(len(direction), -1)
 
     def phase(self, cosine):
         return _phase(cosine, self.medium.g, self.settings.phase_degree)
@@ -204,23 +356,45 @@ class HalfSpaceSolver:
         right = np.polynomial.legendre.legvander(incoming[:, 2], degree)
         return (left*((2*ell+1)*self.medium.g**ell/(4*np.pi))) @ right.T
 
-    def _modes(self, q, omega):
-        key = (*q, omega)
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            return self._cache[key]
-        diagonal = (self.medium.extinction_per_m - 1j * omega / self.medium.speed_m_per_ns
-                    + 1j * self.direction[:, :2] @ q)
-        operator = np.diag(diagonal) - self.scatter
-        lam, vectors = eig(operator, np.diag(self.mu), check_finite=False)
+    def _order_modes(self, lam, vectors):
         if not np.isfinite(lam).all() or not np.isfinite(vectors).all():
             raise ArithmeticError("half-space eigenmodes are not finite")
         positive = lam.real > 0
         if np.count_nonzero(positive) != self.half:
             raise ArithmeticError("the half-space stable subspace has the wrong dimension")
         order = np.r_[np.flatnonzero(positive), np.flatnonzero(~positive)]
-        lam, vectors = lam[order], vectors[:, order]
-        residual = np.linalg.norm(operator @ vectors - self.mu[:, None] * vectors * lam) / max(1., np.linalg.norm(operator))
+        return lam[order], vectors[:, order]
+
+    def _modes(self, q, omega):
+        key = (*q, omega)
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        base = self.medium.extinction_per_m - 1j * omega / self.medium.speed_m_per_ns
+        if self.harmonics is not None and omega == 0:
+            # A' = D^-1 A D is real for D=diag(i^m). The pencil (A', M) has the
+            # eigenvalues of (A, M); eigenvectors map back by D. M^-1 A' is
+            # solved as a standard real problem.
+            _, along = self._axis(q)
+            diagonal = np.full(len(self.mu), base)
+            operator = (self.medium.extinction_per_m*np.eye(len(self.mu)) - self.scatter
+                        + along*(np.tril(self._stream) - np.triu(self._stream)))
+            lam, vectors = eig(operator / self.mu[:, None], check_finite=False)
+            lam, vectors = self._order_modes(lam, vectors)
+            image = operator @ vectors.real + 1j*(operator @ vectors.imag)
+            residual = np.linalg.norm(image - self.mu[:, None] * vectors * lam) / max(1., np.linalg.norm(operator))
+            vectors = np.array([1., 1j, -1., -1j])[self.harmonic % 4][:, None] * vectors
+        else:
+            if self.harmonics is None:
+                diagonal = base + 1j * self.direction[:, :2] @ q
+                operator = np.diag(diagonal) - self.scatter
+            else:
+                _, along = self._axis(q)
+                diagonal = np.full(len(self.mu), base)
+                operator = np.diag(diagonal) + 1j*along*self._stream - self.scatter
+            lam, vectors = eig(operator, np.diag(self.mu), check_finite=False)
+            lam, vectors = self._order_modes(lam, vectors)
+            residual = np.linalg.norm(operator @ vectors - self.mu[:, None] * vectors * lam) / max(1., np.linalg.norm(operator))
         if not np.isfinite(residual) or residual > 1e-10:
             raise ArithmeticError("half-space eigenmode residual exceeds tolerance")
         stable, unstable = vectors[:, :self.half], vectors[:, self.half:]
@@ -240,6 +414,8 @@ class HalfSpaceSolver:
         source = SurfacePort.pencil() if source is None else source
         if self.settings.plane_parallel and (np.any(q != 0) or not source.axisymmetric):
             raise ValueError("plane_parallel supports q=0 and axisymmetric source ports only")
+        if self.harmonics is not None:
+            self._check_even(source, self._axis(q)[0])
         return HalfSpaceSolution(self, source, q, omega)
 
     def response(self, source, detector, *, q_per_m=(0., 0.), omega_per_ns=0.):
@@ -271,7 +447,7 @@ class HalfSpaceSolver:
         forward = self.solve(source, q_per_m=q, omega_per_ns=omega_per_ns)
         reverse = self.solve(detector, q_per_m=-q, omega_per_ns=omega_per_ns)
         a, b = forward.field(z), reverse.field(z)
-        pairing = np.sum(a * b[:, self.reverse] * self.weight, axis=1)
+        pairing = np.sum(a * b[:, self.reverse] * self.weight * self.reverse_sign, axis=1)
         if len(forward.rays):
             cross = reverse.upward_field(-forward.rays, z)
             pairing += np.sum(forward.beam(z) * cross, axis=1)
@@ -311,7 +487,7 @@ class HalfSpaceSolver:
 
     def banana(self, source, detector, points_m, *, source_xy_m=(0., 0.),
                detector_xy_m=(1., 0.), source_sigma_m, detector_sigma_m,
-               q_max_per_m, q_nodes=48, omega_per_ns=0.):
+               q_max_per_m, q_nodes=48, omega_per_ns=0., by_order=False):
         """Local absorption derivative dD/dmu_a(r), in m^-4 per incident photon.
 
         Both spatial ports have normalized circular Gaussian footprints and
@@ -319,7 +495,9 @@ class HalfSpaceSolver:
         density averaged over its footprint. Integrating K(r)*delta_mu_a(r)
         over volume gives its first-order variation. For axial angular
         ports, azimuthal cosine moments are inverted with Bessel functions.
-        Check transverse cutoff, quadrature and angular resolution.
+        With ``by_order`` the result has columns for detected volume orders
+        (0, 1, >=2): order 1 pairs an uncollided leg with a once-scattered
+        leg. Check transverse cutoff, quadrature and angular resolution.
         """
         if self.settings.plane_parallel:
             raise ValueError("plane_parallel does not provide spatial inversion")
@@ -341,10 +519,16 @@ class HalfSpaceSolver:
         waves, weights = (x+1)*qmax/2, w*qmax/2
         rays_s, _, _ = source.internal_rays(self.boundary)
         rays_d, _, _ = detector.internal_rays(self.boundary)
-        forward = np.zeros((len(point), len(self.mu)), complex)
+        harmonic = self.harmonics is not None
+        if harmonic:
+            volume_degree = np.arange(self.harmonics + 1)
+            forward = np.zeros((len(point), len(self.polar_cosine), len(volume_degree)), complex)
+        else:
+            forward = np.zeros((len(point), len(self.mu)), complex)
         adjoint = np.zeros_like(forward)
-        forward_up = np.zeros((len(point), len(rays_d)), complex)
-        adjoint_up = np.zeros((len(point), len(rays_s)), complex)
+        parts = 2 if by_order else 1
+        forward_up = np.zeros((parts, len(point), len(rays_d)), complex)
+        adjoint_up = np.zeros((parts, len(point), len(rays_s)), complex)
         nphi = self.settings.azimuth_nodes
         phi = 2*np.pi*(np.arange(nphi)+.5)/nphi
         degree = np.arange(nphi//2)
@@ -365,16 +549,24 @@ class HalfSpaceSolver:
             radius = np.linalg.norm(displacement, axis=1)
             azimuth = np.arctan2(displacement[:, 1], displacement[:, 0])
             radial = jv(degree[None, :], q*radius[:, None])*(1j**degree)
-            regular = solution.field(z).reshape(len(z), -1, nphi)
-            coefficient = np.einsum('zup,mp->zum', regular, basis)[inverse]
-            angular = np.cos((phi[None, :, None]-azimuth[:, None, None])*degree)
-            field = np.einsum('pum,pvm,pm->puv', coefficient, angular, radial).reshape(len(point), -1)
+            if harmonic:
+                # Jacobi-Anger: moment m inverts with i^m J_m(q rho) about azimuth.
+                coefficient = solution.field(z).reshape(len(z), -1, len(volume_degree))[inverse]
+                field = coefficient * (jv(volume_degree[None, :], q*radius[:, None])
+                                       * (1j**volume_degree))[:, None, :]
+            else:
+                regular = solution.field(z).reshape(len(z), -1, nphi)
+                coefficient = np.einsum('zup,mp->zum', regular, basis)[inverse]
+                angular = np.cos((phi[None, :, None]-azimuth[:, None, None])*degree)
+                field = np.einsum('pum,pvm,pm->puv', coefficient, angular, radial).reshape(len(point), -1)
             grid, pick, target_phi = cross
-            regular_up = solution.upward_field(grid, z).reshape(len(z), -1, nphi)
-            coefficient_up = np.einsum('zup,mp->zum', regular_up, basis)[inverse][:, pick]
             angular_up = np.cos((target_phi[None, :, None]-azimuth[:, None, None])*degree)
-            upward = np.sum(coefficient_up*angular_up*radial[:, None, :], axis=2)
-            return field, upward
+            upward = []
+            for values in solution._upward_parts(grid, z)[2-parts:]:
+                regular_up = values.reshape(len(z), -1, nphi)
+                coefficient_up = np.einsum('zup,mp->zum', regular_up, basis)[inverse][:, pick]
+                upward.append(np.sum(coefficient_up*angular_up*radial[:, None, :], axis=2))
+            return field, np.array(upward)
 
         for q, weight in zip(waves, weights):
             a = self.solve(source, q_per_m=(q, 0.), omega_per_ns=omega_per_ns)
@@ -388,17 +580,37 @@ class HalfSpaceSolver:
             adjoint += factor_d*bf
             adjoint_up += factor_d*bu
 
-        def ballistic(port, xy, sigma):
-            a = self.solve(port, omega_per_ns=omega_per_ns)
-            displacement = (point[:, None, :2] - xy
-                            - point[:, None, 2:] * a.rays[None, :, :2] / a.rays[None, :, 2:])
-            gaussian = np.exp(-np.sum(displacement**2, axis=2)/(2*sigma*sigma)) / (2*np.pi*sigma*sigma)
-            return a.beam(point[:, 2]) * gaussian
+        base = self.medium.extinction_per_m - 1j*omega_per_ns/self.medium.speed_m_per_ns
 
-        pairing = np.sum(forward * adjoint[:, self.reverse] * self.weight, axis=1)
-        pairing += np.sum(ballistic(source, xy_s, sigmas[0]) * adjoint_up, axis=1)
-        pairing += np.sum(ballistic(detector, xy_d, sigmas[1]) * forward_up, axis=1)
-        return -detector.collection_factor / self.boundary.n**2 * pairing
+        def ballistic(port, xy, sigma):
+            # Uncollided interior beam; no angular modes are needed.
+            rays, flux, transmission = port.internal_rays(self.boundary)
+            amplitude = flux * transmission / rays[:, 2]
+            displacement = (point[:, None, :2] - xy
+                            - point[:, None, 2:] * rays[None, :, :2] / rays[None, :, 2:])
+            gaussian = np.exp(-np.sum(displacement**2, axis=2)/(2*sigma*sigma)) / (2*np.pi*sigma*sigma)
+            return np.exp(-point[:, 2, None] * (base / rays[:, 2])) * amplitude * gaussian
+
+        if harmonic:
+            ds, dd = point[:, :2]-xy_s, point[:, :2]-xy_d
+            difference = np.arctan2(ds[:, 1], ds[:, 0]) - np.arctan2(dd[:, 1], dd[:, 0])
+            # Integral over azimuth of c_m(phi-a_s) c_m(phi+pi-a_d).
+            angle = np.cos(volume_degree*difference[:, None]) * np.where(volume_degree % 2, -1., 1.)
+            reverse = np.roll(np.arange(len(self.polar_cosine)), -self.polar_half)
+            diffuse = np.einsum('pum,pum,u,pm->p', forward, adjoint[:, reverse], self.polar_weight, angle)
+        else:
+            diffuse = np.sum(forward * adjoint[:, self.reverse] * self.weight, axis=1)
+        beam_s = ballistic(source, xy_s, sigmas[0])
+        beam_d = ballistic(detector, xy_d, sigmas[1])
+        scale = -detector.collection_factor / self.boundary.n**2
+        if not by_order:
+            pairing = diffuse + np.sum(beam_s * adjoint_up[0], axis=1)
+            pairing += np.sum(beam_d * forward_up[0], axis=1)
+            return scale * pairing
+        # One volume collision: an uncollided leg times a once-scattered leg.
+        first = np.sum(beam_s * adjoint_up[0], axis=1) + np.sum(beam_d * forward_up[0], axis=1)
+        total = diffuse + np.sum(beam_s * adjoint_up[1], axis=1) + np.sum(beam_d * forward_up[1], axis=1)
+        return scale * np.column_stack([np.zeros_like(first), first, total - first])
 
 
 class HalfSpaceSolution:
@@ -413,8 +625,13 @@ class HalfSpaceSolution:
         self.rate = (self.base + 1j * self.rays[:, :2] @ q) / self.rays[:, 2]
         (self.diagonal, self.lam, self.stable, self.unstable, vector_lu,
          boundary_lu, self.eigen_residual) = solver._modes(q, omega)
-        self.forcing = (solver.medium.scattering_per_m * solver.sqrt_weight[:, None]
-                        * solver.angular_phase(solver.direction, self.rays) * self.amplitude)
+        self.axis = solver._axis(q)[0]
+        if solver.harmonics is None:
+            self.forcing = (solver.medium.scattering_per_m * solver.sqrt_weight[:, None]
+                            * solver.angular_phase(solver.direction, self.rays) * self.amplitude)
+        else:
+            self.forcing = (solver.medium.scattering_per_m
+                            * solver.basis_phase(self.rays, self.axis).T * self.amplitude)
         g = lu_solve(vector_lu, self.forcing / solver.mu[:, None])
         self.gs, self.gu = g[:solver.half], g[solver.half:]
         self.part_u = self.gu / (self.lam[solver.half:, None] - self.rate)
@@ -440,6 +657,8 @@ class HalfSpaceSolution:
 
         The uncollided angular delta beams are returned separately by beam().
         In plane_parallel mode this is the azimuthal mean at each cosine.
+        With azimuth_harmonics these are the cosine-moment coefficients:
+        radiance(mu_u, phi) = sum_m field[:, (u, m)] c_m(phi - axis).
         """
         z = _depths(depths_m)
         stable, unstable = self._coordinates(z)
@@ -448,6 +667,8 @@ class HalfSpaceSolution:
 
     def first_field(self, depths_m):
         """One volume collision, including subsequent specular reflection."""
+        if self.solver.harmonics is not None and np.any(self.q != 0):
+            raise ValueError("first_field with azimuth_harmonics requires q=0")
         z = _depths(depths_m)
         s, h = self.solver, self.solver.half
         up = np.zeros((h, len(z)), complex)
@@ -464,6 +685,11 @@ class HalfSpaceSolution:
 
         Evaluated from the collision integral, without angular interpolation.
         """
+        first, total = self._upward_parts(directions, depths_m, first_only=first_only)
+        return first if first_only else total
+
+    def _upward_parts(self, directions, depths_m, *, first_only=False):
+        """(once-scattered, all scattered) upward radiance, shape (depth, direction)."""
         direction = np.asarray(directions, float)
         if (direction.ndim != 2 or direction.shape[1] != 3
                 or not np.isfinite(direction).all() or np.any(direction[:, 2] >= 0)
@@ -479,20 +705,16 @@ class HalfSpaceSolution:
         first = s.medium.scattering_per_m * (
             (beam_phase * self.amplitude / (attenuation[:, None] + mu[:, None] * self.rate)) @ exponent).T
         if first_only:
-            return first
+            return first, None
+        # Laplace transforms of the modal coordinates along each upward ray,
+        # contracted with the collision kernel before the depth sum.
         stable_coord, _ = self._coordinates(z)
-        phase = s.angular_phase(direction, s.direction)*s.sqrt_weight
-        ps = phase @ self.stable
+        phase = s.basis_phase(direction, self.axis)
+        ps = (phase @ self.stable) / (b[:, None] + self.lam[None, :h])
         pu = phase @ self.unstable
-        result = first.copy()
-        for j in range(len(direction)):
-            stable_laplace = stable_coord / (b[j] + self.lam[:h, None])
-            stable_laplace += ((self.gs / (b[j] + self.rate)) @ exponent
-                               / (b[j] + self.lam[:h, None]))
-            unstable_laplace = (self.part_u / (b[j] + self.rate)) @ exponent
-            result[:, j] += s.medium.scattering_per_m / mu[j] * (
-                ps[j] @ stable_laplace + pu[j] @ unstable_laplace)
-        return result
+        rates = (ps @ self.gs + pu @ self.part_u) / (b[:, None] + self.rate[None, :])
+        laplace = ps @ stable_coord + rates @ exponent
+        return first, first + (s.medium.scattering_per_m / mu[:, None] * laplace).T
 
     def response(self, detector):
         """Exterior collected flux spectrum in volume orders (0,1,>=2).
@@ -507,8 +729,7 @@ class HalfSpaceSolution:
         if not len(rays):
             return output
         factor = detector.collection_factor * weight * transmission / self.solver.boundary.n**2
-        total = self.upward_field(-rays, [0.])[0]
-        first = self.upward_field(-rays, [0.], first_only=True)[0]
+        first, total = (value[0] for value in self._upward_parts(-rays, [0.]))
         output[1] = factor @ first
         output[2] = factor @ (total - first)
         return output
@@ -521,10 +742,15 @@ class HalfSpaceSolution:
         integral_s = self.c / self.lam[:h] + np.sum(self.gs / self.rate / self.lam[:h, None], axis=1)
         integral_u = np.sum(self.part_u / self.rate, axis=1)
         integral = self.stable @ integral_s + self.unstable @ integral_u
-        fluence = np.sum(self.amplitude / self.rate) + s.sqrt_weight @ integral
+        if s.harmonics is None:
+            fluence = np.sum(self.amplitude / self.rate) + s.sqrt_weight @ integral
+            outgoing = self.surface_weighted[h:] / s.sqrt_weight[h:]
+            escaped = np.sum(s.weight[h:] * (-s.mu[h:]) * s.transmission * outgoing)
+        else:
+            fluence = np.sum(self.amplitude / self.rate) + s.integral_weight @ integral
+            escaped = np.sum(s.integral_weight[h:] * (-s.mu[h:]) * s.transmission
+                             * self.surface_weighted[h:])
         absorbed = s.medium.absorption_per_m * fluence
-        outgoing = self.surface_weighted[h:] / s.sqrt_weight[h:]
-        escaped = np.sum(s.weight[h:] * (-s.mu[h:]) * s.transmission * outgoing)
         return {"specular": self.specular_fraction, "entered": self.entered_fraction,
                 "absorbed": float(absorbed.real), "escaped": float(escaped.real),
                 "residual": float((absorbed + escaped).real - self.entered_fraction)}

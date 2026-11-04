@@ -209,3 +209,130 @@ def test_plane_parallel_rejects_spatial_or_nonaxial_queries():
         k.response(s, tilted)
     with pytest.raises(ValueError, match="spatial inversion"):
         k.radial_response(s, s, [1.], q_max_per_m=3.)
+
+
+def harmonic_pair(n, polar=4, azimuth=12, degree=6, medium=None):
+    """Dense ordinates and the cosine-moment basis with no harmonic truncation."""
+    medium = Medium(.2, 1., .3, 1.4) if medium is None else medium
+    dense = solver(n, medium=medium, settings=HalfSpaceSettings(polar, azimuth, degree))
+    moments = solver(n, medium=medium, settings=HalfSpaceSettings(
+        polar, azimuth, degree, azimuth_harmonics=azimuth//2-1))
+    return dense, moments
+
+
+def test_normalized_associated_legendre_matches_reference_functions():
+    from math import factorial
+    from scipy.special import lpmv
+    from lighthit.experimental.halfspace import _normalized_legendre
+    x = np.linspace(-1., 1., 9)
+    table = _normalized_legendre(x, 9, 4)
+    for m in range(5):
+        for ell in range(10):
+            if ell < m:
+                assert not table[m, ell].any()
+                continue
+            scale = np.sqrt((2*ell+1)/(4*np.pi)*factorial(ell-m)/factorial(ell+m))
+            np.testing.assert_allclose(abs(table[m, ell]), abs(scale*lpmv(m, ell, x)), atol=2e-15)
+
+
+@pytest.mark.parametrize("n", [1., 1.4])
+@pytest.mark.parametrize("q,omega", [((0., 0.), 0.), ((.8, 0.), 0.), ((-2., 0.), .1)])
+def test_cosine_moments_equal_even_discrete_ordinates(n, q, omega):
+    # phase_degree <= azimuth_nodes/2: the uniform azimuth grid has no aliasing,
+    # and its even subspace is exactly spanned by the retained moments.
+    dense, moments = harmonic_pair(n, 6, 16, 8)
+    assert n == 1. or len(moments.mu) > 128
+    s = SurfacePort.pencil([np.sin(.3), 0., np.cos(.3)])
+    d = SurfacePort.aperture(.7, polar_nodes=3, azimuth_nodes=8)
+    for source in (s, d):
+        a = moments.solve(source, q_per_m=q, omega_per_ns=omega)
+        assert a.eigen_residual < 1e-11
+        np.testing.assert_allclose(a.response(d), dense.response(source, d, q_per_m=q, omega_per_ns=omega),
+                                   rtol=2e-12, atol=3e-15)
+
+
+def test_cosine_moment_banana_equals_discrete_ordinates_with_orders():
+    dense, moments = harmonic_pair(1.4)
+    s, d = SurfacePort.pencil(), SurfacePort.aperture(.7, polar_nodes=2, azimuth_nodes=4)
+    point = np.array([[.2, 0., .3], [.5, .1, .7], [.8, -.2, .3], [0., 0., .5]])
+    keywords = dict(detector_xy_m=(1., 0.), source_sigma_m=.4, detector_sigma_m=.5, q_max_per_m=6., q_nodes=8)
+    expected = dense.banana(s, d, point, **keywords)
+    np.testing.assert_allclose(moments.banana(s, d, point, **keywords), expected, rtol=1e-11, atol=1e-15)
+    for k in (dense, moments):
+        orders = k.banana(s, d, point, by_order=True, **keywords)
+        assert orders.shape == (len(point), 3) and not orders[:, 0].any()
+        np.testing.assert_allclose(orders.sum(axis=1), expected, rtol=1e-11, atol=1e-15)
+    reverse = moments.banana(d, s, point, source_xy_m=(1., 0.), detector_xy_m=(0., 0.),
+                             source_sigma_m=.5, detector_sigma_m=.4, q_max_per_m=6., q_nodes=8, by_order=True)
+    np.testing.assert_allclose(moments.banana(s, d, point, by_order=True, **keywords)/d.collection_factor,
+                               reverse/s.collection_factor, atol=2e-12)
+
+
+def test_first_order_banana_matches_once_scattered_absorption_derivative():
+    # Only order-1 paths survive mu_s -> 0 at first order in mu_s.
+    medium = Medium(.2, 1e-8, .3, 1.4)
+    k = solver(1., medium=medium, settings=HalfSpaceSettings(4, 12, 6, azimuth_harmonics=5))
+    s, d = SurfacePort.pencil(), SurfacePort.aperture(.7, polar_nodes=3, azimuth_nodes=8)
+    x, w = roots_legendre(40)
+    z, weight = (x+1)*20, w*20
+    derivative = weight @ k.depth_sensitivity(s, d, z)
+    epsilon = 1e-5
+    plus = solver(1., medium=replace(medium, absorption_per_m=.2+epsilon), settings=k.settings)
+    minus = solver(1., medium=replace(medium, absorption_per_m=.2-epsilon), settings=k.settings)
+    finite = (plus.response(s, d)[1]-minus.response(s, d)[1])/(2*epsilon)
+    assert derivative == pytest.approx(finite, rel=1e-6)
+    point = np.array([[.3, 0., .4], [.9, .2, .8]])
+    orders = k.banana(s, d, point, detector_xy_m=(1., 0.), source_sigma_m=.4, detector_sigma_m=.4,
+                      q_max_per_m=6., q_nodes=8, by_order=True)
+    assert np.all(abs(orders[:, 2]) < 1e-6*abs(orders[:, 1]))
+
+
+@pytest.mark.parametrize("n", [1., 1.4])
+def test_cosine_moment_balance_and_azimuthal_mean_limit(n):
+    k = solver(n, settings=HalfSpaceSettings(4, 4, 6, azimuth_harmonics=0))
+    axial = solver(n, settings=HalfSpaceSettings(4, 1, 6, plane_parallel=True))
+    s, d = SurfacePort.pencil(), SurfacePort.aperture(.7, polar_nodes=4, azimuth_nodes=8)
+    a = k.solve(s)
+    assert abs(a.photon_balance()["residual"]) < 2e-12
+    np.testing.assert_allclose(a.response(d), axial.response(s, d), atol=3e-14)
+    # Moment coefficients use c_0 = 1/sqrt(2 pi); the axial field is the azimuthal mean.
+    np.testing.assert_allclose(a.first_field([0., .4]), np.sqrt(2*np.pi)*axial.solve(s).first_field([0., .4]),
+                               atol=3e-14)
+    np.testing.assert_allclose(a.field([0., .4]), np.sqrt(2*np.pi)*axial.solve(s).field([0., .4]), atol=3e-14)
+
+
+@pytest.mark.parametrize("q,omega", [((.8, .3), .1), ((0., .5), 0.)])
+def test_cosine_moment_adjoint_pairing_and_rotated_wavevector(q, omega):
+    k = solver(1.4, settings=HalfSpaceSettings(4, 12, 6, azimuth_harmonics=5))
+    s = SurfacePort.pencil()
+    x, w = roots_legendre(120)
+    z, weight = (x+1)*30, w*30
+    derivative = weight @ k.depth_sensitivity(s, s, z, q_per_m=q, omega_per_ns=omega)
+    epsilon = 1e-5
+    plus = solver(1.4, medium=replace(k.medium, absorption_per_m=.2+epsilon), settings=k.settings)
+    minus = solver(1.4, medium=replace(k.medium, absorption_per_m=.2-epsilon), settings=k.settings)
+    finite = (plus.response(s, s, q_per_m=q, omega_per_ns=omega).sum()
+              - minus.response(s, s, q_per_m=q, omega_per_ns=omega).sum())/(2*epsilon)
+    assert derivative == pytest.approx(finite, rel=2e-7, abs=1e-9)
+    magnitude = float(np.hypot(*q))
+    np.testing.assert_allclose(k.response(s, s, q_per_m=q, omega_per_ns=omega),
+                               k.response(s, s, q_per_m=(magnitude, 0.), omega_per_ns=omega), atol=3e-14)
+
+
+def test_cosine_moments_reject_ports_without_mirror_symmetry_and_bad_settings():
+    k = solver(settings=HalfSpaceSettings(4, 8, 6, azimuth_harmonics=3))
+    skew = SurfacePort.pencil([0., np.sin(.3), np.cos(.3)])
+    k.solve(skew, q_per_m=(0., 1.))
+    for q in ((1., 0.), (0., 0.)):  # the moment axis is x at q=0
+        with pytest.raises(ValueError, match="mirror-symmetric"):
+            k.solve(skew, q_per_m=q)
+    with pytest.raises(ValueError, match="q=0"):
+        k.solve(q_per_m=(1., 0.)).first_field([0.])
+    for bad in (dict(azimuth_harmonics=4), dict(azimuth_harmonics=-1), dict(azimuth_harmonics=3, plane_parallel=True)):
+        with pytest.raises(ValueError):
+            HalfSpaceSettings(4, 8, 6, **bad)
+    with pytest.raises(ValueError, match="2\\*polar_nodes"):
+        HalfSpaceSettings(4, 32, 8, azimuth_harmonics=3)
+    # High anisotropy no longer needs an azimuth grid finer than the phase degree.
+    assert len(solver(1.35, medium=Medium(10., 25000., .9, 1.35),
+                      settings=HalfSpaceSettings(40, 8, 78, azimuth_harmonics=3)).mu) == 2*80*4

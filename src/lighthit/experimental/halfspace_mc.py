@@ -228,8 +228,12 @@ class HalfSpaceSamples:
                 "escaped": escaped, "residual": absorbed+escaped-entered}
 
     def cell_absorption_sensitivity(self, *, detector_xy_m=(1., 0.), detector_sigma_m,
-                                    half_angle_rad=np.pi / 2):
-        """Independent path-length derivative averaged over each supplied cell."""
+                                    half_angle_rad=np.pi / 2, by_order=False):
+        """Independent path-length derivative averaged over each supplied cell.
+
+        With ``by_order`` the estimate has shape (cell, order) for detected
+        volume orders (0, 1, >=2).
+        """
         xy = np.asarray(detector_xy_m, float)
         sigma = float(detector_sigma_m)
         if xy.shape != (2,) or not np.isfinite(xy).all() or not math.isfinite(sigma) or sigma <= 0:
@@ -237,7 +241,11 @@ class HalfSpaceSamples:
         gaussian = np.exp(-((self.x_m-xy[0])**2+(self.y_m-xy[1])**2)/(2*sigma*sigma))/(2*np.pi*sigma*sigma)
         weight = self._weights(half_angle_rad) * gaussian
         volume = np.prod(self.cells_m[:, 1]-self.cells_m[:, 0], axis=1)
-        return self._estimate((-self.cell_path_m * weight[:, None] / volume).T)
+        value = (-self.cell_path_m * weight[:, None] / volume).T
+        if not by_order:
+            return self._estimate(value)
+        masks = np.stack([self.order == order for order in range(3)])
+        return self._estimate(value[:, None, :] * masks[None, :, :])
 
 
 def sample_halfspace(medium, boundary, source, *, photons=200000, seed=20261103,

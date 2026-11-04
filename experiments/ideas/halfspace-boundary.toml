@@ -4,20 +4,21 @@ area = "core"
 question = "Can one planar boundary contract support n=1 validation and n=1.4 tissue-air transport with a normal pencil beam, exterior aperture and reciprocal ports?"
 kind = "reference"
 status = "tool"
-verdict = "Synthetic n=1/1.4 validation passes: spectral MC discrepancy <=2.93 standard errors, refined spectral grid change <=0.034% of DC, reciprocal ports agree to 2e-15 relative; local absorption cells agree with independent path lengths within 1.29 standard errors, with 1.42% angular refinement change. No experimental comparison."
+verdict = "Synthetic n=1/1.4 validation passes: spectral MC discrepancy <=2.93 standard errors, refined spectral grid change <=0.034% of DC, reciprocal ports agree to 2e-15 relative; local absorption cells agree with independent path lengths within 1.29 standard errors, with 1.42% angular refinement change. At q != 0 and g=0.9/0.91/0.95 the azimuthal cosine-moment field agrees with independent full-HG histories per collision order within 2.62 standard errors. No experimental comparison."
 cases = []
-how-to-run = "python experiments/reproduce_halfspace.py --output-directory RESULTS; python -m pytest -q tests/test_halfspace*.py"
+how-to-run = "python experiments/reproduce_halfspace.py --output-directory RESULTS [--high-g --workers 3]; python -m pytest -q tests/test_halfspace*.py"
 inputs = ["synthetic mu_a=0.2/m, mu_s=1/m, g=0.3, n_group=1.4, n=1/1.4; no experimental data", "experiments/fixtures/halfspace-materials.json: explicit model parameters, sources and absorption scans"]
 notes = [
   "n is the phase-index ratio inside/outside; group velocity remains a separate medium input.",
   "The source is a true normal pencil beam. The experimental receiver collects escaped flux with Fresnel transmission and an exterior aperture.",
   "Physical and reduced radiance, invariant port measure and the angular forward-adjoint absorption pairing are specified in docs/halfspace.md.",
   "Generalized angular eigenmodes enforce the condition at infinite depth; no far depth wall or depth mesh is introduced.",
-  "76 tests cover boundary optics, exact first-collision limits, time-bin limits, photon balance, reciprocal ports, adjoint finite differences, complete Monte Carlo paths, exact q=0 azimuthal reduction and a Gaussian omitted-band bound.",
+  "91 tests cover boundary optics, exact first-collision limits, time-bin limits, photon balance, reciprocal ports, adjoint finite differences, complete Monte Carlo paths, exact q=0 azimuthal reduction, the cosine-moment subspace against the dense discrete-ordinates field (rtol 2e-12) and a Gaussian omitted-band bound.",
   "Independent validation uses one million point-beam and two million Gaussian-beam histories per boundary. Seeded reports record uncertainties and source hashes.",
-  "The phase is a finite HG expansion with normalization and positivity checks. The q=0 axial projection is validated at g=0.9/0.91; seven material/absorption cases agree with independent full-HG histories within 1.84 standard errors. High-g spatial cost, arbitrary time-profile accuracy and experimental agreement remain open.",
+  "The phase is a finite HG expansion with normalization and positivity checks. The q=0 axial projection is validated at g=0.9/0.91; seven material/absorption cases agree with independent full-HG histories within 1.84 standard errors. Arbitrary time-profile accuracy and experimental agreement remain open.",
   "Roundoff photon balance is not an angular-error bound: a separate polar audit at synthetic g=0.3,n=1.4 reduces the internal-balance/receiver flux difference from 0.083% at 8 polar nodes per interval to 3.34e-8 absolute at 128 nodes and L=18; receiver-only refinement does not remove the bulk error.",
   "The executable time-profile example saves/reuses spectra. For illustrative milk at sigma=100 ps, 301 frequencies/192 ordinates take 27.50 s; 601/256 take 144.19 s. Default-to-refined L1 change is 2.53e-6 over [-0.5,10] ns; 300000-history resolved time bins agree within 2.24 standard errors. Absorption and group index remain specified model assumptions.",
+  "Ports mirror-symmetric about q use azimuthal cosine moments: the kernel is block-diagonal in m and streaming couples m to m+-1; this is the even subspace of the same discrete-ordinates equation, not an approximation. At omega=0 the rescaled operator is real and is solved by a real eigensolver. On the same g=0.3 grid one thread takes 1.23 s instead of 126.6 s for dense QZ (largest relative difference 6e-15). For milk (g=0.9, P97/L192/M8, N=3492) a 48-node banana by order takes 485 s on one thread; dense discrete ordinates at that L would need N of about 75000. High-g validation (2e7 spectral and 1e8 Gaussian-beam histories) passes for milk, dermis and a synthetic g=0.95 case; deep order-1 cells have too few MC events to compare. The time domain (omega != 0) at high g keeps complex QZ and is not validated.",
   "The reproduction entry point runs tests, all numerical checks and figure generation in a caller-selected empty directory. It records source hashes and runtime versions and requires no previous results or private bundle.",
 ]
 
@@ -25,5 +26,5 @@ notes = [
 modules = ["lighthit.experimental.halfspace", "lighthit.experimental.halfspace_boundary", "lighthit.experimental.halfspace_mc"]
 functions = []
 options = []
-scripts = ["experiments/validate_halfspace.py", "experiments/validate_halfspace_materials.py", "experiments/halfspace_time_profile.py", "experiments/validate_halfspace_time.py", "experiments/audit_halfspace_quadrature.py", "experiments/plot_halfspace_report.py", "experiments/reproduce_halfspace.py"]
+scripts = ["experiments/validate_halfspace.py", "experiments/validate_halfspace_materials.py", "experiments/halfspace_time_profile.py", "experiments/validate_halfspace_time.py", "experiments/audit_halfspace_quadrature.py", "experiments/validate_halfspace_highg.py", "experiments/plot_halfspace_report.py", "experiments/reproduce_halfspace.py"]
 tests = ["tests/test_halfspace.py", "tests/test_halfspace_boundary.py", "tests/test_halfspace_mc.py", "tests/test_halfspace_time_example.py"]

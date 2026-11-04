@@ -28,11 +28,14 @@ python experiments/reproduce_halfspace.py --output-directory RESULTS
 
 Run these commands at the repository root. `RESULTS` denotes a new, empty
 local results directory selected by the caller. The last command runs the
-76 tests, synthetic spatial/adjoint checks, seven material cases, polar
+91 tests, synthetic spatial/adjoint checks, seven material cases, polar
 quadrature audit, coarse/fine time spectra, independent time-domain MC and
 all report plots. It takes several minutes on a desktop machine. It uses
 only this checkout and its installed dependencies; no private optical
 bundle, Geant4 installation, previous cache or network connection is needed.
+`--high-g --workers N` adds the spatial g>=0.9 validation at q != 0
+(`high-g/validation.json`): about eight hours of single-threaded jobs
+divided over N processes (under three hours with N=3).
 
 The inputs for the material cases are committed in
 `experiments/fixtures/halfspace-materials.json`. The fixture records which
@@ -63,7 +66,8 @@ report/                          four scientific report figures, PNG/SVG
 ```
 
 Individual entry points are `validate_halfspace.py`,
-`validate_halfspace_materials.py`, `audit_halfspace_quadrature.py`,
+`validate_halfspace_materials.py`, `validate_halfspace_highg.py`,
+`audit_halfspace_quadrature.py`,
 `halfspace_time_profile.py`, `validate_halfspace_time.py` and
 `plot_halfspace_report.py`, all under `experiments/`. Each accepts `--help`.
 The figure generator reads the numerical reports and arrays, so figures can
@@ -297,6 +301,71 @@ receiver must be axial, and q must be zero. Spatial inversion and `banana()`
 are explicitly rejected in this mode. `field()` then returns the azimuthal
 mean rather than a full azimuthal field.
 
+### Spatial high-anisotropy calculation: azimuthal cosine moments
+
+At q != 0 the dense ordinate grid must resolve the phase expansion in
+azimuth as well, `azimuth_nodes > phase_degree`. A positive finite HG
+expansion needs L >= 66 at g=0.9 and L >= 76 at g=0.91; with Fresnel cuts
+this gives at least 2*(2*34)*68 = 9248 dense unknowns at g=0.9, and the
+dense generalized eigenproblem is then hours per transverse wavevector.
+
+For ports that are mirror-symmetric about the line of q (axial pencils,
+apertures, tilted pencils in that plane) the field is even in the azimuth
+`phi` measured from q. `HalfSpaceSettings(..., azimuth_harmonics=M)`
+expands it in orthonormal cosine moments
+
+$$
+I(\mu_u,\phi)=\sum_{m=0}^{M}a_{um}c_m(\phi),\qquad
+c_0=\frac{1}{\sqrt{2\pi}},\quad c_m=\frac{\cos m\phi}{\sqrt\pi},
+$$
+
+with unknowns `U_um = sqrt(w_u) a_um` on the same split Gauss polar nodes.
+By the Legendre addition theorem the collision operator is diagonal in m,
+
+$$
+K_m(\mu,\mu')=2\pi\sum_{l=m}^{L}g^l\,\bar P_l^m(\mu)\bar P_l^m(\mu'),
+$$
+
+where `bar P` are spherical-harmonic normalized associated Legendre
+functions. All L terms are kept in every retained moment. Streaming
+`i q.Omega = i q sin(theta) cos(phi)` couples m to m+-1 with coefficients
+1/2 (1/sqrt(2) between m=0 and 1). The m=0 block carries the whole phase
+normalization, which is checked as before.
+
+This is the same transport equation in another angular basis, not an
+approximation of it. On a uniform azimuth grid with `phase_degree <=
+azimuth_nodes/2` the even dense discrete-ordinate equations are exactly
+these equations with `M = azimuth_nodes/2-1`. Responses, adjoint pairings and
+bananas then agree with the dense solver to roundoff (observed relative
+differences are below 2e-14; the tests require 1e-11). Truncating
+M is a separate angular resolution with its own convergence check. The
+first collision, arbitrary-direction readout and beam cross terms remain the
+exact analytic expressions; only the scattered volume field is expanded.
+
+At omega=0, `D^-1 A D` with `D = diag(i^m)` is real. The eigenpairs are
+then computed from the standard real problem `M^-1 D^-1 A D`; complex
+problems keep the generalized QZ solver. Both are checked by the same
+eigen-equation residual. The complex standard Hessenberg eigensolver in
+some platform LAPACK builds returns inaccurate eigenvectors above about 128
+unknowns; the residual guard rejects such output. Mode coordinates are read
+out along arbitrary upward rays by contracting the collision kernel with
+the modal Laplace transforms before the depth sum.
+
+`banana()` inverts each moment with `i^m J_m(q rho)` about the azimuth of the
+point seen from its port, and evaluates the angular pairing analytically:
+`integral c_m(phi-a_s) c_m(phi+pi-a_d) dphi = (-1)^m cos m(a_s-a_d)`. Beam
+cross terms are still interpolated from `azimuth_nodes` readout azimuths.
+With `by_order=True` it returns columns for detected volume orders
+(0, 1, >=2): order 1 pairs an uncollided leg with a once-scattered leg; the
+paired scattered fields give >=2. The full-HG reference provides the same
+split from its recorded collision counts.
+
+The once-scattered terms use the configured finite expansion, like all
+orders. Near backscatter it converges slowly: for the 0.7 rad receiver and
+a normal pencil, order 1 differs from its full-HG value by 6e-5 (milk) and
+6e-4 (dermis) at L=128, and by 3e-8 and 4.5e-7 at L=192. A g=0.95 case
+needs L≈320 for 4e-5. The >=2 response converges much faster in L.
+
 `experiments/validate_halfspace_materials.py` accepts a JSON profile file
 with coefficients in cm⁻¹, converts them to m⁻¹ and compares this calculation
 with full-HG histories. Missing absorption requires an explicitly labelled
@@ -457,6 +526,40 @@ estimator, including reflected flight segments. Selected source/detector
 swaps, exact first-collision limits, photon balance and absorption finite
 differences are also checked. Unit tests compare once-scattered time bins
 with the exact Gaussian-smoothed exponential for isotropic scattering.
+
+The high-anisotropy spatial calculation is checked separately by
+`python experiments/validate_halfspace_highg.py --output highg.json`:
+
+```python
+kernel = HalfSpaceSolver(medium, HalfSpaceBoundary(n=1.35),
+                        HalfSpaceSettings(97, 32, 192, azimuth_harmonics=8))
+orders = kernel.banana(source, receiver, points_m, detector_xy_m=(l_star, 0.),
+                       source_sigma_m=0.4*l_star, detector_sigma_m=0.4*l_star,
+                       q_max_per_m=12/l_star, q_nodes=48, by_order=True)
+```
+
+It uses three media with n=1.35 or 1.4 against air: the largest value of the
+illustrative milk absorption scan (g=0.9), the pure-HG dermis midpoint
+(g=0.91) and a synthetic g=0.95 medium with the same reduced scattering
+as the dermis case, which is not a material. Lengths are in units of
+l* = 1/(mu_s(1-g)+mu_a). The normal pencil and the 0.7 rad aperture
+(8x16 exterior nodes) are separated by 1 l*, with Gaussian footprints of
+0.4 l*. The calculation is compared with 2x10^7 point-beam histories
+(q l* = 0, 0.5, 2, 5) and 10^8 Gaussian-beam histories (radial flux at
+0-2 l* and three absorption cells), all with full-HG scattering. Each
+detected volume order (0, 1, >=2) is compared on its own.
+In one run all largest pulls per order were below 2.7. For g=0.9 and 0.91:
+- refining the polar grid (P/L 97/192 to 128/254) changed the bananas by
+  at most 4.1e-7;
+- going from 8 to 12 cosine moments changed them by at most 5.9e-7;
+- doubling the beam readout azimuths changed them by at most 2.4e-16;
+- the q integration (48 to 64 nodes, q_max 12/l* to 14/l*) changed them by
+  at most 3.1e-6.
+At g=0.95 the polar refinement 161/320 to 200/398 moves order 1 by 4.2e-5,
+which is its L truncation, and moves >=2 by 3.5e-8. Order 1 in the cell at
+depth 0.5-0.8 l* gets almost no histories, and at g=0.95 none of the
+order-1 cells are resolved by the Monte Carlo (fewer than 100 effective
+histories). These entries are reported but are not compared.
 
 This establishes a synthetic reference. It does not certify arbitrary g,
 all source-detector separations, all time windows or experimental tissue
