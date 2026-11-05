@@ -309,30 +309,42 @@ routed automatically; no option is needed.
 | list of primaries, muon bundle | each muon of at least 20 m; showers grouped by vertex | `lighthit.event` |
 | calibration laser | isotropic flash, no Geant4 | `kernel.transport(IsotropicFlash)` |
 
-Command line (`run/run_lighthit.py` in NTSim; `CACHE` is the prepared RTE
-cache with `muon-data.json` beside it):
+In an NTSim simulation chain, one module replaces the photon Monte Carlo
+(`CherenkovGenerator`, `MCPhotonPropagator`, `SmartRayTracer`) and feeds the
+NTSim electronics with expected photoelectrons per OM and 5 ns bin; the tables
+come from `LIGHTHIT_DATA` and do not depend on the detector layout:
+
+```python
+    ntsim.modules.ParticlePropagator(cascade_bounds_e=(0, 0)),
+    ntsim.modules.LightHit(telescope=telescope, medium_prop=water) << 'light',
+    ntsim.bgvd.BGVDElectronics() << 'daq',
+```
+
+Expert command line for single primaries or a laser flash, without
+electronics (`run/run_lighthit_expert.py` in NTSim; `CACHE` is the prepared
+RTE cache with `muon-data.json` beside it):
 
 ```bash
 # electron (shower route)
-python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 \
+python run/run_lighthit_expert.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 \
   --pdg 11 --energy 100 --position 5 -269.5 330 --direction 0.35 -0.2 0.915 --output out/electron
 
 # muon (muon route)
-python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 \
+python run/run_lighthit_expert.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 \
   --pdg 13 --energy 1000 --position 5 -269.5 330 --direction 0.2 0.9 0.3 --output out/muon
 
 # nu_e CC final state at one vertex: one shower
-python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 5 -269.5 330 \
+python run/run_lighthit_expert.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 5 -269.5 330 \
   --particle 11 70 0.35 -0.2 0.915 --particle 211 25 0.45 -0.1 0.88 --particle 2212 5 0.2 -0.3 0.93 \
   --output out/nue
 
 # nu_mu CC final state: muon + hadronic vertex shower, one event
-python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 5 -269.5 330 \
+python run/run_lighthit_expert.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position 5 -269.5 330 \
   --particle 13 800 0.2 0.9 0.3 --particle 211 150 0.3 0.85 0.4 --particle 2212 50 0.1 0.95 0.2 \
   --output out/numu
 
 # calibration flash (the laser cache is built once with --build-laser-cache)
-python run/run_lighthit.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position -62 -385 361 \
+python run/run_lighthit_expert.py 1 --cache "$CACHE" --clusters 1 2 3 4 5 --position -62 -385 361 \
   --laser 1e15 532 --laser-cache tables/laser-cache --output out/laser
 ```
 
