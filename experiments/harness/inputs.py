@@ -159,10 +159,20 @@ def components(steps, parts):
     return out
 
 
+def laser_tables() -> Path:
+    """Laser table directory: ``$LIGHTHIT_LASER_TABLES`` or the bundle's ``tables/laser-cache``.
+
+    The table's ``laser-data.json`` (if any) declares its receiver; without
+    it the table is the centre-referenced one.
+    """
+    value = os.environ.get("LIGHTHIT_LASER_TABLES")
+    return Path(value).expanduser() if value else bundle_path("tables", "laser-cache")
+
+
 def laser_kernel(**options):
     from lighthit.event import laser_kernel as make
     m = model()
-    base = dict(cache_directory=bundle_path("tables", "laser-cache"), bin_ns=5.0,
+    base = dict(cache_directory=laser_tables(), bin_ns=5.0,
                 omega_per_ns=np.linspace(0.0, 1.2, 321), cache_policy="require")
     base.update(options)
     return make(m.medium, m.detector, **base)

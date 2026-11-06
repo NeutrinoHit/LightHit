@@ -293,6 +293,12 @@ flash = lh.IsotropicFlash.monochromatic([-62.0, -385.0, 361.0], 1e15, 532.0)
 response = EventTransport(kernel, laser_kernel=laser)(flash)
 ```
 
+That table reads the flash at the OM centre. A laser table directory with
+`laser-data.json` (written by `tools/tables/build_glass_laser.py`, 70 min
+for one line with three processes) counts all three orders at the first
+entry into the glass, like the shower and muon routes; `laser_kernel` picks
+the receiver from that file, so the code above is unchanged.
+
 ## 3. Inside NTSim
 
 NTSim keeps primary generation and Geant4 propagation and calls LightHit

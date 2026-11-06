@@ -13,8 +13,11 @@ stated. Fixed items are removed from this list.
   multipole table, but `_transport_elements` takes the directional path for
   spectral cones; with `cache_policy="require"` the transport then fails.
 * `build(source=...)` silently overrides an explicit `method`.
-* The flash path contracts the acceptance up to `source_degree` without the
-  bandwidth check that element routes apply.
+* The centre flash path contracts the acceptance up to `source_degree` without
+  the bandwidth check that element routes apply (the first-entry flash uses the
+  measured bandwidth). Its order 1 with a directional OM, and order 1 of the
+  first-entry flash, is the finite-L table first order, not the exact
+  physical-time integral.
 * With `cache_directory=None`, hybrid runs and `Ge2KernelStore.bundle` drop
   directional tables from memory, so later events rebuild them.
 * `EventTransport` completion: with `max_rounds=4` at most three recomputing
@@ -28,8 +31,10 @@ stated. Fixed items are removed from this list.
   supplied receiver surface at every distance and source size. The complete
   event cost is higher than the retained interval comparison
   (`direct-first-entry.md`). A detector without surface geometry is a point
-  model. Orders 1 and >=2, the standalone leading `ballistic_interval`, the
-  frozen-cone order 0 and the flash path still use the OM centre. The first-entry row builder in
+  model. Orders 1 and >=2, the standalone leading `ballistic_interval` and the
+  frozen-cone order 0 still use the OM centre; so does the flash on a laser
+  table without `laser-data.json` (the first-entry laser table counts all
+  three orders at the glass, `event-and-laser.md`). The first-entry row builder in
   `receiver-first-entry.md` is tested separately and is not yet connected to
   these routes or their prepared tables.
 

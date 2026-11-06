@@ -50,7 +50,22 @@ steps; the earlier bundles used 350-610 nm in 10.4 nm steps).
 
 The laser table (`tables/laser-cache`) is built by
 `lighthit.event.laser_kernel(..., cache_policy="build")` followed by
-`kernel.build(source=flash)` (`docs/event-and-laser.md`).
+`kernel.build(source=flash)` (`docs/event-and-laser.md`); that table reads the
+flash at the OM centre. The first-entry (glass) laser table of one line comes
+from
+
+```sh
+PYTHONPATH=src python tools/tables/build_glass_laser.py \
+  --model DATA/model/bgvd-model.npz --settings DATA/tables/shower-data.json \
+  --output OUT/laser-glass-532 --wavelength 532 --jobs 3
+```
+
+(`DATA` a glass bundle: its scattering degree and boundary-vertex numerics are
+reused). It writes the source-degree-0 directional table under the laser
+kernel's key, `laser-data.json` (the settings `laser_kernel` reads), the cache
+manifest and `build.json` (wall time, contract). About 31 s per frequency at
+one thread (70 min for 321 frequencies with `--jobs 3`, 9.3 MB); repeat the
+command to resume.
 
 ## The arguments of the bundle tables
 

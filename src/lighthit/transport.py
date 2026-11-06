@@ -412,7 +412,8 @@ class TransportKernel:
         # used to be conflated; they are not any more.
         self._methods = {
             "isotropic": _Method(self._transport_isotropic, False,
-                                  "isotropic point flash; exact OM acceptance contraction"),
+                                  "isotropic point flash; exact OM acceptance contraction "
+                                  "(centre multipole or first-entry directional table)"),
             "track": _Method(self._transport_elements, False,
                               "Cherenkov track split into axial source elements"),
             "axial": _Method(self._transport_elements, False,
@@ -846,6 +847,9 @@ class TransportKernel:
         """
         if method == "all":
             return ("multipole", "directional")
+        if method == "isotropic" and self.config.scattered_receiver != "centre":
+            # the flash on the glass: the first-entry directional table (l = 0)
+            return ("directional",)
         if method in ("isotropic", "axial_centroid", "track_centroid"):
             return ("multipole",)
         if method in ("auto", "axial", "track", "directional", "axial_full",
@@ -1057,6 +1061,9 @@ class TransportKernel:
     def _transport_isotropic(self, source, *, method):
         if not isinstance(source, IsotropicFlash):
             raise TypeError("isotropic method requires IsotropicFlash")
+        if self.config.scattered_receiver != "centre":
+            from ._flash_receiver import transport_flash_first_entry
+            return transport_flash_first_entry(self, source, method=method)
         began = perf_counter()
         omega = self.config.omega_per_ns
         positions = self.detector.positions_m

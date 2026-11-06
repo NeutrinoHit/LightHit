@@ -49,7 +49,7 @@ class Context:
 
     def laser_kernel(self, **options):
         def make():
-            self._tables(I.bundle_path("tables", "laser-cache"))
+            self._tables(I.laser_tables())
             return I.laser_kernel(**options)
         return self.cached(("laser", tuple(sorted(options.items()))), make)
 

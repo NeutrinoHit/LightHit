@@ -17,7 +17,9 @@ Cases run strictly one at a time; nothing heavy runs in parallel.
 ``--variant glass`` records the same case on a data bundle whose responses are
 referenced to the first entry into the OM glass (``$LIGHTHIT_DATA`` must name
 such a bundle) under ``<case>@glass``; the stored centre-referenced record of
-the case is kept. A centre-referenced reference is then not used as an accuracy
+the case is kept. ``--variant glass-laser`` (laser cases only) also needs a
+first-entry laser table (``laser-data.json``; ``$LIGHTHIT_LASER_TABLES`` names
+its directory when the bundle has none) and stores ``<case>@glass-laser``. A centre-referenced reference is then not used as an accuracy
 reference: the difference is stored separately as a receiver-definition change.
 """
 from __future__ import annotations
@@ -62,7 +64,9 @@ def _result_path(key, threads, variant=None):
 
 
 #: variant name -> receiver definition its data bundle must declare
-VARIANT_RECEIVER = {"glass": "first-entry"}
+VARIANT_RECEIVER = {"glass": "first-entry", "glass-laser": "first-entry"}
+#: variants whose laser table must declare this receiver (laser cases only)
+VARIANT_LASER_RECEIVER = {"glass-laser": "first-entry"}
 
 
 def _receiver():
@@ -79,12 +83,10 @@ def _receiver():
 
 
 def _laser_receiver():
-    """Receiver of the bundle's laser table (its manifest names none: centre)."""
-    from harness.inputs import bundle_path
-    path = bundle_path("tables", "laser-cache", "cache-manifest.json")
-    if not path.is_file():
-        return "centre"
-    return json.loads(path.read_text()).get("scattered_receiver") or "centre"
+    """Receiver of the laser table: its laser-data.json, else centre (older tables)."""
+    from harness.inputs import laser_tables
+    from lighthit.event import laser_settings
+    return laser_settings(laser_tables()).get("scattered_receiver") or "centre"
 
 
 def _bundle_identity():
@@ -154,10 +156,16 @@ def cmd_one(args):
             raise SystemExit(f"variant {args.variant!r} needs a {expected} bundle; "
                              f"LIGHTHIT_DATA declares {receiver!r}")
         payload.update(variant=args.variant, receiver=receiver, data_bundle=_bundle_identity())
+        laser_expected = VARIANT_LASER_RECEIVER.get(args.variant)
+        if laser_expected is not None and "laser" not in args.case:
+            raise SystemExit(f"variant {args.variant!r} is defined for laser cases only")
         if "laser" in args.case:
             # the flash uses the laser table only: its receiver is that table's
             receiver = payload["receiver"] = _laser_receiver()
             payload["bundle_receiver"] = expected
+            if laser_expected is not None and receiver != laser_expected:
+                raise SystemExit(f"variant {args.variant!r} needs a {laser_expected} laser table; "
+                                 f"the laser table declares {receiver!r} (set LIGHTHIT_LASER_TABLES)")
     centre_reference = None
     if receiver != "centre" and case.reference:
         # stored references are centre-referenced: a difference is the receiver change

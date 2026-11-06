@@ -6,7 +6,7 @@ Do the default routes agree with NTSim's photon Monte Carlo for electrons, pions
 """
 kind = "validation"
 status = "tool"
-verdict = "On 14 Geant4 events (e 10 GeV-10 TeV, pi+ 10 GeV-1 TeV, mu 100 GeV-10 TeV, nu_e CC, nu_mu CC, two geometries; 4-32 MC runs each) the default routes give 0.965-1.035 of the photon-MC total charge; three events fail a distance bin: pion 100 GeV at 50-100 m (0.964 +- 0.015), the 1 TeV muon at 100-150 m (1.118 +- 0.021, 0.4 % of its charge) and the 10 TeV muon at 0-20 m and 50-100 m, where its order 0 is 0.93-0.95 of the MC near the track. The 532 nm laser flash (laser-532nm@glass; its laser table is the centre-referenced one) gives 0.967 +- 0.018 of a 1e8-photon MC, with orders 0/1 at 0.952/0.949 and the 150-200 m bin failing (0.956 +- 0.018, 1.2 % of the charge)."
+verdict = "On 14 Geant4 events (e 10 GeV-10 TeV, pi+ 10 GeV-1 TeV, mu 100 GeV-10 TeV, nu_e CC, nu_mu CC, two geometries; 4-32 MC runs each) the default routes give 0.965-1.035 of the photon-MC total charge; three events fail a distance bin: pion 100 GeV at 50-100 m (0.964 +- 0.015), the 1 TeV muon at 100-150 m (1.118 +- 0.021, 0.4 % of its charge) and the 10 TeV muon at 0-20 m and 50-100 m, where its order 0 is 0.93-0.95 of the MC near the track. The 532 nm laser flash (laser-532nm@glass; its laser table is the centre-referenced one) gives 0.967 +- 0.018 of a 1e8-photon MC, with orders 0/1 at 0.952/0.949 and the 150-200 m bin failing (0.956 +- 0.018, 1.2 % of the charge). On the first-entry (glass) laser table (laser-532nm@glass-laser) the flash gives 0.975 +- 0.018, orders 0/1/>=2 at 0.962/0.957/1.009, 150-200 m still failing (0.964 +- 0.018); the glass adds 1.06 % to order 0 (exp(mu_t 2R/3)) and 0.9/0.6 % to orders 1/>=2, within the 3.5 % error of the single MC run."
 cases = [
   "photon-mc-matrix/electron-10GeV",
   "photon-mc-matrix/electron-100GeV",
@@ -26,7 +26,7 @@ cases = [
 ]
 how-to-run = """
 python experiments/photon_mc.py NAME --orders --run N [--suppression K] for N = 0..R-1 (NTSim environment; runs are independent and may run in parallel), then PYTHONPATH=src python experiments/run.py run 'photon-mc-matrix/*'
-Laser: python experiments/photon_mc_laser.py --photons 1e8 --seed 1, then run.py run 'photon-mc-matrix/laser-532nm'; --variant glass with a glass bundle as $LIGHTHIT_DATA stores <case>@glass
+Laser: python experiments/photon_mc_laser.py --photons 1e8 --seed 1, then run.py run 'photon-mc-matrix/laser-532nm'; --variant glass with a glass bundle as $LIGHTHIT_DATA stores <case>@glass; --variant glass-laser with $LIGHTHIT_LASER_TABLES set to a first-entry laser table (tools/tables/build_glass_laser.py) stores <case>@glass-laser
 """
 inputs = [
   "the events of experiments/regenerate_inputs.py listed in harness/cases_mcmatrix.py MATRIX (runs and photon_suppression per event)",
@@ -74,6 +74,16 @@ inputs_sha256 = { "electron-100GeV-down-run0-steps.npz" = "39e9aeba8bfd40e2", "e
 timing = { wall_s = 22.783, cpu_s = 22.778, peak_rss_mib = 1307.07 }
 metrics = { lighthit_pe = 4.42441, mc_pe = 4.38196, ratio = 1.00969, ratio_sigma = 0.0109218, order0_ratio = 0.995557, order1_ratio = 1.04628, order2_ratio = 0.998578, runs = 16, bins_failed = "none" }
 
+[result."electron-100GeV-down@glass"]
+status = "ok"
+date = "2026-11-05T05:05:42Z"
+commit = "cd5ccc1dfffa"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.0293, 4.51074, 4.13574], numba_threads = 1 }
+inputs_sha256 = { "electron-100GeV-down-steps.npz" = "cb005cee41c32aa8", "electron-100GeV-down-parts.npz" = "4788e6d5394cc2f2", "electron-100GeV-down.json" = "9b2112a91e31aa21", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal" }
+timing = { wall_s = 14.873, cpu_s = 14.84, peak_rss_mib = 2862.11 }
+metrics = { lighthit_pe = 4.46483, mc_pe = 4.38196, ratio = 1.01891, ratio_sigma = 0.0110215, order0_ratio = 1.00749, order1_ratio = 1.05267, order2_ratio = 0.999656, runs = 16, bins_failed = "none" }
+
 [result.electron-100GeV-outside]
 status = "ok"
 date = "2026-10-21T22:05:49Z"
@@ -85,6 +95,26 @@ inputs_sha256 = { "electron-100GeV-outside-run0-steps.npz" = "6d5791ef67664875",
 timing = { wall_s = 9.277, cpu_s = 9.277, peak_rss_mib = 1197.99 }
 metrics = { lighthit_pe = 0.111238, mc_pe = 0.114757, ratio = 0.96934, ratio_sigma = 0.0258863, order0_ratio = 1.0076, order1_ratio = 0.944345, order2_ratio = 0.970236, runs = 16, bins_failed = "none" }
 
+[result."electron-100GeV-outside@glass"]
+status = "ok"
+date = "2026-11-05T05:05:07Z"
+commit = "cd5ccc1dfffa"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.18164, 4.58008, 4.14258], numba_threads = 1 }
+inputs_sha256 = { "electron-100GeV-outside-steps.npz" = "ce4726b9a110027f", "electron-100GeV-outside-parts.npz" = "b67043a6e5a888e7", "electron-100GeV-outside.json" = "a906025c4a4afb76", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal" }
+timing = { wall_s = 7.796, cpu_s = 7.752, peak_rss_mib = 2358.34 }
+metrics = { lighthit_pe = 0.112319, mc_pe = 0.114757, ratio = 0.978758, ratio_sigma = 0.0261378, order0_ratio = 1.031, order1_ratio = 0.950883, order2_ratio = 0.975146, runs = 16, bins_failed = "none" }
+
+[result."electron-100GeV@glass"]
+status = "ok"
+date = "2026-11-05T05:01:48Z"
+commit = "cd5ccc1dfffa"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.73828, 4.58154, 4.01025], numba_threads = 1 }
+inputs_sha256 = { "electron-100GeV-run0-steps.npz" = "3e14d5e9f4b9062a", "electron-100GeV-run0-parts.npz" = "cf4365098763ab28", "electron-100GeV.json" = "09feaa80ed60f2d5", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal" }
+timing = { wall_s = 16.744, cpu_s = 16.716, peak_rss_mib = 2842.61 }
+metrics = { lighthit_pe = 6.3205, mc_pe = 6.34088, ratio = 0.996786, ratio_sigma = 0.00994388, order0_ratio = 0.975742, order1_ratio = 1.00313, order2_ratio = 1.04066, runs = 16, bins_failed = "none" }
+
 [result.electron-10GeV]
 status = "ok"
 date = "2026-10-21T22:49:11Z"
@@ -95,6 +125,16 @@ machine = { cpu_count = 64, python = "3.12.15", numba = "0.67.0", numpy = "2.5.3
 inputs_sha256 = { "electron-10GeV-run0-steps.npz" = "4ad63dffe5acba54", "electron-10GeV-run1-steps.npz" = "6558be959d815bc3", "electron-10GeV-run2-steps.npz" = "6a9504d0e70a30ea", "electron-10GeV-run3-steps.npz" = "6458920a2a6f9e29", "electron-10GeV-run4-steps.npz" = "7ffb5de374d8fd71", "electron-10GeV-run5-steps.npz" = "693181c16097a802", "electron-10GeV-run6-steps.npz" = "42095b450a0c7a14", "electron-10GeV-run7-steps.npz" = "c2bff6445360f273", "electron-10GeV-run8-steps.npz" = "65f8b0ef9469922e", "electron-10GeV-run9-steps.npz" = "3b54520935a6892a", "electron-10GeV-run10-steps.npz" = "254573588dd3fbc1", "electron-10GeV-run11-steps.npz" = "32b25f7566a3cce2", "electron-10GeV-run12-steps.npz" = "e70eeff24423d85f", "electron-10GeV-run13-steps.npz" = "b0b372ce0499feff", "electron-10GeV-run14-steps.npz" = "e228aab05750cb1f", "electron-10GeV-run15-steps.npz" = "cffd5c4d3736c480", "electron-10GeV-run16-steps.npz" = "c92a99b0ceb13c0c", "electron-10GeV-run17-steps.npz" = "c016a136c1401b59", "electron-10GeV-run18-steps.npz" = "901844d31e0b2f69", "electron-10GeV-run19-steps.npz" = "96970cb6c5d8984a", "electron-10GeV-run20-steps.npz" = "db180350888860a3", "electron-10GeV-run21-steps.npz" = "064557aae18b374e", "electron-10GeV-run22-steps.npz" = "65ac76693e78c156", "electron-10GeV-run23-steps.npz" = "d3dbb96518789458", "electron-10GeV-run24-steps.npz" = "6403f7f5ff11a391", "electron-10GeV-run25-steps.npz" = "d75eeccf231e416f", "electron-10GeV-run26-steps.npz" = "0d719a2568f38da0", "electron-10GeV-run27-steps.npz" = "0bf2893e9d5270b3", "electron-10GeV-run28-steps.npz" = "2b315abb7830c569", "electron-10GeV-run29-steps.npz" = "24cd1dbe3a40bb47", "electron-10GeV-run30-steps.npz" = "41bd5bfe2a9efac2", "electron-10GeV-run31-steps.npz" = "dcf85b0a8221a285", "electron-10GeV-run0-hits.npz" = "11dd335b9b3aa588", "electron-10GeV-run1-hits.npz" = "37a71abe20de2289", "electron-10GeV-run2-hits.npz" = "03006b9e939f5c36", "electron-10GeV-run3-hits.npz" = "1385b4481d05fd38", "electron-10GeV-run4-hits.npz" = "04fc2a35bc9d13d6", "electron-10GeV-run5-hits.npz" = "f371d01d204f775c", "electron-10GeV-run6-hits.npz" = "550337c715c7c136", "electron-10GeV-run7-hits.npz" = "c2c60056ba692194", "electron-10GeV-run8-hits.npz" = "9f1b3ac19675b582", "electron-10GeV-run9-hits.npz" = "e4329c3a7ba5b298", "electron-10GeV-run10-hits.npz" = "f4d144aa56fb982c", "electron-10GeV-run11-hits.npz" = "3f7aaaa7883419db", "electron-10GeV-run12-hits.npz" = "ba12e075c6973d88", "electron-10GeV-run13-hits.npz" = "30edb8933b8df74e", "electron-10GeV-run14-hits.npz" = "f8cea2ede9e36510", "electron-10GeV-run15-hits.npz" = "d1d8399b61e09c47", "electron-10GeV-run16-hits.npz" = "2a14d6961e488f2b", "electron-10GeV-run17-hits.npz" = "2260ae9afd3b0728", "electron-10GeV-run18-hits.npz" = "aae3c7f65b4ff7d7", "electron-10GeV-run19-hits.npz" = "ea756f6a114bd363", "electron-10GeV-run20-hits.npz" = "894fdbb8f7b2d25a", "electron-10GeV-run21-hits.npz" = "fcc33118172ad8ef", "electron-10GeV-run22-hits.npz" = "1f422c3865565977", "electron-10GeV-run23-hits.npz" = "f16f2ca4404b2b72", "electron-10GeV-run24-hits.npz" = "f56e8b4dfcaba78a", "electron-10GeV-run25-hits.npz" = "5ad8d70777ff12df", "electron-10GeV-run26-hits.npz" = "ce7041907fe967ff", "electron-10GeV-run27-hits.npz" = "baf707317a68f055", "electron-10GeV-run28-hits.npz" = "f5622ad1fd26327b", "electron-10GeV-run29-hits.npz" = "8996328f2bc9a1d1", "electron-10GeV-run30-hits.npz" = "f1524e00f7163b9f", "electron-10GeV-run31-hits.npz" = "1060bc5d674d0c2a", "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg" }
 timing = { wall_s = 7.068, cpu_s = 7.066, peak_rss_mib = 1019.8 }
 metrics = { lighthit_pe = 0.606823, mc_pe = 0.599239, ratio = 1.01266, ratio_sigma = 0.0227566, order0_ratio = 1.04861, order1_ratio = 0.976634, order2_ratio = 0.992337, runs = 32, bins_failed = "none" }
+
+[result."electron-10GeV@glass"]
+status = "ok"
+date = "2026-11-05T05:04:47Z"
+commit = "cd5ccc1dfffa"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.40625, 4.64062, 4.15283], numba_threads = 1 }
+inputs_sha256 = { "electron-10GeV-steps.npz" = "1f3849aba1c853c5", "electron-10GeV-parts.npz" = "5d80548fede543b7", "electron-10GeV.json" = "0354f3578f091c50", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal" }
+timing = { wall_s = 2.943, cpu_s = 2.937, peak_rss_mib = 2001.45 }
+metrics = { lighthit_pe = 0.611611, mc_pe = 0.599239, ratio = 1.02065, ratio_sigma = 0.0229362, order0_ratio = 1.05936, order1_ratio = 0.982862, order2_ratio = 0.996908, runs = 32, bins_failed = "none" }
 
 [result.electron-10TeV]
 status = "ok"
@@ -118,6 +158,16 @@ inputs_sha256 = { "electron-1TeV-run0-steps.npz" = "13c8fce73c77e7ab", "electron
 timing = { wall_s = 171.85, cpu_s = 171.831, peak_rss_mib = 2242.09 }
 metrics = { lighthit_pe = 63.7213, mc_pe = 64.499, ratio = 0.987942, ratio_sigma = 0.00372132, order0_ratio = 0.983141, order1_ratio = 0.98918, order2_ratio = 0.998568, runs = 8, bins_failed = "none" }
 
+[result."electron-1TeV@glass"]
+status = "ok"
+date = "2026-11-05T05:11:12Z"
+commit = "cd5ccc1dfffa"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [7.44043, 6.26025, 5.0332], numba_threads = 1 }
+inputs_sha256 = { "electron-1TeV-steps.npz" = "d19de019b584640d", "electron-1TeV-parts.npz" = "bd9114f73e9f2e2f", "electron-1TeV.json" = "0028d534809ec94a", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal" }
+timing = { wall_s = 167.835, cpu_s = 165.221, peak_rss_mib = 3515.86 }
+metrics = { lighthit_pe = 64.464, mc_pe = 64.499, ratio = 0.999458, ratio_sigma = 0.0037647, order0_ratio = 0.994476, order1_ratio = 1.00455, order2_ratio = 1.0032, runs = 8, bins_failed = "none" }
+
 [result."laser-532nm@glass"]
 status = "ok"
 date = "2026-11-04T12:21:30Z"
@@ -127,6 +177,17 @@ machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.
 inputs_sha256 = { "laser-532nm-seed1-hits.npz" = "51544c5c94231460", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal", "cache-manifest.json" = "8c2901a228facb76", "laser-cache/files" = "transport-ee9a99" }
 timing = { wall_s = 0.112, cpu_s = 0.112, peak_rss_mib = 613.484 }
 metrics = { lighthit_pe = 14907000.0, mc_pe = 15422600.0, ratio = 0.966569, ratio_sigma = 0.0182115, order0_ratio = 0.951991, order1_ratio = 0.948796, order2_ratio = 1.00275, runs = 1, bins_failed = "150-200 m" }
+
+[result."laser-532nm@glass-laser"]
+status = "ok"
+date = "2026-11-05T15:19:18Z"
+commit = "93adc8892ae3"
+threads = "1"
+src_modified = true
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [7.80762, 6.23438, 6.7334], numba_threads = 1 }
+inputs_sha256 = { "laser-532nm-seed1-hits.npz" = "51544c5c94231460", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal", "build.json" = "c49511a23bc0099e", "cache-manifest.json" = "de0616fe1338afda", "laser-data.json" = "555d99b75b17e07c", "laser-glass-532/files" = "directional-49fd" }
+timing = { wall_s = 0.321, cpu_s = 0.32, peak_rss_mib = 1018.94 }
+metrics = { lighthit_pe = 15032900.0, mc_pe = 15422600.0, ratio = 0.974729, ratio_sigma = 0.0183652, order0_ratio = 0.962042, order1_ratio = 0.956952, order2_ratio = 1.0089, runs = 1, bins_failed = "150-200 m" }
 
 [result.muon-100GeV]
 status = "ok"
@@ -138,6 +199,16 @@ machine = { cpu_count = 64, python = "3.12.15", numba = "0.67.0", numpy = "2.5.3
 inputs_sha256 = { "muon-100GeV-run0-steps.npz" = "0b7eff5b9094b62c", "muon-100GeV-run1-steps.npz" = "67c9672e56278a74", "muon-100GeV-run2-steps.npz" = "d379f34b191c67f0", "muon-100GeV-run3-steps.npz" = "f0f97489757db3e3", "muon-100GeV-run4-steps.npz" = "b432cfe0d3f0a158", "muon-100GeV-run5-steps.npz" = "e55a993c550a1cb2", "muon-100GeV-run6-steps.npz" = "c4475ebd60aa17b1", "muon-100GeV-run7-steps.npz" = "70a4a02c944bc275", "muon-100GeV-run8-steps.npz" = "bd072af96c2b0e90", "muon-100GeV-run9-steps.npz" = "69ca6b9e75fb666a", "muon-100GeV-run10-steps.npz" = "f697f199098356c2", "muon-100GeV-run11-steps.npz" = "1d309a484ff898b7", "muon-100GeV-run12-steps.npz" = "dfad4f8367806d7f", "muon-100GeV-run13-steps.npz" = "3a2308bf89436efd", "muon-100GeV-run14-steps.npz" = "da29e2d489e1c420", "muon-100GeV-run15-steps.npz" = "41f063df8c43c8b8", "muon-100GeV-run0-hits.npz" = "7bb2fabddf78c1e6", "muon-100GeV-run1-hits.npz" = "4b6ac22d86f0029e", "muon-100GeV-run2-hits.npz" = "c69bd63db71063c0", "muon-100GeV-run3-hits.npz" = "db28b667ce859f87", "muon-100GeV-run4-hits.npz" = "63673be96ee4a79c", "muon-100GeV-run5-hits.npz" = "fd310849e44471f1", "muon-100GeV-run6-hits.npz" = "fec68c6dc1182ba0", "muon-100GeV-run7-hits.npz" = "196b9d8aa6b04994", "muon-100GeV-run8-hits.npz" = "f9c1502145a1e11d", "muon-100GeV-run9-hits.npz" = "c3588ea35f20e1a4", "muon-100GeV-run10-hits.npz" = "322ff358d487897f", "muon-100GeV-run11-hits.npz" = "ad6aea4622314eb2", "muon-100GeV-run12-hits.npz" = "beb4bea19d7cc87b", "muon-100GeV-run13-hits.npz" = "e27d055e0030bc21", "muon-100GeV-run14-hits.npz" = "920bd0e0e472f816", "muon-100GeV-run15-hits.npz" = "683a766b65a1e5a7", "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg" }
 timing = { wall_s = 109.261, cpu_s = 109.255, peak_rss_mib = 3620.18 }
 metrics = { lighthit_pe = 1.55099, mc_pe = 1.53201, ratio = 1.01239, ratio_sigma = 0.026022, order0_ratio = 1.00144, order1_ratio = 1.02731, order2_ratio = 1.02407, runs = 16, bins_failed = "none" }
+
+[result."muon-100GeV@glass"]
+status = "ok"
+date = "2026-11-05T05:04:35Z"
+commit = "cd5ccc1dfffa"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [4.29102, 4.62891, 4.14307], numba_threads = 1 }
+inputs_sha256 = { "muon-100GeV-run0-steps.npz" = "95b1a31f5d910b32", "muon-100GeV-run0-parts.npz" = "8cdc6d7b0b74ec1c", "muon-100GeV.json" = "314a8c2e101abc63", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal" }
+timing = { wall_s = 56.273, cpu_s = 51.035, peak_rss_mib = 4714.8 }
+metrics = { lighthit_pe = 1.56292, mc_pe = 1.53201, ratio = 1.02017, ratio_sigma = 0.0262223, order0_ratio = 1.01331, order1_ratio = 1.03234, order2_ratio = 1.02109, runs = 16, bins_failed = "none" }
 
 [result.muon-10TeV]
 status = "ok"
@@ -160,6 +231,16 @@ machine = { cpu_count = 64, python = "3.12.15", numba = "0.67.0", numpy = "2.5.3
 inputs_sha256 = { "muon-1TeV-check-run0-steps.npz" = "1edfe0f436930036", "muon-1TeV-check-run1-steps.npz" = "76842d70a41a7239", "muon-1TeV-check-run2-steps.npz" = "8171c321bd510a2b", "muon-1TeV-check-run3-steps.npz" = "37ce760a121efb0b", "muon-1TeV-check-run4-steps.npz" = "65786bf0264171ea", "muon-1TeV-check-run5-steps.npz" = "cca5a99d087d3425", "muon-1TeV-check-run6-steps.npz" = "d7fff651fb9bdfdf", "muon-1TeV-check-run7-steps.npz" = "379fdce577406eb1", "muon-1TeV-check-run0-hits.npz" = "7460d5c3f7dce98a", "muon-1TeV-check-run1-hits.npz" = "d55cd8af9489baa8", "muon-1TeV-check-run2-hits.npz" = "18ed3f98ef22b625", "muon-1TeV-check-run3-hits.npz" = "3d985673d1607143", "muon-1TeV-check-run4-hits.npz" = "31e2584e1a3a9075", "muon-1TeV-check-run5-hits.npz" = "ca77045a1ce28f69", "muon-1TeV-check-run6-hits.npz" = "ba1f0fb39084423c", "muon-1TeV-check-run7-hits.npz" = "5cfe11794916eb86", "bgvd-model.npz" = "59a4b5a2b329d762", "muon-data.json" = "ed769afd2eadc410", "cache-manifest.json" = "3eed1f3954b32a49", "rte-cache/files" = "directional-0abb", "pack.json" = "935d8e7fe33fc274", "ge2-pack/files" = "charge-0.npy,ful", "manifest.json" = "5821ab30187bf5ef", "report.json" = "73f172ab66c5716e", "midpoint-checks.json" = "ed7ed34eca376dbc", "muon/files" = "first-beta-charg" }
 timing = { wall_s = 330.837, cpu_s = 330.813, peak_rss_mib = 4197.92 }
 metrics = { lighthit_pe = 4.57879, mc_pe = 4.55078, ratio = 1.00615, ratio_sigma = 0.0166442, order0_ratio = 0.994827, order1_ratio = 1.0317, order2_ratio = 0.990629, runs = 8, bins_failed = "100-150 m" }
+
+[result."muon-1TeV-check@glass"]
+status = "ok"
+date = "2026-11-05T05:18:18Z"
+commit = "cd5ccc1dfffa"
+threads = "1"
+machine = { cpu = "Apple M4 Pro", cpu_count = 14, python = "3.12.3", numba = "0.67.0", numpy = "2.5.3", load_average = [7.49561, 7.07129, 5.91455], numba_threads = 1 }
+inputs_sha256 = { "muon-1TeV-check-steps.npz" = "7a0530203fdf3f70", "muon-1TeV-check-parts.npz" = "d38616b4d866e043", "muon-1TeV-check.json" = "10fc6bc4f21178ec", "bgvd-model.npz" = "87cd178268f06402", "muon-data.json" = "ed0d45b14d212e1b", "rte-cache/files" = "directional-0a1f", "pack.json" = "d9b10cc49dfcebb7", "ge2-pack/files" = "array-000.npy,ar", "first-time-beta.json" = "d168ddefc878444b", "manifest.json" = "5f32cf8e52a78264", "muon/files" = "preview-proposal" }
+timing = { wall_s = 204.948, cpu_s = 192.072, peak_rss_mib = 3939.28 }
+metrics = { lighthit_pe = 4.61214, mc_pe = 4.55078, ratio = 1.01348, ratio_sigma = 0.0167654, order0_ratio = 1.00284, order1_ratio = 1.04057, order2_ratio = 0.992942, runs = 8, bins_failed = "100-150 m" }
 
 [result.nue-cc]
 status = "ok"

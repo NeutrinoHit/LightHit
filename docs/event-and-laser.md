@@ -73,7 +73,8 @@ fallback: both routes add the near-field clamp (`metadata["near_field"]`).
 ## Laser kernel
 
 `laser_config(detector, cache_directory, bin_ns=5, cache_policy="require",
-omega_per_ns=None, max_radius_m=None)` returns a `KernelConfig` for a flash:
+omega_per_ns=None, max_radius_m=None, kernel_settings=None)` returns a
+`KernelConfig` for a flash:
 
 * radial range `(3, max(300, 1.05 * farthest OM from the detector centroid))`
   from `point_source_radial_range` (it depends on the detector, not on where
@@ -81,7 +82,62 @@ omega_per_ns=None, max_radius_m=None)` returns a `KernelConfig` for a flash:
 * `k_panel_per_m = min(0.04, 2 pi / r_max)`, bins from -60 to 740 ns, other
   fields at their defaults (321 frequencies unless `omega_per_ns` is given);
 * `cache_policy="require"` by default: build the table first,
-  `laser.build(source=flash)` (multipole table at the flash line only).
+  `laser.build(source=flash)` (the table at the flash line only);
+* `kernel_settings` replace configuration fields, as the `kernel_settings` of
+  `shower-data.json` and `muon-data.json` do. By default they are read from
+  `laser-data.json` in `cache_directory` (`laser_settings(cache_directory)`,
+  schema `lighthit/laser-data/1`); a table directory without that file is the
+  centre-referenced multipole table of earlier releases and keeps the
+  defaults.
+
+### Receiver of the flash
+
+Without settings the flash is read at the OM centre: multipole table, order 0
+the analytic `N A eta A(c) exp(-mu_t d) / (4 pi d^2)`.
+
+With `scattered_receiver="first-entry"` the flash is counted at the first
+entry into the glass sphere, the receiver of the shower and muon routes
+(`_flash_receiver.py`):
+
+* orders 1 and >=2: the first-entry directional table
+  (`DirectionalCache` with the glass boundary vertex). The flash is a pure
+  `l = 0` source, so the table is built with `source_degree=0` (9.3 MB at 532
+  nm) and only `t_(0 lambda 0)` is read:
+  `R_o = sum_lambda alpha_lambda sqrt(2 lambda + 1) t_(0 lambda 0, o) P_lambda(c) / (4 pi)`.
+  On a centre table `t_(0 lambda 0) = M_lambda / sqrt(2 lambda + 1)` and this
+  is the multipole flash to rounding (`tests/test_flash_receiver.py`); on a
+  first-entry table it equals the generic `directional_response` of an `l = 0`
+  source. Order 1 is the finite-L first order of the table (no exact
+  physical-time order 1 on this path); both scattered orders are read out
+  from the spectrum;
+* order 0: the direct flux into the sphere, integrated over the cap the
+  sphere subtends (Gauss in the impact parameter, trapezoid in azimuth),
+  with extinction and clock to the entry point, the acceptance of each ray
+  direction and the weight `area / (pi R^2)` per entering photon. Far from
+  the sphere it exceeds the centre formula by `exp(mu_t 2R/3)`, 1.06 % at
+  532 nm for R = 0.216 m;
+* time origins, the active rule and the out-of-range check are those of the
+  centre path.
+
+`tools/tables/build_glass_laser.py` builds such a table from a model and the
+`shower-data.json` of a glass bundle (its scattering degree and vertex
+numerics, so the flash sees the same glass) and writes `laser-data.json`
+beside it. The boundary vertex dominates the cost: about 31 s per frequency
+at one thread; the 321-frequency 532 nm table took 70 min with three worker
+processes (frequency blocks are checkpointed; repeat the command to resume).
+A flash on it takes 0.31 s at one thread (0.10 s on the centre table), most
+of it the order-0 quadrature.
+
+Against the photon MC of the same 532 nm flash (1e8 photons, hits counted at
+the sphere; `photon-mc-matrix/laser-532nm@glass-laser`) the glass table gives
+0.975 +- 0.018 of the total charge (0.967 on the centre table), orders 0/1/>=2
+at 0.962/0.957/1.009. The scattering degree is not the cause: a centre table
+at degree 96 reproduces the degree-24 one to 4e-10. The glass also moves the
+direct light and the early scattered light about 1 ns earlier, onto the MC's
+clock at the sphere: the share of order 1 within the 5 ns before the centre
+arrival at 50-150 m rises from 0.21-0.24 to 0.37-0.42 (MC 0.46-0.52), of order
+>=2 from 0.06-0.09 to 0.13-0.19 (MC 0.12-0.18). One MC run (about 3.5 % on
+orders 0 and 1) cannot separate the two tables in charge.
 
 `laser_kernel(medium, detector, *, cache_directory, **options)` wraps it in a
 `TransportKernel`. The flash itself is `IsotropicFlash.monochromatic(position,
@@ -93,5 +149,8 @@ comes from the flash.
 
 `tests/test_event.py`: composition with fake routes (one clock, summed-charge
 selection, completion, the out-of-reach case) and a real laser flash;
-`tests/test_geometry_and_pose.py` for `laser_config`. The route fallback has no
-test.
+`tests/test_geometry_and_pose.py` for `laser_config`;
+`tests/test_flash_receiver.py` for the glass flash (contraction against the
+multipole and generic directional kernels, direct flux against an independent
+polar integral and the small-sphere limit, the route, `laser-data.json`). The
+route fallback has no test.

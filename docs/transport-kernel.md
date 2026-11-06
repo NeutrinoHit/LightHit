@@ -135,7 +135,11 @@ the kernel; without a path it returns the kernel's store.
     the exact full-HG physical-time integral (`single.single_bins`) when the
     acceptance is constant, otherwise the finite-L multipole first order;
     order >=2 from the table. The acceptance is contracted up to
-    `source_degree` without the bandwidth check.
+    `source_degree` without the bandwidth check. With
+    `scattered_receiver="first-entry"` the flash is counted at the first entry
+    into the glass instead: first-entry directional table at source degree 0
+    for orders 1 and >=2, direct flux into the sphere for order 0
+    (`event-and-laser.md`, Receiver of the flash).
   * a straight `CherenkovTrack` with a frozen cone (Numba) -> `_track_transport`.
   * element sources -> `_transport_directional` when the cone is spectral or the
     acceptance degree is >= 1 (zero-frequency pass for every OM, full frequencies

@@ -33,7 +33,8 @@ from time import perf_counter, process_time
 
 import numpy as np
 
-__all__ = ["SourceComponent", "EventTransport", "common_time_origins", "laser_config", "laser_kernel"]
+__all__ = ["SourceComponent", "EventTransport", "common_time_origins", "laser_config", "laser_kernel",
+           "laser_settings", "LASER_DATA"]
 
 
 @dataclass(frozen=True)
@@ -295,27 +296,63 @@ class EventTransport:
                                        charge, origins, active, "event", metadata)
 
 
+#: Manifest next to a laser table that declares its kernel settings (receiver).
+LASER_DATA = "laser-data.json"
+LASER_DATA_SCHEMA = "lighthit/laser-data/1"
+
+
+def laser_settings(cache_directory):
+    """Kernel settings declared by ``cache_directory/laser-data.json``, or ``{}``.
+
+    A laser table written before this manifest existed declares nothing: it is
+    the centre-referenced multipole table and keeps the defaults.
+    """
+    if cache_directory is None:
+        return {}
+    from pathlib import Path
+    import json
+    path = Path(cache_directory).expanduser() / LASER_DATA
+    if not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != LASER_DATA_SCHEMA:
+        raise ValueError(f"{path}: unknown laser data schema {data.get('schema')!r}")
+    return dict(data.get("kernel_settings") or {})
+
+
 def laser_config(detector, *, cache_directory, bin_ns=5.0, cache_policy="require",
-                 omega_per_ns=None, max_radius_m=None):
+                 omega_per_ns=None, max_radius_m=None, kernel_settings=None):
     """Kernel settings of a point calibration flash on the whole detector.
 
     One position-independent radial range is derived from the detector
     centroid (``point_source_radial_range``); ``max_radius_m`` extends it.
     The cache is built once per wavelength (``cache_policy="build"``) and then
     reused with ``"require"``.
+
+    ``kernel_settings`` (by default those declared by ``laser-data.json`` in
+    ``cache_directory``) replace configuration fields, as the shower and muon
+    manifests do. ``scattered_receiver='first-entry'`` counts scattered light
+    at the first entry into the glass sphere (directional table, source
+    degree 0); without settings the table is the centre-referenced one.
     """
+    from dataclasses import replace
     from . import KernelConfig, describe_geometry, point_source_radial_range
+    from .receiver_data import decode_settings
     radial_range = point_source_radial_range(detector, describe_geometry(detector).centroid_m)
     if max_radius_m is not None:
         maximum = float(max_radius_m)
         if not np.isfinite(maximum) or maximum <= radial_range[0]:
             raise ValueError("max_radius_m must exceed the radial minimum")
         radial_range = (radial_range[0], maximum)
-    return KernelConfig(
+    config = KernelConfig(
         **({} if omega_per_ns is None else {"omega_per_ns": omega_per_ns}),
         relative_time_edges_ns=np.arange(-60., 740. + bin_ns, bin_ns),
         radial_range_m=radial_range, k_panel_per_m=min(0.04, 2 * np.pi / radial_range[1]),
         cache_directory=cache_directory, cache_policy=cache_policy)
+    settings = laser_settings(cache_directory) if kernel_settings is None else dict(kernel_settings)
+    if settings:
+        config = replace(config, **decode_settings(settings, cache_directory or "."))
+    return config
 
 
 def laser_kernel(medium, detector, *, cache_directory, **options):
