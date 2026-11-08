@@ -5,8 +5,9 @@ Run from a checkout with the validation and test dependencies installed.
 Each child process uses this checkout's source. Outputs go to an initially
 empty directory; no installation, source rewriting or network access occurs.
 The default run includes spatial, material and time-profile validation.
---high-g adds the spatial g>=0.9 validation at q != 0 (about two hours of
-single-threaded jobs, divided by --workers).
+--high-g adds the spatial g>=0.9 validation at q != 0 (about eight hours of
+single-threaded jobs, divided by --workers); --time-high-g adds the same
+check at nonzero frequency and in time (about seven hours).
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ FILES = [
     "src/lighthit/experimental/halfspace_boundary.py",
     "src/lighthit/experimental/halfspace_mc.py",
     "experiments/validate_halfspace.py", "experiments/validate_halfspace_materials.py",
-    "experiments/validate_halfspace_highg.py",
+    "experiments/validate_halfspace_highg.py", "experiments/validate_halfspace_time_highg.py",
     "experiments/halfspace_time_profile.py", "experiments/validate_halfspace_time.py",
     "experiments/audit_halfspace_quadrature.py", "experiments/plot_halfspace_report.py",
     "experiments/reproduce_halfspace.py", "experiments/fixtures/halfspace-materials.json",
@@ -62,8 +63,10 @@ def main():
                         help="run numerical checks and save arrays without rendering images")
     parser.add_argument("--high-g", action="store_true",
                         help="also run the spatial high-anisotropy validation with full-HG histories")
+    parser.add_argument("--time-high-g", action="store_true",
+                        help="also run the high-anisotropy frequency/time validation at q != 0")
     parser.add_argument("--workers", type=int, default=1,
-                        help="parallel single-threaded jobs for --high-g")
+                        help="parallel single-threaded jobs for --high-g and --time-high-g")
     args = parser.parse_args()
     output = args.output_directory.resolve()
     if output.exists() and any(output.iterdir()):
@@ -86,7 +89,7 @@ def main():
                 "runtime": {"python": sys.version.split()[0], "system": platform.system(),
                             "architecture": platform.machine(), "packages": packages},
                 "source_sha256": before, "figures_requested": not args.no_figures,
-                "high_g_requested": args.high_g,
+                "high_g_requested": args.high_g, "time_high_g_requested": args.time_high_g,
                 "steps": [], "passed": False}
     destination = output/"manifest.json"
 
@@ -118,6 +121,9 @@ def main():
     if args.high_g:
         steps.append(("high-g", ["experiments/validate_halfspace_highg.py", "--output",
                                  str(output/"high-g"/"validation.json"), "--workers", str(args.workers)]))
+    if args.time_high_g:
+        steps.append(("time-high-g", ["experiments/validate_halfspace_time_highg.py", "--output",
+                                      str(output/"time-high-g"/"validation.json"), "--workers", str(args.workers)]))
     readout = ["experiments/halfspace_time_profile.py", "plot", "--spectrum",
                str(output/"time"/"fine"/"spectrum.npz"), "--output-directory",
                str(output/"time"/"profile"), "--bin-width-ns", "0.01"]

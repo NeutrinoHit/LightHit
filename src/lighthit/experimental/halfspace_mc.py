@@ -228,18 +228,25 @@ class HalfSpaceSamples:
                 "escaped": escaped, "residual": absorbed+escaped-entered}
 
     def cell_absorption_sensitivity(self, *, detector_xy_m=(1., 0.), detector_sigma_m,
-                                    half_angle_rad=np.pi / 2, by_order=False):
+                                    half_angle_rad=np.pi / 2, by_order=False, omega_per_ns=0.):
         """Independent path-length derivative averaged over each supplied cell.
 
         With ``by_order`` the estimate has shape (cell, order) for detected
-        volume orders (0, 1, >=2).
+        volume orders (0, 1, >=2). A nonzero ``omega_per_ns`` gives the
+        derivative of the escape spectrum, weighting each history by
+        exp(i omega t) of its total flight time, as in ``spectrum``.
         """
         xy = np.asarray(detector_xy_m, float)
         sigma = float(detector_sigma_m)
+        omega = float(omega_per_ns)
         if xy.shape != (2,) or not np.isfinite(xy).all() or not math.isfinite(sigma) or sigma <= 0:
             raise ValueError("detector position must be finite and its sigma positive")
+        if not math.isfinite(omega):
+            raise ValueError("omega_per_ns must be finite")
         gaussian = np.exp(-((self.x_m-xy[0])**2+(self.y_m-xy[1])**2)/(2*sigma*sigma))/(2*np.pi*sigma*sigma)
         weight = self._weights(half_angle_rad) * gaussian
+        if omega:
+            weight = weight * np.exp(1j * omega * self.path_m / self.speed_m_per_ns)
         volume = np.prod(self.cells_m[:, 1]-self.cells_m[:, 0], axis=1)
         value = (-self.cell_path_m * weight[:, None] / volume).T
         if not by_order:

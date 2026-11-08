@@ -336,3 +336,66 @@ def test_cosine_moments_reject_ports_without_mirror_symmetry_and_bad_settings():
     # High anisotropy no longer needs an azimuth grid finer than the phase degree.
     assert len(solver(1.35, medium=Medium(10., 25000., .9, 1.35),
                       settings=HalfSpaceSettings(40, 8, 78, azimuth_harmonics=3)).mu) == 2*80*4
+
+
+def test_complex_eigensolver_is_accurate_above_128_unknowns():
+    from scipy.linalg import eig
+    from lighthit.experimental.halfspace import _complex_eig
+    rng = np.random.default_rng(5)
+    matrix = rng.standard_normal((300, 300)) + 1j*rng.standard_normal((300, 300))
+    lam, vectors = _complex_eig(matrix)
+    residual = np.linalg.norm(matrix @ vectors - vectors*lam)/np.linalg.norm(matrix)
+    assert residual < 1e-13
+    reference = eig(matrix, np.eye(300), right=False)
+    np.testing.assert_allclose(np.sort_complex(lam), np.sort_complex(reference), rtol=0, atol=1e-11)
+
+
+@pytest.mark.parametrize("q,omega,banana", [((3., 0.), .3, True), ((0., -1.), 2., False), ((.5, .5), -.7, False)])
+def test_cosine_moments_at_frequency_match_generalized_pencil(monkeypatch, q, omega, banana):
+    # Forward scattering, Fresnel boundary and more than 128 unknowns: the
+    # standard complex problem M^-1 A' must reproduce the generalized QZ solution.
+    from scipy.linalg import eig
+    import lighthit.experimental.halfspace as module
+    medium = Medium(.5, 40., .8, 1.35)
+    settings = HalfSpaceSettings(21, 8, 40, azimuth_harmonics=3)
+    s, d = SurfacePort.pencil(), SurfacePort.aperture(.7, polar_nodes=4, azimuth_nodes=8)
+    point = np.array([[.02, 0., .03], [.05, .01, .06]])
+
+    def evaluate(k):
+        solution = k.solve(s, q_per_m=q, omega_per_ns=omega)
+        values = [solution.response(d)]
+        if banana:
+            values.append(k.banana(s, d, point, detector_xy_m=(.05, 0.), source_sigma_m=.02,
+                                   detector_sigma_m=.02, q_max_per_m=150., q_nodes=6,
+                                   omega_per_ns=omega, by_order=True))
+        return solution.eigen_residual, values
+
+    k = solver(1.35, medium=medium, settings=settings)
+    assert len(k.mu) > 128
+    residual, expected = evaluate(k)
+    assert residual < 1e-12
+    monkeypatch.setattr(module, "_complex_eig", lambda matrix: eig(matrix, np.eye(len(matrix))))
+    _, actual = evaluate(solver(1.35, medium=medium, settings=settings))
+    for a, b in zip(expected, actual):
+        np.testing.assert_allclose(a, b, rtol=1e-10, atol=1e-12*np.abs(b).max())
+
+
+def test_first_order_banana_at_frequency_matches_once_scattered_derivative():
+    medium = Medium(.2, 1e-8, .3, 1.4)
+    k = solver(1., medium=medium, settings=HalfSpaceSettings(4, 12, 6, azimuth_harmonics=5))
+    s, d = SurfacePort.pencil(), SurfacePort.aperture(.7, polar_nodes=3, azimuth_nodes=8)
+    q, omega = (.6, 0.), .4
+    x, w = roots_legendre(40)
+    z, weight = (x+1)*20, w*20
+    derivative = weight @ k.depth_sensitivity(s, d, z, q_per_m=q, omega_per_ns=omega)
+    epsilon = 1e-5
+    plus = solver(1., medium=replace(medium, absorption_per_m=.2+epsilon), settings=k.settings)
+    minus = solver(1., medium=replace(medium, absorption_per_m=.2-epsilon), settings=k.settings)
+    finite = (plus.response(s, d, q_per_m=q, omega_per_ns=omega)[1]
+              - minus.response(s, d, q_per_m=q, omega_per_ns=omega)[1])/(2*epsilon)
+    assert derivative == pytest.approx(finite, rel=1e-6)
+    point = np.array([[.3, 0., .4], [.9, .2, .8]])
+    orders = k.banana(s, d, point, detector_xy_m=(1., 0.), source_sigma_m=.4, detector_sigma_m=.4,
+                      q_max_per_m=6., q_nodes=8, omega_per_ns=omega, by_order=True)
+    assert np.all(abs(orders[:, 2]) < 1e-6*abs(orders[:, 1]))
+    assert np.all(abs(orders[:, 1].imag) > 1e-3*abs(orders[:, 1].real))

@@ -65,3 +65,23 @@ def test_cell_sensitivity_orders_partition_the_total():
     orders = sample.cell_absorption_sensitivity(detector_sigma_m=.4, half_angle_rad=.7, by_order=True)
     assert orders.mean.shape == (2, 3) and not orders.mean[:, 0].any()
     np.testing.assert_allclose(orders.mean.sum(axis=1), total.mean, rtol=1e-12)
+
+
+def test_cell_sensitivity_at_frequency_weights_each_history_by_its_flight_time():
+    medium = Medium(.2, 1., .3, 1.4)
+    cells = np.array([[[0., -.2, .1], [.4, .2, .4]], [[.6, -.2, .1], [1., .2, .4]]])
+    sample = sample_halfspace(medium, HalfSpaceBoundary(1.4), SurfacePort.pencil(), photons=20000,
+                              seed=19, source_sigma_m=.4, sensitivity_cells_m=cells)
+    omega = .7
+    stationary = sample.cell_absorption_sensitivity(detector_sigma_m=.4, half_angle_rad=.7)
+    np.testing.assert_array_equal(
+        sample.cell_absorption_sensitivity(detector_sigma_m=.4, half_angle_rad=.7, omega_per_ns=0.).mean,
+        stationary.mean)
+    actual = sample.cell_absorption_sensitivity(detector_sigma_m=.4, half_angle_rad=.7, omega_per_ns=omega,
+                                                by_order=True)
+    gaussian = np.exp(-((sample.x_m-1.)**2+sample.y_m**2)/(2*.4**2))/(2*np.pi*.4**2)
+    phase = np.exp(1j*omega*sample.path_m/sample.speed_m_per_ns)
+    volume = np.prod(cells[:, 1]-cells[:, 0], axis=1)
+    value = -sample.cell_path_m*(sample._weights(.7)*gaussian*phase)[:, None]/volume
+    np.testing.assert_allclose(actual.mean.sum(axis=1), value.mean(axis=0), rtol=1e-12)
+    assert np.all(np.abs(actual.mean[:, 2].imag) > 0) and not actual.mean[:, 0].any()

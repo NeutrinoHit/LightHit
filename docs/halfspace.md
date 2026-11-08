@@ -28,7 +28,7 @@ python experiments/reproduce_halfspace.py --output-directory RESULTS
 
 Run these commands at the repository root. `RESULTS` denotes a new, empty
 local results directory selected by the caller. The last command runs the
-91 tests, synthetic spatial/adjoint checks, seven material cases, polar
+97 tests, synthetic spatial/adjoint checks, seven material cases, polar
 quadrature audit, coarse/fine time spectra, independent time-domain MC and
 all report plots. It takes several minutes on a desktop machine. It uses
 only this checkout and its installed dependencies; no private optical
@@ -36,6 +36,9 @@ bundle, Geant4 installation, previous cache or network connection is needed.
 `--high-g --workers N` adds the spatial g>=0.9 validation at q != 0
 (`high-g/validation.json`): about eight hours of single-threaded jobs
 divided over N processes (under three hours with N=3).
+`--time-high-g --workers N` adds the same check at nonzero frequency and in
+time (`time-high-g/validation.json`): about seven single-threaded hours
+(under four hours with N=2).
 
 The inputs for the material cases are committed in
 `experiments/fixtures/halfspace-materials.json`. The fixture records which
@@ -67,7 +70,7 @@ report/                          four scientific report figures, PNG/SVG
 
 Individual entry points are `validate_halfspace.py`,
 `validate_halfspace_materials.py`, `validate_halfspace_highg.py`,
-`audit_halfspace_quadrature.py`,
+`validate_halfspace_time_highg.py`, `audit_halfspace_quadrature.py`,
 `halfspace_time_profile.py`, `validate_halfspace_time.py` and
 `plot_halfspace_report.py`, all under `experiments/`. Each accepts `--help`.
 The figure generator reads the numerical reports and arrays, so figures can
@@ -342,12 +345,18 @@ M is a separate angular resolution with its own convergence check. The
 first collision, arbitrary-direction readout and beam cross terms remain the
 exact analytic expressions; only the scattered volume field is expanded.
 
-At omega=0, `D^-1 A D` with `D = diag(i^m)` is real. The eigenpairs are
-then computed from the standard real problem `M^-1 D^-1 A D`; complex
-problems keep the generalized QZ solver. Both are checked by the same
-eigen-equation residual. The complex standard Hessenberg eigensolver in
-some platform LAPACK builds returns inaccurate eigenvectors above about 128
-unknowns; the residual guard rejects such output. Mode coordinates are read
+With `D = diag(i^m)`, `D^-1 A D` is real apart from the scalar
+`-i omega/c` on its diagonal. The eigenpairs are computed from the standard
+problem `M^-1 D^-1 A D` of the same pencil: a real eigensolver at omega=0,
+and the complex LAPACK `zgeev` with its minimal workspace otherwise. The
+dense ordinate basis keeps the generalized QZ solver. Every path is checked
+by the same eigen-equation residual (1e-10). In some platform LAPACK builds
+the blocked complex Hessenberg reduction, which `zgeev` selects with a large
+workspace, returns wrong vectors above about 128 unknowns (relative errors
+of order one); the minimal workspace keeps the unblocked reduction, and a
+test checks it on a 300x300 matrix. The half-size problem for `lambda^2`
+that the mu -> -mu symmetry allows is not used: squaring loses about
+1e-10 relative accuracy at the grazing ordinates. Mode coordinates are read
 out along arbitrary upward rays by contracting the collision kernel with
 the modal Laplace transforms before the depth sum.
 
@@ -481,7 +490,8 @@ continuous full-HG comparison gives a maximum resolved-bin discrepancy of
 2.24 standard errors. Near-zero order-1 tail bins are checked against the
 absolute band bound, not a relative error against an unresolved MC zero.
 This validates that particular broadened q=0 example. It does not establish
-a measured group index or a finite-offset time profile at high g.
+a measured group index. At high g the time profile is checked at one spatial
+frequency, q l* = 1 (see below), not at a finite source-detector offset.
 
 ## Run and validation scope
 
@@ -560,6 +570,43 @@ which is its L truncation, and moves >=2 by 3.5e-8. Order 1 in the cell at
 depth 0.5-0.8 l* gets almost no histories, and at g=0.95 none of the
 order-1 cells are resolved by the Monte Carlo (fewer than 100 effective
 histories). These entries are reported but are not compared.
+
+The same calculation at nonzero frequency and in time is checked by
+`python experiments/validate_halfspace_time_highg.py --output time-highg.json`
+for the milk (g=0.9) and dermis (g=0.91) cases, with the same geometry and
+grids. Times are in l*/c and frequencies in c/l*, with c the speed in the
+medium. The check has three parts:
+- spectra at q l* = 0.5, 2, 5 and omega l*/c = 0.3, 3 are compared with
+  2x10^7 point-beam histories weighted by exp(i(omega t - q x));
+- the time profile at q l* = 1 is built from 49 frequencies (period
+  100 l*/c, Gaussian timing response sigma = 2 l*/c, band up to
+  omega l*/c = 2) and compared with the same histories in 14 bins over
+  [-6, 44] l*/c;
+- the banana at omega l*/c = 0.3 in the three cells is compared with 10^8
+  Gaussian-beam histories, whose path lengths in a cell are weighted by
+  exp(i omega t) at the detected flight time.
+In one run the largest pulls for orders 1 and >=2 were:
+
+| Medium | Spectra | Time bins | Banana |
+|---|---|---|---|
+| milk, g=0.9 | 1.8, 1.3 | 0.9, 1.6 | 0.7, 1.5 |
+| dermis, g=0.91 | 0.8, 2.3 | 0.5, 2.3 | 0.6, 2.2 |
+
+Order 0 is zero for this aperture in both references.
+- Refining the polar grid changed the spectra by at most 4.4e-7, and 12
+  cosine moments changed them by at most 7.2e-7.
+- Halving the frequency step changed the time profile by 1.5e-4 in L1
+  relative to the charge. The omitted Gaussian band is bounded by 3.5e-5.
+- The eigen residual stayed below 3.5e-14.
+- Order 1 after 20 l*/c and order 1 in the middle banana cell (for the
+  dermis also in the third cell) have fewer than 100 effective histories
+  and are not compared. Late bins whose
+  Monte Carlo error is below the band bound are checked against that
+  absolute bound instead.
+The banana q integration was not refined again at omega != 0.
+With the standard complex eigensolver, one frequency at 3492 unknowns takes
+70-74 s on one thread, against 636-674 s with complex QZ, and the responses
+agree to 2.4e-12. The whole check takes about seven single-threaded hours.
 
 This establishes a synthetic reference. It does not certify arbitrary g,
 all source-detector separations, all time windows or experimental tissue

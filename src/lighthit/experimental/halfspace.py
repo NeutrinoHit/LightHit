@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import math
 
 import numpy as np
-from scipy.linalg import eig, lu_factor, lu_solve
+from scipy.linalg import eig, lapack, lu_factor, lu_solve
 from scipy.special import eval_legendre, j0, jv, roots_legendre
 
 from .halfspace_boundary import HalfSpaceBoundary
@@ -37,6 +37,20 @@ def _phase(cosine, g, degree):
     for ell in range(degree + 1):
         result += (2 * ell + 1) * g**ell * eval_legendre(ell, x)
     return result / (4 * np.pi)
+
+
+def _complex_eig(matrix):
+    """Right eigenpairs of a complex matrix by LAPACK zgeev, minimal workspace.
+
+    The minimal workspace keeps the unblocked Hessenberg reduction. With the
+    optimal (blocked) workspace some platform LAPACK builds return wrong
+    eigenvectors above about 128 unknowns; callers still check the residual.
+    """
+    n = len(matrix)
+    lam, _, vectors, info = lapack.zgeev(matrix, compute_vl=0, lwork=max(1, 2*n))
+    if info != 0:
+        raise ArithmeticError(f"complex eigensolver failed (info={info})")
+    return lam, vectors
 
 
 def _normalized_legendre(x, degree, order):
@@ -371,27 +385,29 @@ class HalfSpaceSolver:
             self._cache.move_to_end(key)
             return self._cache[key]
         base = self.medium.extinction_per_m - 1j * omega / self.medium.speed_m_per_ns
-        if self.harmonics is not None and omega == 0:
-            # A' = D^-1 A D is real for D=diag(i^m). The pencil (A', M) has the
-            # eigenvalues of (A, M); eigenvectors map back by D. M^-1 A' is
-            # solved as a standard real problem.
+        if self.harmonics is not None:
+            # A' = D^-1 A D is real up to the scalar -i omega/c for D=diag(i^m).
+            # The pencil (A', M) has the eigenvalues of (A, M); eigenvectors
+            # map back by D. M^-1 A' is solved as a standard problem: real at
+            # omega=0, complex otherwise.
             _, along = self._axis(q)
             diagonal = np.full(len(self.mu), base)
-            operator = (self.medium.extinction_per_m*np.eye(len(self.mu)) - self.scatter
-                        + along*(np.tril(self._stream) - np.triu(self._stream)))
-            lam, vectors = eig(operator / self.mu[:, None], check_finite=False)
-            lam, vectors = self._order_modes(lam, vectors)
-            image = operator @ vectors.real + 1j*(operator @ vectors.imag)
+            stream = along*(np.tril(self._stream) - np.triu(self._stream))
+            if omega == 0:
+                operator = self.medium.extinction_per_m*np.eye(len(self.mu)) - self.scatter + stream
+                lam, vectors = eig(operator / self.mu[:, None], check_finite=False)
+                lam, vectors = self._order_modes(lam, vectors)
+                image = operator @ vectors.real + 1j*(operator @ vectors.imag)
+            else:
+                operator = base*np.eye(len(self.mu)) - self.scatter + stream
+                lam, vectors = _complex_eig(operator / self.mu[:, None])
+                lam, vectors = self._order_modes(lam, vectors)
+                image = operator @ vectors
             residual = np.linalg.norm(image - self.mu[:, None] * vectors * lam) / max(1., np.linalg.norm(operator))
             vectors = np.array([1., 1j, -1., -1j])[self.harmonic % 4][:, None] * vectors
         else:
-            if self.harmonics is None:
-                diagonal = base + 1j * self.direction[:, :2] @ q
-                operator = np.diag(diagonal) - self.scatter
-            else:
-                _, along = self._axis(q)
-                diagonal = np.full(len(self.mu), base)
-                operator = np.diag(diagonal) + 1j*along*self._stream - self.scatter
+            diagonal = base + 1j * self.direction[:, :2] @ q
+            operator = np.diag(diagonal) - self.scatter
             lam, vectors = eig(operator, np.diag(self.mu), check_finite=False)
             lam, vectors = self._order_modes(lam, vectors)
             residual = np.linalg.norm(operator @ vectors - self.mu[:, None] * vectors * lam) / max(1., np.linalg.norm(operator))
