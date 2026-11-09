@@ -23,6 +23,16 @@ as for the second event of a run. Definitions written to the output:
 * JIT share of the first call = first call - warm event (empty cache), which
   also contains first touches of memory-mapped tables.
 
+Cases: ``electron-100GeV`` is event 5 of the bundle's Geant4 file (fine steps);
+``electron-100GeV-ntsim`` is the NTSim regeneration with the same vertex,
+direction and energy (``inputs/electron-100GeV-steps.npz``; the photon-MC
+matrix event and, to rounding, the electron fixture of the kit's check.py).
+Every row records the number of source steps and their median length.
+
+Before every process the parent records the load average and the other busy
+processes (at least 50% of one core): their number, how many are Python
+programs and their summed CPU share, without names.
+
 The data bundle is ``$LIGHTHIT_DATA`` (inputs as in experiments/run.py). The
 operating-system file cache is not purged; whether the table files were read
 from disk or from memory is therefore not controlled and is stated as such.
@@ -46,6 +56,7 @@ sys.path.insert(0, str(HERE))
 THREAD_VARIABLES = ("NUMBA_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                     "VECLIB_MAXIMUM_THREADS", "MKL_NUM_THREADS")
 CASES = {"electron-100GeV": "default-shower-route/electron-100GeV",
+         "electron-100GeV-ntsim": "photon-mc-matrix/electron-100GeV",
          "muon-100GeV": "default-muon-route/muon-100GeV",
          "laser-532nm": "default-laser-route/laser-532nm"}
 
@@ -71,7 +82,7 @@ def child(name, calls):
     ctx = Context()
     start = _clock()
     kernel = ctx.kernel()
-    if name == "electron-100GeV":
+    if name.startswith("electron-100GeV"):
         from lighthit.shower import ShowerTransport
         route = ShowerTransport(kernel)
         route.tables()
@@ -83,11 +94,17 @@ def child(name, calls):
         from lighthit.event import EventTransport
         route = EventTransport(kernel, laser_kernel=ctx.laser_kernel())
     setup = _since(start)
+    elements = None
     if name == "electron-100GeV":
-        source = ctx.shower_source(name)
+        elements = source = ctx.shower_source(name)
+        run = lambda: route(replace(source))
+    elif name == "electron-100GeV-ntsim":
+        from harness.inputs import inputs_dir, load_steps
+        elements = source = load_steps(inputs_dir() / "electron-100GeV-steps.npz")[0]
         run = lambda: route(replace(source))
     elif name == "muon-100GeV":
         steps, ancestry, uid = ctx.muon_source(name)
+        elements = steps
         run = lambda: route(replace(steps), dict(ancestry), primary_uid=uid)
     else:
         run = lambda: route(laser_flash())
@@ -99,7 +116,10 @@ def child(name, calls):
         entry["charge_pe_by_order"] = [float(x) for x in
                                        np.asarray(response.charge_components_pe).sum(axis=0)]
         records.append(entry)
-    return dict(case=name, import_=imported, setup=setup, calls=records,
+    source_steps = None if elements is None else dict(
+        steps=int(len(elements.length_m)),
+        median_step_mm=float(1e3 * np.median(np.asarray(elements.length_m))))
+    return dict(case=name, import_=imported, setup=setup, calls=records, source=source_steps,
                 numba_threads=numba.get_num_threads(),
                 lighthit=lighthit.__version__, inputs=ctx.inputs)
 
@@ -125,7 +145,24 @@ def summarise(name, runs):
                 jit_share_of_first_call_s=empty["calls"][0]["wall_s"] - warm(empty),
                 warm_cpu_s=statistics.median(c["cpu_s"] for c in filled["calls"][1:]),
                 charge_pe_by_order=charges[0], max_charge_spread_pe=spread,
+                source_steps=(empty.get("source") or {}).get("steps"),
+                median_step_mm=(empty.get("source") or {}).get("median_step_mm"),
                 calls=len(empty["calls"]))
+
+
+def busy_processes(threshold=50.0):
+    """Other processes using at least ``threshold`` % of one core: count, Python count, CPU %."""
+    try:
+        out = subprocess.run(["ps", "-Ao", "pid=,pcpu=,comm="], capture_output=True, text=True).stdout
+    except OSError:
+        return None
+    busy = []
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) == 3 and int(parts[0]) != os.getpid() and float(parts[1]) >= threshold:
+            busy.append((float(parts[1]), Path(parts[2]).name.lower().startswith("python")))
+    return dict(threshold_percent=threshold, processes=len(busy),
+                python_processes=sum(p for _, p in busy), cpu_percent=round(sum(c for c, _ in busy), 1))
 
 
 def machine():
@@ -177,12 +214,14 @@ def main():
             raw[name] = {}
             for mode in ("empty-jit-cache", "filled-jit-cache"):
                 load = list(os.getloadavg())
+                busy = busy_processes()
                 out = subprocess.run([sys.executable, __file__, "_child", name, "--calls", str(args.calls)],
                                      env=env, capture_output=True, text=True)
                 line = [x for x in out.stdout.splitlines() if x.startswith("RESULT ")]
                 if out.returncode or not line:
                     raise SystemExit(f"{name} {mode} failed:\n{out.stderr[-3000:]}")
-                raw[name][mode] = dict(json.loads(line[-1][7:]), load_average_before=load)
+                raw[name][mode] = dict(json.loads(line[-1][7:]), load_average_before=load,
+                                        busy_processes_before=busy)
                 print(name, mode, json.dumps({k: raw[name][mode][k] for k in ("import_", "setup")}),
                       [round(c["wall_s"], 3) for c in raw[name][mode]["calls"]], flush=True)
         rows.append(summarise(name, raw[name]))

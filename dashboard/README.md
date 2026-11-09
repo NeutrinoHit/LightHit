@@ -83,6 +83,14 @@ comparisons are taken only from `time_routes.py` (cold setup, JIT compilation
 and warm event response separately, fixed threads, one machine) and, for the
 laser, from the photon Monte Carlo of the same flash with its achieved
 precision; registry wall times are not a matched benchmark.
+The 100 GeV electron is timed on two events with the same vertex, direction
+and energy: event 5 of the bundle's Geant4 file and the NTSim event of the
+kit's `check.py` and the photon-MC matrix. Each row records the number of
+source steps and their median length; the Timing tab states the resulting
+approximately linear growth of the time with the number of steps. Before
+every timed process the run records the load average and the other busy
+processes (count, Python programs, CPU share; no names), and the tab states
+them.
 
 The site serves D3 7.9.0 and Lucide 0.468.0 from `vendor/`, with their respective
 licenses. It does not need an external script CDN to display the archived plots.

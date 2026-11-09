@@ -14,6 +14,9 @@ the ratio and the share of the event's charge. The Monte-Carlo error of a bin is
 the spread of the bin charge over the runs divided by sqrt(runs) (with one run,
 the square root of the summed squared hit weights). A bin with more than 0.1 %
 of the Monte-Carlo charge passes when |ratio - 1| <= max(2 sigma, 3 %).
+
+Without the hit files of all the runs of the stored record on this machine, the
+case compares with the group sums kept in that record (``_matrix_stored``).
 """
 from __future__ import annotations
 
@@ -80,9 +83,106 @@ def _nearest(steps, positions):
     return cKDTree(np.r_[a, b, .5 * (a + b)]).query(positions)[0]
 
 
+def _stored_record(name):
+    """The centre-referenced record of ``name`` (its Monte-Carlo group sums), or None."""
+    from .record import RESULTS
+    path = RESULTS / "photon-mc-matrix" / f"{name}.json"
+    if not path.is_file():
+        return None, path
+    return json.loads(path.read_text()), path
+
+
+def _local_runs(name):
+    try:
+        return _runs(name)
+    except FileNotFoundError:
+        return []
+
+
 def _matrix(ctx, name):
+    hits_paths = _local_runs(name)
+    stored, stored_path = _stored_record(name)
+    stored_runs = (stored or {}).get("metrics", {}).get("mc", {}).get("runs", 0)
+    if stored is not None and len(hits_paths) < stored_runs:
+        return _matrix_stored(ctx, name, stored, stored_path)
+    return _matrix_runs(ctx, name, _runs(name))
+
+
+def _matrix_stored(ctx, name, stored, stored_path):
+    """The route against the Monte-Carlo group sums kept in the centre-referenced record.
+
+    Used when the photon_mc.py hit files of all runs are not on this machine: the
+    record keeps, per distance bin and order, the Monte-Carlo charge and its
+    error, which is all this case compares. The event steps are the first run's
+    steps or, without them, the regenerated input of the same name (same Geant4
+    seed); the number of OMs in every distance bin must equal the record's.
+    """
     from lighthit.event import EventTransport
-    hits_paths = _runs(name)
+    from .inputs import file_hash
+    base = inputs_dir()
+    steps_path = base / "mc" / f"{name}-run0-steps.npz"
+    if not steps_path.is_file():
+        steps_path = base / f"{name}-steps.npz"
+    ctx._note(steps_path, steps_path.with_name(steps_path.name.replace("-steps", "-parts")),
+              stored_path)
+    steps, sources = _components(steps_path)
+    kernel = ctx.kernel()
+    distance = _nearest(steps, kernel.detector.positions_m)
+    old = stored["metrics"]
+    for (lo, hi), previous in zip(zip(BINS_M[:-1], BINS_M[1:]), old["by_distance"]):
+        count = int(((distance >= lo) & (distance < hi)).sum())
+        if count != previous["oms"] or previous["distance_m"][0] != lo:
+            raise ValueError(f"{name}: distance bin {lo:g}-{hi:g} m has {count} OMs, "
+                             f"the stored record {previous['oms']}: not the same event")
+    response = ctx.cached("event-route", lambda: EventTransport(kernel))(sources)
+    lh = np.asarray(response.charge_components_pe, float)
+    lh = np.c_[lh, lh.sum(1)]
+    total_mc = old["totals"]["total"]["mc_pe"]
+    total_lh = lh[:, 3].sum()
+    rows, failed = [], []
+    for (lo, hi), previous in zip(zip(BINS_M[:-1], BINS_M[1:]), old["by_distance"]):
+        m = (distance >= lo) & (distance < hi)
+        entry = dict(distance_m=previous["distance_m"], oms=int(m.sum()),
+                     oms_with_mc_hits=previous.get("oms_with_mc_hits"))
+        for k, label in enumerate(ORDERS):
+            q_lh = lh[m, k].sum()
+            q_mc, sigma_mc = previous[label]["mc_pe"], previous[label]["mc_sigma_pe"]
+            ratio = q_lh / q_mc if q_mc > 0 else None
+            sigma = sigma_mc / q_mc * ratio if q_mc > 0 and ratio else None
+            entry[label] = dict(lighthit_pe=float(q_lh), mc_pe=float(q_mc), mc_sigma_pe=float(sigma_mc),
+                                ratio=ratio, ratio_sigma=sigma,
+                                mc_share=float(q_mc / total_mc) if total_mc else None,
+                                lighthit_share=float(q_lh / total_lh) if total_lh else None)
+        tot = entry["total"]
+        tested = tot["mc_share"] is not None and tot["mc_share"] > SHARE_MIN and tot["ratio"] is not None
+        entry["tested"] = bool(tested)
+        if tested:
+            entry["passed"] = bool(abs(tot["ratio"] - 1) <= max(2 * tot["ratio_sigma"], TOLERANCE))
+            if not entry["passed"]:
+                failed.append(f"{lo:g}-{hi:g} m")
+        rows.append(entry)
+    totals = {}
+    for k, label in enumerate(ORDERS):
+        q_mc, s = old["totals"][label]["mc_pe"], old["totals"][label]["mc_sigma_pe"]
+        totals[label] = dict(lighthit_pe=float(lh[:, k].sum()), mc_pe=float(q_mc), mc_sigma_pe=float(s),
+                             ratio=float(lh[:, k].sum() / q_mc) if q_mc > 0 else None)
+    return dict(
+        headline=dict(lighthit_pe=float(total_lh), mc_pe=float(total_mc),
+                      ratio=totals["total"]["ratio"],
+                      ratio_sigma=(totals["total"]["mc_sigma_pe"] / total_mc * totals["total"]["ratio"]
+                                   if total_mc and totals["total"]["ratio"] else None),
+                      order0_ratio=totals["0"]["ratio"], order1_ratio=totals["1"]["ratio"],
+                      order2_ratio=totals[">=2"]["ratio"], runs=old["mc"]["runs"],
+                      bins_failed=", ".join(failed) or "none"),
+        totals=totals, by_distance=rows, route=response.metadata.get("route"),
+        same_steps_in_all_runs=old.get("same_steps_in_all_runs"),
+        mc=dict(old["mc"], source="stored group sums", record=f"photon-mc-matrix/{name}",
+                record_date=stored.get("date"), record_sha256=file_hash(str(stored_path)),
+                steps=steps_path.name, steps_digest=_digest(steps_path)))
+
+
+def _matrix_runs(ctx, name, hits_paths):
+    from lighthit.event import EventTransport
     steps_paths = [p.with_name(p.name.replace("-hits", "-steps")) for p in hits_paths]
     ctx._note(*steps_paths, *hits_paths)
     digests = [_digest(p) for p in steps_paths]

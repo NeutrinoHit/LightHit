@@ -138,7 +138,13 @@ definition rather than an error. Photon Monte Carlo counts light at the glass.
 
 `time_routes.py` measures the cold, JIT and warm time of the electron, muon
 and laser examples in fresh processes with fixed thread settings (empty and
-filled Numba cache; every warm call on a new source object).
+filled Numba cache; every warm call on a new source object). The 100 GeV
+electron is timed on two events with the same vertex, direction and energy:
+event 5 of the bundle's Geant4 file (`electron-100GeV`, fine Geant4 steps) and
+the NTSim regeneration (`electron-100GeV-ntsim`, the photon-MC matrix event
+and the kit's check.py fixture); every row records the number of source steps
+and their median length, and before every process the load average and the
+number and CPU share of other busy processes.
 `photon_mc_laser.py` is the photon Monte Carlo of the laser flash; its chunk
 times give the Monte-Carlo time to the precision reached
 (`photon-mc-matrix/laser-532nm`).

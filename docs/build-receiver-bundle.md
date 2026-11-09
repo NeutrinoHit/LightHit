@@ -268,6 +268,15 @@ standard deviations), the muon near-distance Q1 flag on one OM, and weak
 distance flags remain visible; these checks do not certify every individual
 OM or arbitrary time binning.
 
+The electron fixture is the NTSim event with 42,194 charged steps (median
+step 4.95 mm). Event 5 of the data bundle's Geant4 file, used by the
+dashboard examples, has the same vertex, direction and energy but 221,504
+steps (median 0.55 mm). With `experiments/time_routes.py` on a Mac, one
+thread, the glass tables (2026-11-05, two series), the warm calls take
+15.2-16.1 s and 47.5-48.1 s. Orders 0 and 1 grow with the number of steps
+and order >=2 hardly changes, so the time grows about linearly with the
+steps: 7.5-8.7 s + 0.18 ms per step from these two events.
+
 The recorded runtime delivery occupies about 27.03 GB, including fixed
 validation inputs. Stored time rows account for 636 MB more than their
 compressed equivalents. The observed construction workspace reached

@@ -381,9 +381,20 @@ def route_timing(paths, matrix, sources, mc_check=None):
         raw = json.loads(path.read_text())
         sources["timing/" + path.name] = digest(path)
         loads = [m["load_average_before"][0] for case in raw["raw"].values() for m in case.values()]
-        runs.append({**{k: raw[k] for k in ("started", "finished", "source", "machine", "threads",
-                                            "thread_variables", "receiver", "definitions", "rows")},
-                     "load_average_1min_range": [min(loads), max(loads)]})
+        busy = [m["busy_processes_before"] for case in raw["raw"].values() for m in case.values()
+                if m.get("busy_processes_before")]
+        run = {**{k: raw[k] for k in ("started", "finished", "source", "machine", "threads",
+                                      "thread_variables", "receiver", "definitions", "rows")},
+               "load_average_1min_range": [min(loads), max(loads)]}
+        if busy:
+            # other processes busy before each timed process: counts and CPU share, no names
+            run["busy_processes_before"] = {
+                "threshold_percent": busy[0]["threshold_percent"],
+                "processes_range": [min(b["processes"] for b in busy), max(b["processes"] for b in busy)],
+                "python_processes_range": [min(b["python_processes"] for b in busy),
+                                           max(b["python_processes"] for b in busy)],
+                "cpu_percent_range": [min(b["cpu_percent"] for b in busy), max(b["cpu_percent"] for b in busy)]}
+        runs.append(run)
     laser = None
     entry = next((m for m in matrix if m["id"].startswith("laser-532nm") and m.get("mc_timing")), None)
     if entry is not None:

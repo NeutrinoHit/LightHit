@@ -25,6 +25,9 @@ notes = [
   """
 Accuracy is measured against reference-shower (original-step orders 0 and 1, per-band order >=2) on the OMs of this route.
 """,
+  """
+The time depends on the event's Geant4 stepping (experiments/time_routes.py, 2026-11-05, Mac, 1 thread, glass tables): event 5 of the bundle's Geant4 file (221,504 steps, median 0.55 mm) takes 47.5-48.1 s warm in two series, the NTSim event of photon-mc-matrix/electron-100GeV and of the kit's check.py (same vertex, direction and energy; 42,194 steps, median 4.95 mm) 15.2-16.1 s. Orders 0 and 1 follow the number of steps and order >=2 does not, so the time grows about linearly with the steps: 7.5-8.7 s + 0.18 ms per step from these two events.
+""",
 ]
 
 [code]

@@ -6,7 +6,7 @@ Do the default routes agree with NTSim's photon Monte Carlo for electrons, pions
 """
 kind = "validation"
 status = "tool"
-verdict = "On 14 Geant4 events (e 10 GeV-10 TeV, pi+ 10 GeV-1 TeV, mu 100 GeV-10 TeV, nu_e CC, nu_mu CC, two geometries; 4-32 MC runs each) the default routes give 0.965-1.035 of the photon-MC total charge; three events fail a distance bin: pion 100 GeV at 50-100 m (0.964 +- 0.015), the 1 TeV muon at 100-150 m (1.118 +- 0.021, 0.4 % of its charge) and the 10 TeV muon at 0-20 m and 50-100 m, where its order 0 is 0.93-0.95 of the MC near the track. The 532 nm laser flash (laser-532nm@glass; its laser table is the centre-referenced one) gives 0.967 +- 0.018 of a 1e8-photon MC, with orders 0/1 at 0.952/0.949 and the 150-200 m bin failing (0.956 +- 0.018, 1.2 % of the charge). On the first-entry (glass) laser table (laser-532nm@glass-laser) the flash gives 0.975 +- 0.018, orders 0/1/>=2 at 0.962/0.957/1.009, 150-200 m still failing (0.964 +- 0.018); the glass adds 1.06 % to order 0 (exp(mu_t 2R/3)) and 0.9/0.6 % to orders 1/>=2, within the 3.5 % error of the single MC run."
+verdict = "On 14 Geant4 events (e 10 GeV-10 TeV, pi+ 10 GeV-1 TeV, mu 100 GeV-10 TeV, nu_e CC, nu_mu CC, two geometries; 4-32 MC runs each) the default routes give 0.965-1.035 of the photon-MC total charge; three events fail a distance bin: pion 100 GeV at 50-100 m (0.964 +- 0.015), the 1 TeV muon at 100-150 m (1.118 +- 0.021, 0.4 % of its charge) and the 10 TeV muon at 0-20 m and 50-100 m, where its order 0 is 0.93-0.95 of the MC near the track. The 532 nm laser flash (laser-532nm@glass; its laser table is the centre-referenced one) gives 0.967 +- 0.018 of a 1e8-photon MC, with orders 0/1 at 0.952/0.949 and the 150-200 m bin failing (0.956 +- 0.018, 1.2 % of the charge). On the first-entry (glass) laser table (laser-532nm@glass-laser) the flash gives 0.975 +- 0.018, orders 0/1/>=2 at 0.962/0.957/1.009, 150-200 m still failing (0.964 +- 0.018); the glass adds 1.06 % to order 0 (exp(mu_t 2R/3)) and 0.9/0.6 % to orders 1/>=2, within the 3.5 % error of the single MC run. On the glass (first-entry) tables (<case>@glass, against the stored Monte-Carlo group sums) the seven electron and muon events up to 1 TeV give 0.979-1.021 of the MC total (e 100 GeV 0.9968 +- 0.0099, e 1 TeV 0.9995 +- 0.0038, mu 100 GeV 1.020 +- 0.026) and pass every bin except the 1 TeV muon at 100-150 m (1.101 +- 0.021, 0.4 % of its charge); the pion, neutrino and 10 TeV events, regenerated on another machine, are not the Monte-Carlo events and are not remeasured."
 cases = [
   "photon-mc-matrix/electron-10GeV",
   "photon-mc-matrix/electron-100GeV",
@@ -41,6 +41,9 @@ laser-532nm: the flash of default-laser-route; OM distance to the flash; one MC 
 """,
   "The Monte-Carlo error of a bin is the run-to-run spread of its charge divided by sqrt(runs).",
   "The 10 TeV events use photon_suppression 10 (Poisson 1/10 of the photons, weight 10): unbiased, larger statistical error.",
+  """
+Where the hit files of all runs are not on the machine, the case compares with the Monte-Carlo group sums and errors kept in the centre-referenced record (metrics.mc.source = "stored group sums"); the steps are then the regenerated input of the same name, and every distance bin must hold the record's number of OMs. Regenerated on another machine, the electron and muon events pass this check; the events with hadrons (pion-*, nue-cc, numu-cc) do not (Geant4 hadronic showers differ between the machines), so their @glass records need the original Monte-Carlo steps.
+""",
 ]
 
 [code]

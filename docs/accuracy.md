@@ -548,8 +548,9 @@ The maximum difference is 0.023 of the production numerical tolerance.
 This checks Q0 quadrature on those receivers; it does not remove the pion
 MC discrepancy or certify all scattered-light distances.
 
-The full warm 100 GeV electron call takes 15.00 s against 10.17 s for the
-retained leading interval comparison on the same Mac with one thread.
+The full warm 100 GeV electron call (the NTSim event, 42,194 steps) takes
+15.00 s against 10.17 s for the retained leading interval comparison on the
+same Mac with one thread.
 The paired complete muon calls take 69.35 s (entry) and 70.77 s (interval).
 Muon entry bins are evaluated only on the requested receiver batches;
 all 12 active OMs and both scattered orders are preserved. The pion and νe

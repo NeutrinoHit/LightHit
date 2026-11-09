@@ -510,6 +510,12 @@ source.
 An addressed 100 GeV electron in five Baikal-GVD clusters (1440 OMs) takes
 about 15 s on one CPU thread with the default event route, including all
 three scattering components, receiver selection, charge and time bins.
+This is the NTSim event of the kit's `check.py` and of the photon-MC matrix:
+42,194 charged steps, median step 4.95 mm, 15.2-16.1 s warm on a Mac. Event
+5 of the bundle's Geant4 file has the same vertex, direction and energy but
+221,504 finer steps (median 0.55 mm) and takes 47.5-48.1 s. The time grows
+about linearly with the number of steps (orders 0 and 1 follow the steps,
+order >=2 does not): about 8 s + 0.18 ms per step from these two events.
 Order 0 integrates the original Geant4 steps and continuous spectrum to
 first entry on the supplied OM glass. Grouped order 1 and the source basis,
 band folding and prepared atlases for order >=2 retain their acceleration;
